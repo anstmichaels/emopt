@@ -8,10 +8,10 @@ class MakeInstall(DistutilsInstall):
         DistutilsInstall.run(self)
 
 setup(name='emopt',
-      version='0.2.2',
+      version='0.2.3',
       description='A suite of tools for optimizing the shape and topology of ' \
       'electromagnetic structures.',
-      url='',
+      url='https://github.com/anstmichaels/emopt',
       author='Andrew Michaels',
       author_email='amichaels@berkeley.edu',
       license='Apache 2.0',
