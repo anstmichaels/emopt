@@ -275,13 +275,13 @@ In our case, both libraries are installed in the same directory, so these two
 environment variables have the same path. This may not be the case on your
 system, however.
 
-Next, simple run make to build and assemble EMOpt:
+Next, run the setup.py script to build and install EMOpt:
 
 ```
-make
+$ python setup.py install --user
 ```
 
-
+Assuming this completes without error, you should be all set and ready to go!
 
 
 ### Running Examples
