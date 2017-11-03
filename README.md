@@ -17,8 +17,6 @@ C/C++ Requirements:
 - [boost.geometry](http://www.boost.org/doc/libs/develop/libs/geometry/doc/html/index.html): For performing computational geometry operations.
 - [PETSc](https://www.mcs.anl.gov/petsc/): For solving large systems of the form Ax=b.
 - [SLEPc](http://slepc.upv.es/): For solving large eigenvalue problems of the form Ax=nBx.
-- BLAS of some variety (Recommended: Openblas)
-- Lapack
 
 Python Requirements:
 - [python 2.7+](https://www.python.org/)
@@ -287,11 +285,6 @@ Assuming this completes without error, you should be all set and ready to go!
 ### Running Examples
 
 Example projects can be found in the *examples/* folder. Each example is documented and should give you an idea how to use the libraries.  It is recommended that you start with the *simple_waveguide* project first to get a quick introduction into how the core components are used.  More detailed documentation will be added in the near future.
-
-## Built With
-
-- [Eigen](http://eigen.tuxfamily.org/) - All matrix operations in the FDFD solver and adjoint method code
-- [numpy](http://www.numpy.org/) and [scipy](https://scipy.org/) - used pretty much everywhere
 
 ## Authors
 Andrew Michaels 
