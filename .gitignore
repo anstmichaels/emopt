@@ -46,3 +46,4 @@
 # Python dist files
 build/
 emopt.egg-info/
+dist/
