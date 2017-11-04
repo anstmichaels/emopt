@@ -32,7 +32,7 @@ Python Requirements:
 In addition to these specific packages, your system must be 
 equipped with the ability to compile c++ source using a makefile.
 
-#### Installing C/C++ Prerequisites
+### Installing C/C++ Prerequisites
 
 Depending on the system you are installing EMOpt on, you may wish to install
 it such that everyone on the system can use it or only a single user can use
@@ -44,7 +44,7 @@ is the path to your (the user's) home directory. Inside of this global
 installation directory, we will also need to create a subdirectory where the
 required header-only libraries will be stored.
 
-##### Eigen
+#### Eigen
 
 Eigen is a header-only library and does not need to be compiled. Simply
 download the most recent stable release from
@@ -58,7 +58,7 @@ $ tar xvzf 3.3.4.tar.gz
 $ cp -r eigen-eigen-5a0156e40feb/Eigen $HOME/local/include/eigen-3.3.4/
 ```
 
-##### Boost.Geometry
+#### Boost.Geometry
 
 Boost.Geometry is also header-only and does not need to be compiled. Simply
 download the most recent stable release of the boost libraries from 
@@ -71,7 +71,7 @@ $ tar xvzf boost_1_65_1.tar.gz
 $ cp -r boost_1_65_1/boost/ $HOME/local/include/boost/
 ```
 
-##### Compiling PETSc
+#### Compiling PETSc
 
 PETSc is a powerful library for solving large sparse systems in a distributed
 manner. Before using EMOpt, PETSc must be compiled and installed on your
@@ -166,7 +166,7 @@ and installed succcessfully. This is not a bad idea.
 
 Note: compiling PETSc with --with-clanguage=cxx will likely prevent the installation of slepc4py from working.
 
-##### Compiling SLEPc
+#### Compiling SLEPc
 
 SLEPc is a library for solving large sparse eigenvalue problems. Because it is
 built on top of PETSc, there are no additional dependencies that are needed.
@@ -210,7 +210,7 @@ make SLEPC_DIR=$HOME/Downloads/slepc-3.8.1 PETSC_DIR=$HOME/local/petsc/petsc-3.8
 make SLEPC_DIR=$HOME/local/slepc/slepc-3.8.1 PETSC_DIR=$HOME/local/petsc/petsc-3.8.0 PETSC_ARCH="" test
 ```
 
-#### Installing Python Prerequisites
+### Installing Python Prerequisites
 
 Note: this assumes that you already have python 2.7+, pip, and the python
 development libraries (e.g. python-devel) installed on your system.
