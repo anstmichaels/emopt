@@ -1,14 +1,14 @@
 from setuptools import setup
-from distutils.command.install import install as DistutilsInstall
+from setuptools.command.install import install as SetuptoolsInstall
 import subprocess
 
-class MakeInstall(DistutilsInstall):
+class MakeInstall(SetuptoolsInstall):
     def run(self):
         subprocess.call('make')
-        DistutilsInstall.run(self)
+        SetuptoolsInstall.run(self)
 
 setup(name='emopt',
-      version='0.2.3',
+      version='0.2.3.1',
       description='A suite of tools for optimizing the shape and topology of ' \
       'electromagnetic structures.',
       url='https://github.com/anstmichaels/emopt',
@@ -17,6 +17,5 @@ setup(name='emopt',
       license='Apache 2.0',
       packages=['emopt'],
       package_data={'emopt':['*.so', 'data', 'data/*']},
-      install_requires=['numpy', 'scipy', 'mpi4py', 'petsc4py', 'slepc4py'],
       cmdclass={'install':MakeInstall},
       zip_safe=False)
