@@ -49,27 +49,27 @@ N = sim.N
 # Setup system materials
 ####################################################################################
 # Materials
-n0 = 1.44
+n0 = 1.0
 n1 = 3.0
 
 # set a background permittivity of 1
 eps_background = Rectangle(W/2, H/2, 2*W, H)
-eps_background.set_layer(2)
-eps_background.set_material(n0**2)
+eps_background.layer = 2
+eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
 h_wg = 0.5
 waveguide = Rectangle(W/2, H/2, 2*W, h_wg)
-waveguide.set_layer(1)
-waveguide.set_material(n1**2)
+waveguide.layer = 1
+waveguide.material_value = n1**2
 
 eps = StructuredMaterial(W, H, dx, dy)
 eps.add_primitive(waveguide)
 eps.add_primitive(eps_background)
 
 mu_background = Rectangle(W/2, H/2, 2*W, H)
-mu_background.set_layer(2)
-mu_background.set_material(1.0)
+mu_background.layer = 2
+mu_background.material_value = 1.0
 
 mu = StructuredMaterial(W, H, dx, dy)
 mu.add_primitive(mu_background)

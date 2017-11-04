@@ -295,8 +295,8 @@ if __name__ == '__main__':
 
     # set a background permittivity containing the cladding material (SiO2)
     eps_background = Rectangle(W/2, H/2, 2*W, H)
-    eps_background.set_layer(2)
-    eps_background.set_material(eps_clad)
+    eps_background.layer = 2
+    eps_background.material_value = eps_clad
 
     # Define the horizontal waveguide crossing structure
     h_wg = 0.75
@@ -329,8 +329,8 @@ if __name__ == '__main__':
 
     # assemble the polygon
     crossing_x.set_points(xs, ys)
-    crossing_x.set_layer(1)
-    crossing_x.set_material(n_eff**2)
+    crossing_x.layer = 1
+    crossing_x.material_value = n_eff**2
 
     # vertical taper.  This has the same coordinates as the horizontal
     # crossing, except we need to rotate them (and make sure the
@@ -347,8 +347,8 @@ if __name__ == '__main__':
     crossing_y = Polygon()
 
     crossing_y.set_points(ys, xs)
-    crossing_y.set_layer(1)
-    crossing_y.set_material(n_eff**2)
+    crossing_y.layer = 1
+    crossing_y.material_value = n_eff**2
 
     # All primitive components (polygons, rectangles, etc) must be added to a
     # StructuredMaterial. This layers the components in such a way that more
@@ -360,8 +360,8 @@ if __name__ == '__main__':
 
     # Set the permeability --> it's uniformly 1
     mu_background = Rectangle(W/2, H/2, 2*W, H)
-    mu_background.set_layer(2)
-    mu_background.set_material(1.0)
+    mu_background.layer = 2
+    mu_background.material_value = 1.0
 
     mu = StructuredMaterial(W, H, dx, dy)
     mu.add_primitive(mu_background)

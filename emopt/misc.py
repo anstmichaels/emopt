@@ -243,20 +243,25 @@ def info_message(message):
     """
     print(u'\u001b[46;1m[INFO]\u001b[0m %s' % (message))
 
+class EMOptWarning(RuntimeWarning):
+    pass
+
+@run_on_master
 def _warning_message(message, category=UserWarning, filename='', lineno=-1):
     # Override python's warning message by adding a colored [WARNING] flag in
     # front to make it more noticeable.
-    if(filename is not '' and lineno != -1):
+    if(type(category == EMOptWarning)):
+        print(u'\u001b[43;1m[WARNING]\u001b[0m %s' % (message))
+    else:
         print(u'\u001b[43;1m[WARNING]\u001b[0m in %s at line %d: %s' % \
               (filename, lineno, message))
-    else:
-        print(u'\u001b[43;1m[WARNING]\u001b[0m %s' % (message))
 warnings.showwarning = _warning_message
+
 
 def warning_message(message, module):
     # Produce a warning message to warn the user that a problem has occurred.
     # This is primarily intended for internal use within emopt
-    warnings.warn('in %s: %s' % (module, message), category=RuntimeWarning)
+    warnings.warn('in %s: %s' % (module, message), category=EMOptWarning)
 
 def error_message(message):
     """Print a formatted, easily-distinguishable error message.

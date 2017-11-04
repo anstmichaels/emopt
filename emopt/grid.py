@@ -329,16 +329,28 @@ class MaterialPrimitive(object):
 
     Methods
     -------
-    get_layer(self)
-        Get the layer of the primitive.
-    set_layer(self)
-        Set the layer of the primitive.
     contains_point(self, x, y)
         Check if a material primitive contains the supplied (x,y) coordinate
+
+    Attributes
+    ----------
+    layer : int
+        The layer of the material primitive. Lower means higher priority in
+        terms of visibility.
     """
 
     def __init__(self):
         self.object = None
+        self._layer = 1
+
+    @property
+    def layer(self):
+        return self._layer
+
+    @layer.setter
+    def layer(self, newlayer):
+        self._layer = newlayer
+        libGrid.MaterialPrimitive_set_layer(self.object, c_int(newlayer))
 
     def get_layer(self):
         """Get the layer of the primitive.
@@ -348,6 +360,8 @@ class MaterialPrimitive(object):
         int
             The layer.
         """
+        warning_message('get_layer() is deprecated. Use property ' \
+            'myprim.layer instead.', 'emopt.grid')
         return libGrid.MaterialPrimitive_get_layer(self.object)
 
     def set_layer(self, layer):
@@ -358,6 +372,8 @@ class MaterialPrimitive(object):
         layer : int
             The new layer.
         """
+        warning_message('set_layer(...) is deprecated. Use property ' \
+            'myprim.layer=... instead.', 'emopt.grid')
         libGrid.MaterialPrimitive_set_layer(self.object, c_int(layer))
 
     def contains_point(self, x, y):
@@ -517,7 +533,7 @@ class Rectangle(MaterialPrimitive):
         """(Deprecated) Set the material value of the Rectangle's interior.
         """
         warning_message('set_mateiral(...) is deprecated. Use property ' \
-                        'myrect.material_value=... instead.', 'gremilin.grid')
+                        'myrect.material_value=... instead.', 'emopt.grid')
         libGrid.Rectangle_set_material(self.object, mat.real, mat.imag)
 
     def set_position(self, x0, y0):
@@ -538,7 +554,7 @@ class Rectangle(MaterialPrimitive):
         """(Deprecated) Set the width of the rectangle.
         """
         warning_message('set_width(...) is deprecated. Use property ' \
-                        'myrect.width=... instead.', 'gremilin.grid')
+                        'myrect.width=... instead.', 'emopt.grid')
 
         libGrid.Rectangle_set_width(self.object, width)
         self._xspan = width
@@ -546,7 +562,7 @@ class Rectangle(MaterialPrimitive):
     def set_height(self, height):
         """(Deprecated) Set the height of the rectangle."""
         warning_message('set_width(...) is deprecated. Use property ' \
-                        'myrect.width=... instead.', 'gremilin.grid')
+                        'myrect.width=... instead.', 'emopt.grid')
 
         libGrid.Rectangle_set_height(self.object, height)
         self._yspan = height
@@ -574,7 +590,7 @@ class Polygon(MaterialPrimitive):
         return self._Np
 
     @property
-    def mat_value(self):
+    def material_value(self):
         return self._value
 
     @xs.setter
@@ -592,9 +608,10 @@ class Polygon(MaterialPrimitive):
         warning_message('Polygon.Np cannot be modified in this way.', \
                         'emopt.grid.Polygon')
 
-    @mat_value.setter
-    def mat_value(self, value):
-        self.set_material(value)
+    @material_value.setter
+    def material_value(self, value):
+        libGrid.Polygon_set_material(self.object, value.real, value.imag)
+        self._value = value
 
     def __del__(self):
         libGrid.Polygon_delete(self.object)
@@ -631,6 +648,8 @@ class Polygon(MaterialPrimitive):
         self._ys[index] = y
 
     def set_material(self, mat):
+        warning_message('set_material(...) is deprecated. Use property ' \
+                        'mypoly.material_value=... instead.', 'emopt.grid')
         libGrid.Polygon_set_material(self.object, mat.real, mat.imag)
         self._value = mat
 
