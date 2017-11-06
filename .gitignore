@@ -45,6 +45,7 @@
 
 # Python dist files
 build/
+!docs/build/
 emopt.egg-info/
 dist/
 docs/build/doctrees
