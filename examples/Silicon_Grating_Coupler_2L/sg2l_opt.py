@@ -301,28 +301,27 @@ if __name__ == '__main__':
     for i in range(Ng):
         rect_top = Rectangle(shift0 + period*i + df*period/2.0, \
                              y_top, period*df, h_etch)
-        rect_top.set_layer(1)
-        rect_top.set_material(eps_core)
+        rect_top.layer = 1
+        rect_top.material_value = eps_core
         grating_top.append(rect_top)
 
         rect_bot = Rectangle(shift_bot+shift0+period*i+df*period/2.0, \
                              y_bot, period*df, h_wg-h_etch)
-        rect_bot.set_layer(1)
-        rect_bot.set_material(eps_core)
+        rect_bot.layer = 1
+        rect_bot.material_value = eps_core
         grating_bot.append(rect_bot)
 
     # set the background material using a rectangle equal in size to the system
     background = Rectangle(W/2,H/2,W,H)
 
     # set the relative layers of the permitivity primitives
-    # NOTE: set_layer doesnt appear to actually do anything. Fix this in the code!
-    wg.set_layer(1)
-    background.set_layer(2)
+    wg.layer = 1
+    background.layer = 2
 
     # set the complex permitivies of each shape
     # the waveguide is Silicon clad in SiO2
-    wg.set_material(eps_core)
-    background.set_material(eps_clad)
+    wg.material_value = eps_core
+    background.material_value = eps_clad
 
     # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
     # This Material defines the distribution of the permittivity within the simulated
@@ -340,8 +339,8 @@ if __name__ == '__main__':
 
     # set up the magnetic permeability -- just 1.0 everywhere
     mu_background = Rectangle(W/2,H/2,W,H)
-    mu_background.set_material(1.0)
-    mu_background.set_layer(1)
+    mu_background.material_value = 1.0
+    mu_background.layer = 1
     mu = StructuredMaterial(W,H,dx,dy)
     mu.add_primitive(mu_background)
 
