@@ -1,11 +1,11 @@
-# EMOpt
+# EMopt
 A toolkit for for shape optimization of (currently 2D) electromagnetic structures.
 
-EMOpt implements the adjoint method along with subroutines for smoothing of material interfaces on a rectangular grid (grid smoothing) in order compute gradients of a function of the electic and magnetic field.  These gradients can be used in conjunction with a number of minimization techniques in order to optimize a complicated passive electromagnetic device. The included adjoint method code relies on a small simple finite difference frequency domain (FDFD) solver which solves Maxwell's equations on a rectangular grid.  The grid smoothing interface, meanwhile, is independent and can be used with the adjoint method + FDFD libraries or with other 3rd party solvers.
+EMopt implements the adjoint method along with subroutines for smoothing of material interfaces on a rectangular grid (grid smoothing) in order compute gradients of a function of the electic and magnetic field.  These gradients can be used in conjunction with a number of minimization techniques in order to optimize a complicated passive electromagnetic device. The included adjoint method code relies on a small simple finite difference frequency domain (FDFD) solver which solves Maxwell's equations on a rectangular grid.  The grid smoothing interface, meanwhile, is independent and can be used with the adjoint method + FDFD libraries or with other 3rd party solvers.
 
 ## Getting Started
 
-These instructions will help you get EMOpt up and running on your system.
+These instructions will help you get EMopt up and running on your system.
 
 ### Software Prerequisites
 
@@ -34,9 +34,9 @@ equipped with the ability to compile c++ source using a makefile.
 
 ### Installing C/C++ Prerequisites
 
-Depending on the system you are installing EMOpt on, you may wish to install
+Depending on the system you are installing EMopt on, you may wish to install
 it such that everyone on the system can use it or only a single user can use
-it.  In this guide, we will assume that EMOpt will be installed for a local
+it.  In this guide, we will assume that EMopt will be installed for a local
 user. This process is easily modified to work for system-wide installation.
 
 All prerequiste libraries will be installed to a folder $HOME/local where $HOME
@@ -74,8 +74,8 @@ $ cp -r boost_1_65_1/boost/ $HOME/local/include/boost/
 #### Compiling PETSc
 
 PETSc is a powerful library for solving large sparse systems in a distributed
-manner. Before using EMOpt, PETSc must be compiled and installed on your
-system.  In order for PETSc to work with EMOpt, we need to be very careful
+manner. Before using EMopt, PETSc must be compiled and installed on your
+system.  In order for PETSc to work with EMopt, we need to be very careful
 to compile PETSc with support for complex scalars and include support for
 scalapack and MUMPS. Luckily, the PETSc compilation scripts make this relatively 
 easy for us. 
@@ -215,7 +215,7 @@ make SLEPC_DIR=$HOME/local/slepc/slepc-3.8.1 PETSC_DIR=$HOME/local/petsc/petsc-3
 Note: this assumes that you already have python 2.7+, pip, and the python
 development libraries (e.g. python-devel) installed on your system.
 
-Before using EMOpt, we need to install numpy, scipy, mpi4py, petsc4py, and
+Before using EMopt, we need to install numpy, scipy, mpi4py, petsc4py, and
 slepc4py. Additionally, it is strongly recommended that you install h5py and
 matplotlib. 
 
@@ -257,11 +257,11 @@ $ pip install --user h5py
 $ pip install --user matplotlib
 ```
 
-### Installing EMOpt
+### Installing EMopt
 
 Once the repository has been cloned (or downloaded), change into the emopt
-directory, and make build EMOpt using make. Before running make, we need to
-tell EMOpt where to find the include files for eigen and boost. We do this by
+directory, and make build EMopt using make. Before running make, we need to
+tell EMopt where to find the include files for eigen and boost. We do this by
 setting the appropriate environment variables:
 
 ```
@@ -273,7 +273,7 @@ In our case, both libraries are installed in the same directory, so these two
 environment variables have the same path. This may not be the case on your
 system, however.
 
-Next, run the setup.py script to build and install EMOpt:
+Next, run the setup.py script to build and install EMopt:
 
 ```
 $ python setup.py install --user
@@ -290,5 +290,5 @@ Example projects can be found in the *examples/* folder. Each example is documen
 Andrew Michaels 
 
 ## License
-EMOpt is currently released under the Apache 2.0 license (see LICENSE.md for details)
+EMopt is currently released under the Apache 2.0 license (see LICENSE.md for details)
 

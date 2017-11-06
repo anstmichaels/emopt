@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# EMOpt documentation build configuration file, created by
+# EMopt documentation build configuration file, created by
 # sphinx-quickstart on Sun Nov  5 22:02:02 2017.
 #
 # This file is execfile()d with the current directory set to its
@@ -51,7 +51,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'EMOpt'
+project = u'EMopt'
 copyright = u'2017, Andrew Michaels'
 author = u'Andrew Michaels'
 
@@ -121,7 +121,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'EMOptdoc'
+htmlhelp_basename = 'EMoptdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -148,7 +148,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'EMOpt.tex', u'EMOpt Documentation',
+    (master_doc, 'EMopt.tex', u'EMopt Documentation',
      u'Andrew Michaels', 'manual'),
 ]
 
@@ -158,7 +158,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'emopt', u'EMOpt Documentation',
+    (master_doc, 'emopt', u'EMopt Documentation',
      [author], 1)
 ]
 
@@ -169,8 +169,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'EMOpt', u'EMOpt Documentation',
-     author, 'EMOpt', 'One line description of project.',
+    (master_doc, 'EMopt', u'EMopt Documentation',
+     author, 'EMopt', 'One line description of project.',
      'Miscellaneous'),
 ]
 
