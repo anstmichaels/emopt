@@ -47,4 +47,5 @@
 build/
 emopt.egg-info/
 dist/
-docs/build/*
+docs/build/doctrees
+docs/build/html
