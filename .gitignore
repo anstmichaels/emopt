@@ -47,3 +47,4 @@
 build/
 emopt.egg-info/
 dist/
+docs/build/*
