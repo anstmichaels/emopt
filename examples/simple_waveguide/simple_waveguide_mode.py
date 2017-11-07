@@ -2,13 +2,7 @@
 waveguide which is excited by a mode source which injects the fundamental mode
 of the waveguide.
 
-On most *nix-based machines, this example can be executed as follows. First,
-create a symlink to the emopt_root_dir/lib/emopt folder in the current
-path:
-
-    $ ln -s /path/to/emopt_root/lib/emopt ./
-
-Next, run the script:
+On most *nix-based machines, run the script with:
 
     $ mpirun -n 8 python simple_waveguide.py
 

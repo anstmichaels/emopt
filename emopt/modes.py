@@ -918,3 +918,317 @@ class Mode_TM(Mode_TE):
         # In order to make use of the TE subclass, we need to flip the sign of
         # the Jx and Jy sources
         return (src[0], -1*src[1], -1*src[2])
+
+class Mode_FullVector(ModeSolver):
+    """Solve for the modes for a 2D slice of a 3D structure.
+
+    Parameters
+    ----------
+    wavelength : float
+        The wavelength of the modes.
+    ds : float
+        The grid spacing in the mode field (y) direction.
+    eps : numpy.ndarray
+        The array containing the slice of permittivity for which the modes are
+        calculated.
+    mu : numpy.ndarray
+        The array containing the slice of permeabilities for which the modes are
+        calculated.
+    n0 : float (optional)
+        The 'guess' for the effective index around which the modes are
+        computed. In general, this value should be larger than the index of the
+        mode you are looking for. (default = 1.0)
+    neigs : int (optional)
+        The number of modes to compute. (default = 1)
+    backwards : bool
+        Defines whether or not the mode propagates in the forward +x direction
+        (False) or the backwards -x direction (True). (default = False)
+
+    Attributes
+    ----------
+    wavelength : float
+        The wavelength of the solved modes.
+    neff : list of floats
+        The list of solved effective indices
+    n0 : float
+        The effective index near which modes are found
+    neigs : int
+        The number of modes to solve for.
+
+    Methods
+    -------
+    build(self)
+        Build the system of equations and prepare the mode solver for the solution
+        process.
+    solve(self)
+        Solve for the modes of the structure.
+    get_field(self, i, component)
+        Get the desired raw field component of the i'th mode.
+    get_field_interp(self, i, component)
+        Get the desired interpolated field component of the i'th mode
+    get_mode_number(self, i):
+        Estimate the number X of the given TE_X mode.
+    find_mode_index(self, X):
+        Find the index of a TE_X mode with the desired X.
+    get_source(self, i, ds1, ds2, ds3=0.0)
+        Get the source current distribution for the i'th mode.
+    """
+
+    def __init__(self, wavelength, ds, eps, mu, n0=1.0, neigs=1, \
+                 backwards=False):
+        super(ModeFullVector, self).__init__(wavelength, n0, neigs)
+
+        # We extend the size of the inputs by one element on both sides in order to
+        # accomodate taking derivatives which will be necessary for finding
+        # sources.  Any returned quantities will be the same length as the
+        # input eps/mu
+        M, N = eps.shape
+        self._M = M+2
+        self._N = N+2
+
+        self.eps = np.pad(eps, 1, mode='edge')
+        self.mu = np.pad(mu, 1, mode='edge')
+
+        self.ds = ds
+
+        if(backwards):
+            self._dir = -1.0
+        else:
+            self._dir = 1.0
+
+        # non-dimensionalization for spatial variables
+        self.R = self.wavelength/(2*np.pi)
+
+        # Solve problem of the form Ax = lBx
+        # define A and B matrices here
+        # factor of 3 due to 3 field components
+        Nfields = 6
+        self._A = PETSc.Mat()
+        self._A.create(PETSc.COMM_WORLD)
+        self._A.setSizes([Nfields*self._N, Nfields*self._N])
+        self._A.setType('aij')
+        self._A.setUp()
+
+        self._B = PETSc.Mat()
+        self._B.create(PETSc.COMM_WORLD)
+        self._B.setSizes([Nfields*self._N, Nfields*self._N])
+        self._B.setType('aij')
+        self._B.setUp()
+
+        # setup the solver
+        self._solver = SLEPc.EPS()
+        self._solver.create()
+
+        # we need to set up the spectral transformation so that it doesnt try
+        # to invert 
+        st = self._solver.getST()
+        st.setType('sinvert')
+
+        # Let's use MUMPS for any system solving since it is fast
+        ksp = st.getKSP()
+        #ksp.setType('gmres')
+        ksp.setType('preonly')
+        pc = ksp.getPC()
+        pc.setType('lu')
+        pc.setFactorSolverPackage('mumps')
+
+        # setup vectors for the solution
+        self._x = []
+        self._neff = np.zeros(neigs, dtype=np.complex128)
+        vr, wr = self._A.getVecs()
+        self._x.append(vr)
+
+        for i in range(neigs-1):
+            self._x.append(self._x[0].copy())
+
+        ib, ie = self._A.getOwnershipRange()
+        self.ib = ib
+        self.ie = ie
+
+    def build(self):
+        """Build the system of equations and prepare the mode solver for the solution
+        process.
+
+        In order to solve for the eigen modes, we must first assemble the
+        relevant matrices :math:`A` and :math:`B` for the generalized
+        eigenvalue problem given by :math:`A x = n_x B x` where :math:`n_x` is
+        the eigenvalue and :math:`x` is the vector containing the eigen modes.
+
+        Notes
+        -----
+        This function is run on all nodes.
+        """
+        ds = self.ds/self.R # non-dimensionalize
+
+        A = self._A
+        B = self._B
+        mu = self.mu
+        eps = self.eps
+        N = self._N
+
+        for I in xrange(self.ib, self.ie):
+            pass
+
+    def solve(self):
+        """Solve for the modes of the structure.
+
+        Notes
+        -----
+        This function is run on all nodes.
+        """
+        self._solver.setOperators(self._A, self._B)
+        self._solver.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+        self._solver.setDimensions(self.neigs, PETSc.DECIDE)
+        self._solver.setTarget(self.n0)
+        self._solver.setFromOptions()
+
+        self._solver.solve()
+        nconv = self._solver.getConverged()
+
+        if(nconv < self.neigs):
+            warning_message('%d eigenmodes were requested, however only %d ' \
+                            'eigenmodes were found.' % (self.neigs, nconv), \
+                            module='emopt.modes')
+
+        # nconv can be bigger than the desired number of eigen values
+        if(nconv > self.neigs):
+            neigs = self.neigs
+        else:
+            neigs = nconv
+
+        for i in range(neigs):
+            self.neff[i] = self._solver.getEigenvalue(i)
+            self._solver.getEigenvector(i, self._x[i])
+
+    def get_field(self, i, component):
+        """Get the desired raw field component of the i'th mode.
+
+        Notes
+        -----
+        This function only returns a non-None result on the master node. On all
+        other nodes, None is returned.
+
+        See Also
+        --------
+        :func:`.ModeFullVector.get_field_interp`
+
+        :func:`.ModeFullVector.find_mode_index`
+
+        Parameters
+        ----------
+        i : int
+            The index of the desired mode
+        component : str
+            The desired field component (Ex, Ey, Ez, Hx, Hy, Hz)
+
+        Returns
+        -------
+        numpy.ndarray or None
+            (Master node only) an array containing the desired component of the
+            mode field.
+        """
+        pass
+
+    def get_field_interp(self, i, component):
+        """Get the desired interpolated field component of the i'th mode.
+
+        In general, this function should be preferred over
+        :func:`.ModeFullVector.get_field`.
+
+        In general, you may wish to solve for more than one mode.  In order to
+        get the desired mode, you must specify its index.  If you do not know
+        the index but you do know the desired mode number, then
+        :func:`.ModeFullVector.find_mode_index` may be used to determine the index of
+        the desired mode.
+
+        Notes
+        -----
+        This function only returns a non-None result on the master node. On all
+        other nodes, None is returned.
+
+        See Also
+        --------
+        :func:`.ModeFullVector.get_field`
+
+        :func:`.ModeFullVector.find_mode_index`
+
+        Parameters
+        ----------
+        i : int
+            The index of the desired mode
+        component : str
+            The desired field component (Ex, Ey, Ez, Hx, Hy, Hz)
+
+        Returns
+        -------
+        numpy.ndarray or None
+            (Master node only) an array containing the desired component of the
+            interpolated mode field.
+        """
+        pass
+
+    def get_mode_number(self, i):
+        """
+        Parameters
+        ----------
+        i : int
+            The index of the mode to analyze.
+
+        Returns
+        -------
+        int
+            The number X of the specified TE_X mode.
+        """
+        pass
+
+    def find_mode_index(self, X):
+        """
+        Parameters
+        ----------
+        X : int
+            The number of the desired mode.
+
+        Returns
+        -------
+        int
+            The index of the mode with the desired number.
+        """
+        for i in range(self.neigs):
+            if(self.get_mode_number(i) == X):
+                return i
+
+        warning_message('Desired mode number was not found.', 'emopt.modes')
+        return 0
+
+    def get_source(self, i, dx, dy, dz):
+        """Get the source current distribution for the i'th mode.
+
+        Notes
+        -----
+        This class assumes all modes propagate in the z direction. In order to
+        propagate a mode in the x or y direction, the spatial coordinates may
+        be permuted.
+
+        TODO
+        ----
+        Implement in parallelized manner.
+
+        Parameters
+        ----------
+        i : int
+            Index of the mode for which the corresponding current sources are
+            desired.
+        dx : float
+            The grid spacing in the x direction.
+        dy : float
+            The grid spacing in the y direction.
+        dz : float
+            Unused in :class:`.Mode_TE`
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            (On ALL nodes) The tuple (Jx, Jy, Jz, Mx, My, Mz) containing arrays of the
+            source distributions.
+        """
+        pass

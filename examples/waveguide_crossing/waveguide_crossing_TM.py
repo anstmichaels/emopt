@@ -28,13 +28,7 @@ It is worth noting that this example is a bit contrived as it can actually be
 solved largely by hand. Nonetheless, it is a nice gentle introduction to
 optimization with emopt.
 
-On most *nix-based machines, this example can be executed as follows. First,
-create a symlink to the emopt_root_dir/lib/emopt folder in the current
-path:
-
-    $ ln -s /path/to/emopt_root/lib/emopt ./
-
-Next, run the script:
+On most *nix-based machines, run the script with:
 
     $ mpirun -n 8 python waveguide_crossing_TM.py
 

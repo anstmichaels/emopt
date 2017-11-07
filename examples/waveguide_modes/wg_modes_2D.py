@@ -1,15 +1,9 @@
-"""Demonstrate how to use the emopt mode solver (for 2D problems with 1D
+"""Demonstrate how to use the EMopt mode solver (for 2D problems with 1D
 slices).
 
-On most *nix-based machines, this example can be executed as follows. First,
-create a symlink to the emopt_root_dir/lib/emopt folder in the current
-path:
+On most *nix-based machines, run the script with:
 
-    $ ln -s /path/to/emopt_root/lib/emopt ./
-
-Next, run the script:
-
-    $ mpirun -n 8 python wg_modes.py
+    $ mpirun -n 8 python wg_modes_2D.py
 
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
