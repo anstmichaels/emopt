@@ -43,7 +43,7 @@ import sys, slepc4py
 slepc4py.init(sys.argv)
 
 from misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master
+NOT_PARALLEL, run_on_master, MathDummy
 
 from grid import row_wise_A_update
 
@@ -974,9 +974,9 @@ class Mode_FullVector(ModeSolver):
         Get the source current distribution for the i'th mode.
     """
 
-    def __init__(self, wavelength, ds, eps, mu, n0=1.0, neigs=1, \
-                 backwards=False):
-        super(ModeFullVector, self).__init__(wavelength, n0, neigs)
+    def __init__(self, wavelength, dx, dy, eps, mu, n0=1.0, neigs=1, \
+                 backwards=False, verbose=True):
+        super(Mode_FullVector, self).__init__(wavelength, n0, neigs)
 
         # We extend the size of the inputs by one element on both sides in order to
         # accomodate taking derivatives which will be necessary for finding
@@ -989,7 +989,10 @@ class Mode_FullVector(ModeSolver):
         self.eps = np.pad(eps, 1, mode='edge')
         self.mu = np.pad(mu, 1, mode='edge')
 
-        self.ds = ds
+        self.dx = dx
+        self.dy = dy
+
+        self.verbose = verbose
 
         if(backwards):
             self._dir = -1.0
@@ -1005,13 +1008,13 @@ class Mode_FullVector(ModeSolver):
         Nfields = 6
         self._A = PETSc.Mat()
         self._A.create(PETSc.COMM_WORLD)
-        self._A.setSizes([Nfields*self._N, Nfields*self._N])
+        self._A.setSizes([Nfields*self._M*self._N, Nfields*self._M*self._N])
         self._A.setType('aij')
         self._A.setUp()
 
         self._B = PETSc.Mat()
         self._B.create(PETSc.COMM_WORLD)
-        self._B.setSizes([Nfields*self._N, Nfields*self._N])
+        self._B.setSizes([Nfields*self._M*self._N, Nfields*self._M*self._N])
         self._B.setType('aij')
         self._B.setUp()
 
@@ -1044,6 +1047,14 @@ class Mode_FullVector(ModeSolver):
         ib, ie = self._A.getOwnershipRange()
         self.ib = ib
         self.ie = ie
+        #indset = self._A.getOwnershipIS()
+
+        #self._ISEx = indset[0].createBlock(self._M*self._N, [0])
+        #self._ISEy = indset[0].createBlock(self._M*self._N, [1])
+        #self._ISEz = indset[0].createBlock(self._M*self._N, [2])
+        #self._ISHx = indset[0].createBlock(self._M*self._N, [3])
+        #self._ISHy = indset[0].createBlock(self._M*self._N, [4])
+        #self._ISHz = indset[0].createBlock(self._M*self._N, [5])
 
     def build(self):
         """Build the system of equations and prepare the mode solver for the solution
@@ -1058,16 +1069,152 @@ class Mode_FullVector(ModeSolver):
         -----
         This function is run on all nodes.
         """
-        ds = self.ds/self.R # non-dimensionalize
+        if(self.verbose and NOT_PARALLEL):
+            info_message('Building system matrix...')
+
+        dx = self.dx/self.R # non-dimensionalize
+        dy = self.dy/self.R # non-dimensionalize
+
+        odx = 1.0/dx
+        ody = 1.0/dy
 
         A = self._A
         B = self._B
         mu = self.mu
         eps = self.eps
+        M = self._M
         N = self._N
 
         for I in xrange(self.ib, self.ie):
-            pass
+            # (stuff) = n_z B E_x
+            if(I < N*M):
+                y = int(I/N)
+                x = I - y * N
+
+                JEz0 = I+2*M*N
+                JEz1 = I+2*M*N+1
+                JHy = I+4*M*N
+
+                # derivative of Ez
+                A[I,JEz0] = odx
+                if(x < N-1): A[I,JEz1] = -odx
+
+                # Ey at x,y
+                A[I,JHy] = -1j*mu[y,x]
+
+                # Setup the LHS B matrix
+                B[I,I] = -1j
+
+            # (stuff) = n_z B E_y
+            elif(I < 2*N*M):
+                y = int((I-M*N)/N)
+                x = (I-M*N) - y * N
+
+                JEz0 = I + M*N
+                JEz1 = I + M*N + N
+                JHx = I + 2*M*N
+
+                # derivative of Ez
+                A[I,JEz0] = -ody
+                if(y < M-1): A[I,JEz1] = ody
+
+                # Hx at x,y
+                A[I,JHx] = -1j*mu[y,x]
+
+                # Setup the LHS B matrix
+                B[I,I] = 1j
+
+            # (stuff) = n_z B E_z
+            elif(I < 3*N*M):
+                y = int((I-2*M*N)/N)
+                x = (I-2*M*N) - y * N
+
+                JEy0 = I - M*N
+                JEy1 = I - M*N + 1
+                JEx0 = I - 2*M*N
+                JEx1 = I - 2*M*N + N
+                JHz = I + 3*M*N
+
+                # derivative of Ey
+                A[I, JEy0] = -odx
+                if(x < N-1): A[I,JEy1] = odx
+
+                # derivative of Ex
+                A[I, JEx0] = ody
+                if(y < M-1): A[I, JEx1] = -ody
+
+                # Hz at x,y
+                A[I, JHz] = -1j*mu[y,x]
+
+                # Setup the LHS B matrix
+                # B[I,I] = 0
+
+            # (stuff) = n_z B H_x
+            elif(I < 4*N*M):
+                y = int((I-3*M*N)/N)
+                x = (I-3*M*N) - y * N
+
+                JHz1 = I + 2*M*N
+                JHz0 = I + 2*M*N - 1
+                JEy = I - 2*M*N
+
+                # derivative of Hz
+                if(x > 0): A[I, JHz0] = odx
+                A[I, JHz1] = -odx
+
+                # Ey
+                A[I, JEy] = 1j*eps[y,x]
+
+                # Setup the LHS B matrix
+                B[I,I] = -1j
+
+            # (stuff) = n_z B H_y
+            elif(I < 5*N*M):
+                y = int((I-4*M*N)/N)
+                x = (I-4*M*N) - y * N
+
+                JHz1 = I + M*N
+                JHz0 = I + M*N - N
+                JEx = I - 4*M*N
+
+                # derivative of Ez
+                if(y > 0): A[I, JHz0] = -ody
+                A[I, JHz1] = ody
+
+                # Ex
+                A[I, JEx] = 1j*eps[y,x]
+
+                # Setup the LHS B matrix
+                B[I,I] = 1j
+
+
+            # (stuff) = n_z B H_z
+            else:
+                y = int((I-5*M*N)/N)
+                x = (I-5*M*N) - y * N
+
+                JHy0 = I - M*N - 1
+                JHy1 = I - M*N
+                JHx0 = I - 2*M*N - N
+                JHx1 = I - 2*M*N
+                JEz = I - 3*M*N
+
+                # derivative of Hy
+                if(x < N-1): A[I, JHy0] = -ody
+                A[I,JHy1] = ody
+
+                # derivative of Hx
+                if(y > 0): A[I, JHx0] = ody
+                A[I, JHx1] = -ody
+
+                # Ez
+                A[I, JEz] = 1j*eps[y,x]
+
+                # Setup the LHS B matrix
+                # B[I,I] = 0
+
+        self._A.assemble()
+        self._B.assemble()
 
     def solve(self):
         """Solve for the modes of the structure.
@@ -1076,6 +1223,9 @@ class Mode_FullVector(ModeSolver):
         -----
         This function is run on all nodes.
         """
+        if(self.verbose and NOT_PARALLEL):
+            info_message('Solving...')
+
         self._solver.setOperators(self._A, self._B)
         self._solver.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
         self._solver.setDimensions(self.neigs, PETSc.DECIDE)
@@ -1127,7 +1277,99 @@ class Mode_FullVector(ModeSolver):
             (Master node only) an array containing the desired component of the
             mode field.
         """
-        pass
+        M = self._M
+        N = self._N
+
+        if(component == 'Ex'):
+            if(self.ib >= M*N):
+                I0 = 0
+                I1 = 0
+            else:
+                I0 = 0
+                if(self.ie >= M*N):
+                    I1 = M*N-self.ib
+                else:
+                    I1 = self.ie-self.ib
+        elif(component == 'Ey'):
+            if(self.ib >= 2*M*N or self.ie < M*N):
+                I0 = 0
+                I1 = 0
+            else:
+                if(self.ib < M*N):
+                    I0 = M*N - self.ib
+                else:
+                    I0 = 0
+                if(self.ie >= 2*M*N):
+                    I1 = 2*M*N-self.ib
+                else:
+                    I1 = self.ie-self.ib
+        elif(component == 'Ez'):
+            if(self.ib >= 3*M*N or self.ie < 2*M*N):
+                I0 = 0
+                I1 = 0
+            else:
+                if(self.ib < 2*M*N):
+                    I0 = 2*M*N - self.ib
+                else:
+                    I0 = 0
+                if(self.ie >= 3*M*N):
+                    I1 = 3*M*N-self.ib
+                else:
+                    I1 = self.ie-self.ib
+        elif(component == 'Hx'):
+            if(self.ib >= 4*M*N or self.ie < 3*M*N):
+                I0 = 0
+                I1 = 0
+            else:
+                if(self.ib < 3*M*N):
+                    I0 = 3*M*N - self.ib
+                else:
+                    I0 = 0
+                if(self.ie >= 4*M*N):
+                    I1 = 4*M*N-self.ib
+                else:
+                    I1 = self.ie-self.ib
+        elif(component == 'Hy'):
+            if(self.ib >= 5*M*N or self.ie < 4*M*N):
+                I0 = 0
+                I1 = 0
+            else:
+                if(self.ib < 4*M*N):
+                    I0 = 4*M*N - self.ib
+                else:
+                    I0 = 0
+                if(self.ie >= 5*M*N):
+                    I1 = 5*M*N-self.ib
+                else:
+                    I1 = self.ie-self.ib
+        elif(component == 'Hz'):
+            if(self.ie < 4*M*N):
+                I0 = 0
+                I1 = 0
+            else:
+                if(self.ib < 5*M*N):
+                    I0 = 5*M*N - self.ib
+                else:
+                    I0 = 0
+
+                I1 = self.ie-self.ib
+        else:
+            raise ValueError('Unrecongnized field componenet "%s". The allowed'
+                             'field components are Ex, Ey, Ez, Hx, Hy, Hz.' % (component))
+
+        comm = MPI.COMM_WORLD
+        x = self._x[i].getArray()[I0:I1]
+        x_full = comm.gather(x, root=0)
+
+        #scatter, x_full = PETSc.Scatter.toZero(x)
+        #scatter.scatter(x, x_full, False, PETSc.Scatter.Mode.FORWARD)
+
+        if(NOT_PARALLEL):
+            x_assembled = np.concatenate(x_full)
+            field = np.reshape(x_assembled, (M,N))
+            return field[1:-1, 1:-1]
+        else:
+            return MathDummy()
 
     def get_field_interp(self, i, component):
         """Get the desired interpolated field component of the i'th mode.
@@ -1143,6 +1385,10 @@ class Mode_FullVector(ModeSolver):
 
         Notes
         -----
+        The fields are solved for on a grid made up of compressed 2D Yee cells.
+        The fields are thus interpolated at the center of this Yee cell (which
+        happens to coincide with the position of Hz)
+
         This function only returns a non-None result on the master node. On all
         other nodes, None is returned.
 
@@ -1165,7 +1411,80 @@ class Mode_FullVector(ModeSolver):
             (Master node only) an array containing the desired component of the
             interpolated mode field.
         """
-        pass
+        f_raw = self.get_field(i, component)
+
+        if(NOT_PARALLEL):
+            if(component == 'Ex'):
+                Ex = np.copy(f_raw)
+                Ex[0:-1,:] += f_raw[1:,:]
+                return Ex[1:-1, 1:-1]/2.0
+            elif(component == 'Ey'):
+                Ey = np.copy(f_raw)
+                Ey[:,0:-1] += f_raw[:,1:]
+                return Ey[1:-1, 1:-1]/2.0
+            elif(component == 'Ez'):
+                Ez = np.copy(f_raw)
+                Ez[:,0:-1] += f_raw[:,1:]
+                Ez[0:-1,:] += f_raw[1:,:]
+                Ez[0:-1, 0:-1] += f_raw[1:,1:]
+                return Ez[1:-1, 1:-1]/4.0
+            elif(component == 'Hx'):
+                Hx = np.copy(f_raw)
+                Hx[:,0:-1] += f_raw[:,1:]
+                return Hx[1:-1, 1:-1]/2.0
+            elif(component == 'Hy'):
+                Hy = np.copy(f_raw)
+                Hy[0:-1,:] += f_raw[1:,:]
+                return Hy[1:-1, 1:-1]
+            elif(component == 'Hz'):
+                return f_raw[1:-1, 1:-1]
+        else:
+            return MathDummy()
+
+    def component_energy(self, i):
+        """Get the fraction of energy stored in each field component.
+
+        Parameters
+        ----------
+        i : int
+            The index of the mode to analyze
+
+        Returns
+        -------
+        [float, float, float, float, float, float]
+            The list of energy fractions corresponding to Ex, Ey, Ez, Hx, Hy,
+            Hz
+        """
+        eps = self.eps[1:-1, 1:-1]
+        mu = self.mu[1:-1, 1:-1]
+
+        Ex = self.get_field(i, 'Ex')
+        WEx = np.sum(eps.real*np.abs(Ex)**2)
+        del Ex
+
+        Ey = self.get_field(i, 'Ey')
+        WEy = np.sum(eps.real*np.abs(Ey)**2)
+        del Ey
+
+        Ez = self.get_field(i, 'Ez')
+        WEz = np.sum(eps.real*np.abs(Ez)**2)
+        del Ez
+
+        Hx = self.get_field(i, 'Hx')
+        WHx = np.sum(mu.real*np.abs(Hx)**2)
+        del Hx
+
+        Hy = self.get_field(i, 'Hy')
+        WHy = np.sum(mu.real*np.abs(Hy)**2)
+        del Hy
+
+        Hz = self.get_field(i, 'Hz')
+        WHz = np.sum(mu.real*np.abs(Hz)**2)
+        del Hz
+
+        Wtot = WEx+WEy+WEz+WHx+WHy+WHz
+        return [WEx/Wtot, WEy/Wtot, WEz/Wtot,
+                WHx/Wtot, WHy/Wtot, WHz/Wtot]
 
     def get_mode_number(self, i):
         """
@@ -1176,8 +1495,8 @@ class Mode_FullVector(ModeSolver):
 
         Returns
         -------
-        int
-            The number X of the specified TE_X mode.
+        int, int
+            The numbers X and Y of the mode.
         """
         pass
 

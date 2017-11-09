@@ -9,13 +9,15 @@ If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
 import emopt.modes
-from emopt.modes import ModeFullVector
+from emopt.modes import Mode_FullVector
 
-from emopt.misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, n_silicon
+from emopt.misc import info_message, warning_message, RANK, \
+NOT_PARALLEL, run_on_master, n_silicon, PlaneCoordinates, save_results
 
 from emopt.modedata import gen_mode_data_TE, gen_mode_data_TM
 import emopt.fomutils as FOMUtils
+
+from emopt.grid import Rectangle, StructuredMaterial
 
 import numpy as np
 from math import pi
@@ -23,71 +25,75 @@ from math import pi
 ####################################################################################
 # Set up the size of the problem
 ####################################################################################
-H = 6.0
-dy = 0.01
-N = int(np.ceil(H/dy)+1)
-H = (N-1)*dy
+W = 4.0
+H = 2.22
+dx = 0.02
+dy = 0.02
+N = int(np.ceil(W/dy)+1)
+M = int(np.ceil(H/dy)+1)
+W = (N-1)*dy
+H = (M-1)*dy
 
 wavelength = 1.55
 
 ####################################################################################
-# Define the material distributions
+# Define the material distributions!
 ####################################################################################
-eps = np.ones(N, dtype=np.complex128)*1.444**2
-mu = np.ones(N, dtype=np.complex128)
+eps_Si = 3.45**2
+eps_SiO2 = 1.444**2
 
-# Setup a waveguide by inserting values into eps
-# Geometry is represented simply as an array of values. The physical distance
-# between values in the array is given by dy.
-w_wg = 2.0
-x = np.arange(N)*dy
-eps[(x >= H/2-w_wg/2) & (x <= H/2+w_wg/2)] = 2.0**2
-eps[(x >= H/2-w_wg/6) & (x <= H/2+w_wg/6)] = 2.8**2
+w_wg = 1.5
+h_SOI = 0.22
+h_etched = 0.11
+
+rib = Rectangle(W/2, 1.0+h_SOI/2.0, w_wg, h_SOI)
+etched = Rectangle(W/2, 1.0+h_etched/2.0, 2*W, h_etched)
+eps_bg = Rectangle(W/2, H/2, 2*W, 2*H)
+
+rib.layer = 1; rib.material_value = eps_Si
+etched.layer = 1; etched.material_value = eps_Si
+eps_bg.layer = 2; eps_bg.material_value = eps_SiO2
+
+eps = StructuredMaterial(W,H,dx,dy)
+eps.add_primitive(rib); eps.add_primitive(etched); eps.add_primitive(eps_bg)
+
+mu_bg = Rectangle(W/2, H/2, 2*W, 2*H)
+mu_bg.layer = 1; mu_bg.material_value = 1.0
+mu = StructuredMaterial(W,H,dx,dy)
+mu.add_primitive(mu_bg)
+
+eps_arr = eps.get_values(0,M,0,N)
+mu_arr = mu.get_values(0,M,0,N)
 
 ####################################################################################
 # setup the mode solver
 ####################################################################################
-# Solving for the modes of an electromagnetic structure involves expressing
-# Maxwell's equations for a field with a known form as an eigenvalue problem.
-# Because of the way that eigenvalues are compute numerically, we cannot be
-# absolutely sure that the highest order *physical* modes will be the first 3
-# eigenvectors that we find.  We thus solve for more vectors than we really
-# need to be sure that we can pick out the desired modes.
-neigs = 8
-modes = Mode_TE(wavelength, dy, eps, mu, n0=3.0, neigs=neigs)
+neigs = 4
+modes = Mode_FullVector(wavelength, dx, dy, eps_arr, mu_arr, n0=np.sqrt(eps_Si), neigs=neigs)
 modes.build() # build the eigenvalue problem internally
 modes.solve() # solve for the effective indices and mode profiles
 
-# Finally, we visualize the results. Because emopt relies on MPI to do
-# parallelization, this script is actually duplicated and run many times in
-# parallel. If we are not careful, we could end up generating a separate plot
-# for every single processor. In order to avoid this, we only run on the
-# "master" node, which is achieved using the NOT_PARALLEL flag.
+Ex = modes.get_field_interp(0, 'Ex')
+e_frac = modes.component_energy(0)
 if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
-    print('          n_eff          ')
-    print('-------------------------')
-    for j in range(neigs):
-        n = modes.neff[j]
-        print('%d : %0.4f  +  %0.4f i' % (j, n.real, n.imag))
+    print e_frac
 
+    print modes.neff[2]
 
-    f, axes = plt.subplots(3,1)
-    for j in range(3):
-        i = modes.find_mode_index(j)
-        Ez = modes.get_field_interp(i, 'Ez')
+    #Ex = fields[0:M,:]
+    vmin = np.min(np.abs(Ex))
+    vmax = np.max(np.abs(Ex))
+    levels = np.linspace(vmin, vmax, 16)
 
-        ax = axes[j]
-        #ax = f.add_subplot(3,1,j+1)
-        ax.plot(x, np.abs(Ez), linewidth=2)
-        ax.set_ylabel('E$_z$ (TE$_%d$)' % j, fontsize=12)
-        ax.set_xlim([x[0], x[-1]])
-
-        ax2 = ax.twinx()
-        ax2.plot(x, np.sqrt(eps.real), 'r--', linewidth=1, alpha=0.5)
-        ax2.set_ylabel('Refractive Index')
-
-    axes[2].set_xlabel('x [um]', fontsize=12)
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    im = ax.contourf(np.abs(Ex), extent=[0,W,0,H], levels=levels, vmin=vmin,
+                     vmax=vmax, cmap='hot')
+    ax.contour(np.abs(Ex), extent=[0,W,0,H], linewidths=[0.5,],
+               colors='k')
+    ax.contour(eps_arr.real, levels=[eps_Si,], extent=[0,W,0,H],
+                linewidths=[1,], colors=['w'])
+    f.colorbar(im)
     plt.show()
-
