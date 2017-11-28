@@ -975,7 +975,7 @@ class Mode_FullVector(ModeSolver):
     """
 
     def __init__(self, wavelength, dx, dy, eps, mu, n0=1.0, neigs=1, \
-                 backwards=False, verbose=True):
+                 backwards=False, verbose=True, bc='0000'):
         super(Mode_FullVector, self).__init__(wavelength, n0, neigs)
 
         # We extend the size of the inputs by one element on both sides in order to
@@ -1004,7 +1004,7 @@ class Mode_FullVector(ModeSolver):
 
         # Solve problem of the form Ax = lBx
         # define A and B matrices here
-        # factor of 3 due to 3 field components
+        # 6 fields + 1 dummy variable for enforcing zero divergence of B = mu*H
         Nfields = 6
         self._A = PETSc.Mat()
         self._A.create(PETSc.COMM_WORLD)
@@ -1023,7 +1023,7 @@ class Mode_FullVector(ModeSolver):
         self._solver.create()
 
         # we need to set up the spectral transformation so that it doesnt try
-        # to invert 
+        # to invert B
         st = self._solver.getST()
         st.setType('sinvert')
 
@@ -1056,6 +1056,21 @@ class Mode_FullVector(ModeSolver):
         #self._ISHy = indset[0].createBlock(self._M*self._N, [4])
         #self._ISHz = indset[0].createBlock(self._M*self._N, [5])
 
+        # handle boundary conditions
+        # TODO: Lots of checking for the supplied format should be done here
+        self._bc = bc
+
+        if(bc[0] == 'P' and bc[1] == 'P'):
+            self._periodic_x = True
+        else:
+            self._periodic_x = False
+
+        if(bc[2] == 'P' and bc[3] == 'P'):
+            self._periodic_y = True
+        else:
+            self._periodic_y = False
+
+
     def build(self):
         """Build the system of equations and prepare the mode solver for the solution
         process.
@@ -1086,132 +1101,184 @@ class Mode_FullVector(ModeSolver):
         N = self._N
 
         for I in xrange(self.ib, self.ie):
-            # (stuff) = n_z B E_x
-            if(I < N*M):
-                y = int(I/N)
-                x = I - y * N
-
-                JEz0 = I+2*M*N
-                JEz1 = I+2*M*N+1
-                JHy = I+4*M*N
-
-                # derivative of Ez
-                A[I,JEz0] = odx
-                if(x < N-1): A[I,JEz1] = -odx
-
-                # Ey at x,y
-                A[I,JHy] = -1j*mu[y,x]
-
-                # Setup the LHS B matrix
-                B[I,I] = -1j
-
-            # (stuff) = n_z B E_y
-            elif(I < 2*N*M):
-                y = int((I-M*N)/N)
-                x = (I-M*N) - y * N
-
-                JEz0 = I + M*N
-                JEz1 = I + M*N + N
-                JHx = I + 2*M*N
-
-                # derivative of Ez
-                A[I,JEz0] = -ody
-                if(y < M-1): A[I,JEz1] = ody
-
-                # Hx at x,y
-                A[I,JHx] = -1j*mu[y,x]
-
-                # Setup the LHS B matrix
-                B[I,I] = 1j
-
-            # (stuff) = n_z B E_z
-            elif(I < 3*N*M):
-                y = int((I-2*M*N)/N)
-                x = (I-2*M*N) - y * N
-
-                JEy0 = I - M*N
-                JEy1 = I - M*N + 1
-                JEx0 = I - 2*M*N
-                JEx1 = I - 2*M*N + N
-                JHz = I + 3*M*N
-
-                # derivative of Ey
-                A[I, JEy0] = -odx
-                if(x < N-1): A[I,JEy1] = odx
-
-                # derivative of Ex
-                A[I, JEx0] = ody
-                if(y < M-1): A[I, JEx1] = -ody
-
-                # Hz at x,y
-                A[I, JHz] = -1j*mu[y,x]
-
-                # Setup the LHS B matrix
-                # B[I,I] = 0
-
-            # (stuff) = n_z B H_x
-            elif(I < 4*N*M):
-                y = int((I-3*M*N)/N)
-                x = (I-3*M*N) - y * N
-
-                JHz1 = I + 2*M*N
-                JHz0 = I + 2*M*N - 1
-                JEy = I - 2*M*N
-
-                # derivative of Hz
-                if(x > 0): A[I, JHz0] = odx
-                A[I, JHz1] = -odx
-
-                # Ey
-                A[I, JEy] = 1j*eps[y,x]
-
-                # Setup the LHS B matrix
-                B[I,I] = -1j
+            A[I,I] = 0.0
+            B[I,I] = 0.0
 
             # (stuff) = n_z B H_y
-            elif(I < 5*N*M):
-                y = int((I-4*M*N)/N)
-                x = (I-4*M*N) - y * N
+            if(I < N*M):
+                y = int((I-0*M*N)/N)
+                x = (I-0*M*N) - y * N
 
-                JHz1 = I + M*N
-                JHz0 = I + M*N - N
-                JEx = I - 4*M*N
+                JHz1 = 5*M*N + y*N + x
+                JHz0 = 5*M*N + (y-1)*N + x
+                JHz2 = 6*M*N-N+x
+                JEx = y*N + x
+                JHy = 4*M*N + y*N + x
 
                 # derivative of Ez
                 if(y > 0): A[I, JHz0] = -ody
+                elif(self._periodic_y): A[I, JHz2] = -ody
                 A[I, JHz1] = ody
 
                 # Ex
                 A[I, JEx] = 1j*eps[y,x]
 
                 # Setup the LHS B matrix
-                B[I,I] = 1j
+                B[I,JHy] = 1j*self._dir
+            # (stuff) = n_z B H_x
+            elif(I < 2*N*M):
+                y = int((I-1*M*N)/N)
+                x = (I-1*M*N) - y * N
 
+                JHz1 = 5*N*M + y*N + x
+                JHz0 = 5*N*M + y*N + x - 1
+                JHz2 = 5*M*N + y*N + N-1
+                JEy = M*N + y*N + x
+                JHx = 3*M*N + y*N + x
 
-            # (stuff) = n_z B H_z
-            else:
-                y = int((I-5*M*N)/N)
-                x = (I-5*M*N) - y * N
+                # derivative of Hz
+                if(x > 0): A[I, JHz0] = odx
+                elif(self._periodic_x): A[I, JHz2] = odx
+                A[I, JHz1] = -odx
 
-                JHy0 = I - M*N - 1
-                JHy1 = I - M*N
-                JHx0 = I - 2*M*N - N
-                JHx1 = I - 2*M*N
-                JEz = I - 3*M*N
+                # Ey
+                A[I, JEy] = 1j*eps[y,x]
+
+                # Setup the LHS B matrix
+                B[I,JHx] = -1j*self._dir
+
+            # (stuff) = dummy variable (zero)
+            elif(I < 3*M*N):
+                y = int((I-2*M*N)/N)
+                x = (I-2*M*N) - y * N
+
+                JHy0 = 4*M*N + y*N + x - 1
+                JHy1 = 4*M*N + y*N + x
+                JHy2 = 4*M*N + y*N + N-1
+
+                JHx0 = 3*M*N + (y-1)*N + x
+                JHx1 = 3*M*N + y*N + x
+                JHx2 = 4*M*N - N + x
+
+                JEz = 2*M*N + y*N + x
+                Jdummy = 6*M*N + y*N + x
 
                 # derivative of Hy
-                if(x < N-1): A[I, JHy0] = -ody
-                A[I,JHy1] = ody
+                if(x > 0): A[I, JHy0] = -odx
+                elif(self._periodic_x): A[I, JHy2] = -odx
+                A[I,JHy1] = odx
 
                 # derivative of Hx
                 if(y > 0): A[I, JHx0] = ody
+                elif(self._periodic_y): A[I, JHx2] = ody
                 A[I, JHx1] = -ody
 
                 # Ez
                 A[I, JEz] = 1j*eps[y,x]
 
                 # Setup the LHS B matrix
-                # B[I,I] = 0
+                #B[I,Jdummy] = 0.0
+
+            # (stuff) = n_z B E_y
+            elif(I < 4*N*M):
+                y = int((I-3*M*N)/N)
+                x = (I-3*M*N) - y * N
+
+                JEz0 = 2*M*N + y*N + x
+                JEz1 = 2*M*N + (y+1)*N + x
+                JEz2 = 2*M*N + x
+                JHx = 3*M*N + y*N + x
+                JEy = M*N + y*N+x
+
+                # derivative of Ez
+                A[I,JEz0] = -ody
+                if(y < M-1): A[I,JEz1] = ody
+                elif(self._periodic_y): A[I,JEz2] = ody
+
+                # Hx at x,y
+                A[I,JHx] = -1j*mu[y,x]
+
+                # Setup the LHS B matrix
+                B[I,JEy] = 1j*self._dir
+
+            # (stuff) = n_z B E_x
+            elif(I < 5*N*M):
+                y = int((I-4*M*N)/N)
+                x = (I-4*M*N) - y * N
+
+                JEz0 = 2*M*N + y*N + x
+                JEz1 = 2*M*N + y*N + x + 1
+                JEz2 = y*N + 2*M*N
+                JHy = 4*M*N + y*N + x
+                JEx = y*N + x
+
+                # derivative of Ez
+                A[I,JEz0] = odx
+                if(x < N-1): A[I,JEz1] = -odx
+                elif(self._periodic_x): A[I,JEz2] = -odx
+
+                # Ey at x,y
+                A[I,JHy] = -1j*mu[y,x]
+
+                # Setup the LHS B matrix
+                B[I,JEx] = -1j*self._dir
+
+
+            # (stuff) = n_z B E_z
+            elif(I < 6*N*M):
+                y = int((I-5*M*N)/N)
+                x = (I-5*M*N) - y * N
+
+                JEy0 = M*N + y*N + x
+                JEy1 = M*N + y*N + x + 1
+                JEy2 = M*N + y*N
+
+                JEx0 = y*N + x
+                JEx1 = (y+1)*N + x
+                JEx2 = x
+
+                JHz = 5*M*N + y*N + x
+                JEz = 2*M*N + y*N + x
+
+                # derivative of Ey
+                A[I, JEy0] = -odx
+                if(x < N-1): A[I,JEy1] = odx
+                elif(self._periodic_x): A[I, JEy2] = odx
+
+                # derivative of Ex
+                A[I, JEx0] = ody
+                if(y < M-1): A[I, JEx1] = -ody
+                elif(self._periodic_y): A[I, JEx2] = -ody
+
+                # Hz at x,y
+                A[I, JHz] = -1j*mu[y,x]
+
+                # Setup the LHS B matrix
+                B[I,JEz] = 0.0
+
+            # (stuff) = n_z B H_z
+            #else:
+            #    y = int((I-6*M*N)/N)
+            #    x = (I-6*M*N) - y * N
+
+            #    JHz = 5*M*N + y*N + x
+
+            #    JHx0 = 3*M*N + y*N + x
+            #    JHx1 = 3*M*N + y*N + x + 1
+
+            #    JHy0 = 4*M*N + y*N + x
+            #    JHy1 = 4*M*N + (y+1)*N + x
+
+            #    # derivative of Hx
+            #    A[I, JHx0] = -odx
+            #    if(x < N-1): A[I, JHx1] = odx * mu[y,x+1]/mu[y,x]
+
+            #    # derivative of Hy
+            #    A[I, JHy0] = -ody
+            #    if(y < M-1): A[I, JHy1] = ody * mu[y+1,x]/mu[y,x]
+
+            #    # RHS (B)
+            #    B[I,JHz] = -1j*self._dir
 
         self._A.assemble()
         self._B.assemble()

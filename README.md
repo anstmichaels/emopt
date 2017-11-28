@@ -55,7 +55,7 @@ in $HOME/local, e.g.
 ```
 $ curl -L -O http://bitbucket.org/eigen/eigen/get/3.3.4.tar.gz
 $ tar xvzf 3.3.4.tar.gz
-$ cp -r eigen-eigen-5a0156e40feb/Eigen $HOME/local/include/eigen-3.3.4/
+$ cp -r eigen-eigen-5a0156e40feb/Eigen $HOME/local/include/Eigen/
 ```
 
 #### Boost.Geometry

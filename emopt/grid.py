@@ -27,7 +27,7 @@ from numpy.ctypeslib import ndpointer
 import scipy
 import os
 
-from misc import DomainCoordinates, LineCoordinates
+from misc import DomainCoordinates, LineCoordinates, PlaneCoordinates
 from misc import warning_message
 
 __author__ = "Andrew Michaels"
@@ -249,6 +249,13 @@ class Material(object):
             n2 = domain.k[-1]+1
 
             return self.get_values(m1, m2, n1, n2)[:, 0]
+        elif(isinstance(domain, PlaneCoordinates)):
+            m1 = domain.j[0,0]
+            m2 = domain.j[-1,0]
+            n1 = domain.k[0,0]
+            n2 = domain.k[0,-1]
+
+            return self.get_values(m1, m2, n1, n2)
 
 class GridMaterial(Material):
     """Define a simple rectangular-grid-based Material distribution.

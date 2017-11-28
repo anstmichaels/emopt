@@ -178,8 +178,8 @@ class Optimizer(object):
         running = True
         params = np.zeros(self.p0.shape)
         if(RANK == 0):
-            pfinal, params = self.run_sequence(self.am)
-            return pfinal, params
+            fom, params = self.run_sequence(self.am)
+            return fom, params
         else:
             while(running):
                 # Wait for commands from the master node
@@ -193,6 +193,8 @@ class Optimizer(object):
                     self.am.gradient(params)
                 elif(command == self.RunCommands.EXIT):
                     running = False
+
+        return None, None
 
 
     def __fom(self, params):

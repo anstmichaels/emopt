@@ -246,8 +246,6 @@ if __name__ == '__main__':
     w_src= 5.0
 
     # create the simulation object.
-    # Note: This is TE as is defined in electromagnetics (not the silly silicon
-    # photonics definition)
     sim = FDFD_TE(W, H, dx, dy, wavelength, [1.0,1.0,1.0,1.0])
 
     # Get the actual width and height

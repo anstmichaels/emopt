@@ -1105,10 +1105,6 @@ class AdjointMethodPNF(AdjointMethodFM):
         """Calculate the non-power-normalized figure of merit
         :math:`f(\\mathbf{E}, \\mathbf{H})`.
 
-        Notes
-        -----
-        This function is called only on the master node.
-
         Parameters
         ----------
         sim : emopt.fdfd.FDFD
@@ -1128,10 +1124,6 @@ class AdjointMethodPNF(AdjointMethodFM):
         """Calculate the derivative of the non-power-normalized figure of merit
         with respect to the fields in the discretized grid.
 
-        Notes
-        -----
-        This function is called only on the master node.
-
         Parameters
         ----------
         sim : emopt.fdfd.FDFD
@@ -1145,6 +1137,30 @@ class AdjointMethodPNF(AdjointMethodFM):
             The derivative of f with respect to the fields in the form (E, H)
         """
         pass
+
+    def calc_y(self, sim, params):
+        """Calculate the additive contribution to the figure of merit by
+        explicit functions of the design variables.
+
+        Because of the power normalization, we have to handle contributions to
+        the figure of merit which depend explicitly on the design variables
+        separately. This function returns the value of the functional y(p)
+        where y(p) is given by F = f(E,H,p)/Psrc + y(p).
+
+        Parameters
+        ----------
+        sim : emopt.fdfd.FDFD
+            The FDFD simulation object.
+        params : numpy.ndarray
+            The current set of design variables
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            The value of y(p)
+        """
+        return 0.0
+
 
     def calc_fom(self, sim, params):
         """Calculate the power-normalized figure of merit.
@@ -1162,10 +1178,11 @@ class AdjointMethodPNF(AdjointMethodFM):
             The value of the power-normalized figure of merit.
         """
         f = self.calc_f(sim, params)
+        y = self.calc_y(sim, params)
         Psrc = sim.get_source_power()
 
         if(NOT_PARALLEL):
-            return f / Psrc
+            return f / Psrc + y
         else:
             return None
 

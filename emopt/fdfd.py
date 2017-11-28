@@ -413,8 +413,6 @@ class FDFD_TE(FDFD):
         self.ib, self.ie = self._A.getOwnershipRange()
         self.A_diag_update = np.zeros(self.ie-self.ib, dtype=np.complex128)
 
-
-
         # use conjugate gradients or bicgstab
         if(use_iterative):
             # create a linear solver
