@@ -14,7 +14,6 @@ from emopt.modes import Mode_TE
 from emopt.misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, n_silicon
 
-from emopt.modedata import gen_mode_data_TE, gen_mode_data_TM
 import emopt.fomutils as FOMUtils
 
 import numpy as np

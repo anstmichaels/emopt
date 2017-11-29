@@ -256,12 +256,8 @@ class Mode_TE(ModeSolver):
                  backwards=False):
         super(Mode_TE, self).__init__(wavelength, n0, neigs)
 
-        # We extend the size of the inputs by one element on both sides in order to
-        # accomodate taking derivatives which will be necessary for finding
-        # sources.  Any returned quantities will be the same length as the
-        # input eps/mu
         N = len(eps)
-        self._N = N+2
+        self._N = N
 
         self.eps = np.concatenate((eps[0:1], eps, eps[-1:]))
         self.mu = np.concatenate((mu[0:1], mu, mu[-1:]))
@@ -491,11 +487,11 @@ class Mode_TE(ModeSolver):
         # initialization, we need to be careful to return fields of the
         # expected size, hence the [1:]
         if(component == 'Ez'):
-            return self._Ez[i][1:-1]
+            return self._Ez[i]
         elif(component == 'Hx'):
-            return self._Hx[i][1:-1]
+            return self._Hx[i]
         elif(component == 'Hy'):
-            return self._Hy[i][1:-1]
+            return self._Hy[i]
         else:
             raise ValueError('Unrecongnized field componenet "%s". The allowed'
                              'field components are Ez, Hx, Hy.' % (component))
@@ -541,11 +537,11 @@ class Mode_TE(ModeSolver):
         # initialization, we need to be careful to return fields of the
         # expected size, hence the [1:]
         if(component == 'Ez'):
-            return self._Ez[i][1:-1]
+            return self._Ez[i]
         elif(component == 'Hy'):
-            return self._Hy[i][1:-1]
+            return self._Hy[i]
         elif(component == 'Hx'):
-            Hxi = np.copy(self._Hx[i])
+            Hxi = np.pad(self._Hx[i], 1, 'constant', constant_values=0)
             Hxi[1:] += Hxi[0:self._N-1]
             return Hxi[1:-1] / 2.0
         else:
@@ -667,13 +663,14 @@ class Mode_TE(ModeSolver):
         N = self._N
 
         if(NOT_PARALLEL):
-            Jz = np.zeros(N-2, dtype=np.complex128)
-            Mx = np.zeros(N-2, dtype=np.complex128)
-            My = np.zeros(N-2, dtype=np.complex128)
+            Jz = np.zeros(N, dtype=np.complex128)
+            Mx = np.zeros(N, dtype=np.complex128)
+            My = np.zeros(N, dtype=np.complex128)
 
-            Ez = self._Ez[i]
-            Hx = self._Hx[i]
-            Hy = self._Hy[i]
+            # need to include boundary values
+            Ez = np.pad(self._Ez[i], 1, 'constant', constant_values=0)
+            Hx = np.pad(self._Hx[i], 1, 'constant', constant_values=0)
+            Hy = np.pad(self._Hy[i], 1, 'constant', constant_values=0)
             neff = self.neff[i]
             dx = dx/self.R # non-dimensionalize
             dy = dy/self.R # non-dimensionalize
@@ -1164,7 +1161,6 @@ class Mode_FullVector(ModeSolver):
                 JHx2 = 4*M*N - N + x
 
                 JEz = 2*M*N + y*N + x
-                Jdummy = 6*M*N + y*N + x
 
                 # derivative of Hy
                 if(x > 0): A[I, JHy0] = -odx
@@ -1191,13 +1187,13 @@ class Mode_FullVector(ModeSolver):
                 JEy = M*N + y*N+x
 
                 # derivative of Ez
-                if(y > 0):
+                if(y > 0 or self._periodic_y):
                     A[I,JEz0] = -ody
                 if(y < M-1): A[I,JEz1] = ody
                 elif(self._periodic_y): A[I,JEz2] = ody
 
                 # Hx at x,y
-                if(x > 0):
+                if(x > 0 or self._periodic_x):
                     A[I,JHx] = -1j*mu[y,x]
 
                 # Setup the LHS B matrix
@@ -1215,13 +1211,13 @@ class Mode_FullVector(ModeSolver):
                 JEx = y*N + x
 
                 # derivative of Ez
-                if(x > 0):
+                if(x > 0 or self._periodic_x):
                     A[I,JEz0] = odx
                 if(x < N-1): A[I,JEz1] = -odx
                 elif(self._periodic_x): A[I,JEz2] = -odx
 
                 # Hy at x,y
-                if(y > 0):
+                if(y > 0 or self._periodic_y):
                     A[I,JHy] = -1j*mu[y,x]
 
                 # Setup the LHS B matrix
@@ -1245,13 +1241,13 @@ class Mode_FullVector(ModeSolver):
                 JEz = 2*M*N + y*N + x
 
                 # derivative of Ey
-                if(x > 0):
+                if(x > 0 or self._periodic_x):
                     A[I, JEy0] = -odx
                 if(x < N-1): A[I,JEy1] = odx
                 elif(self._periodic_x): A[I, JEy2] = odx
 
                 # derivative of Ex
-                if(y > 0):
+                if(y > 0 or self._periodic_y):
                     A[I, JEx0] = ody
                 if(y < M-1): A[I, JEx1] = -ody
                 elif(self._periodic_y): A[I, JEx2] = -ody
