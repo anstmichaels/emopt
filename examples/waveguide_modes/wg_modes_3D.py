@@ -94,7 +94,10 @@ if(NOT_PARALLEL):
                      vmax=vmax, cmap='hot')
     ax.contour(np.abs(Ex), extent=[0,W,0,H], linewidths=[0.5,],
                colors='k')
-    ax.contour(eps_arr.real, levels=[eps_Si,], extent=[0,W,0,H],
+    # Technically epsilon is defined half a grid cell below the field
+    # interpolation points. We shift epsilon up by this much to make the
+    # visualization look correct
+    ax.contour(eps_arr.real, levels=[eps_Si,], extent=[0,W,dy/2.0,H+dy/2.0],
                 linewidths=[1,], colors=['w'])
     f.colorbar(im)
     plt.show()

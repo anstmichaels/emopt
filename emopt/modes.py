@@ -357,7 +357,8 @@ class Mode_TE(ModeSolver):
                 i = I
                 j0 = I+2*N
 
-                A[i,j0] = -1*mu[i]
+                if(i > 0):
+                    A[i,j0] = 1j*mu[i]
 
             # (stuff) = n_x B H_x
             elif(I < 2*N):
@@ -366,7 +367,8 @@ class Mode_TE(ModeSolver):
                 j1 = I-N
 
                 A[i,j0] = -1j*mu[I-N]
-                A[i,j1] = -1.0/ds
+                if(j1 > 0):
+                    A[i,j1] = -1.0/ds
 
                 if(j1 < N-1):
                     A[i,j1+1] = 1.0/ds
@@ -377,21 +379,22 @@ class Mode_TE(ModeSolver):
                 j0 = I-2*N
                 j1 = I-N
 
-                A[i,j0] = -1.0*eps[j0]
-                A[i,j1] = -1j/ds
+                A[i,j0] = 1j*eps[j0]
+                #if(j0 < N-1):
+                A[i,j1] = -1.0/ds
 
                 if(j1 > N):
-                    A[i,j1-1] = 1j/ds
+                    A[i,j1-1] = 1.0/ds
 
         # Define B. It contains ones on the first and last third of the
         # diagonals
         for i in xrange(self.ib, self.ie):
             if(i < N):
-                B[i,i] = self._dir
+                B[i,i] = -1j*self._dir
             elif(i < 2*N):
                 B[i,i] = 0
             else:
-                B[i,i] = self._dir
+                B[i,i] = -1j*self._dir
 
         self._A.assemble()
         self._B.assemble()
@@ -983,8 +986,8 @@ class Mode_FullVector(ModeSolver):
         # sources.  Any returned quantities will be the same length as the
         # input eps/mu
         M, N = eps.shape
-        self._M = M+2
-        self._N = N+2
+        self._M = M
+        self._N = N
 
         self.eps = np.pad(eps, 1, mode='edge')
         self.mu = np.pad(mu, 1, mode='edge')
@@ -1004,7 +1007,7 @@ class Mode_FullVector(ModeSolver):
 
         # Solve problem of the form Ax = lBx
         # define A and B matrices here
-        # 6 fields + 1 dummy variable for enforcing zero divergence of B = mu*H
+        # 6 fields
         Nfields = 6
         self._A = PETSc.Mat()
         self._A.create(PETSc.COMM_WORLD)
@@ -1147,7 +1150,7 @@ class Mode_FullVector(ModeSolver):
                 # Setup the LHS B matrix
                 B[I,JHx] = -1j*self._dir
 
-            # (stuff) = dummy variable (zero)
+            # (stuff) = Hz (zero)
             elif(I < 3*M*N):
                 y = int((I-2*M*N)/N)
                 x = (I-2*M*N) - y * N
@@ -1176,9 +1179,6 @@ class Mode_FullVector(ModeSolver):
                 # Ez
                 A[I, JEz] = 1j*eps[y,x]
 
-                # Setup the LHS B matrix
-                #B[I,Jdummy] = 0.0
-
             # (stuff) = n_z B E_y
             elif(I < 4*N*M):
                 y = int((I-3*M*N)/N)
@@ -1191,12 +1191,14 @@ class Mode_FullVector(ModeSolver):
                 JEy = M*N + y*N+x
 
                 # derivative of Ez
-                A[I,JEz0] = -ody
+                if(y > 0):
+                    A[I,JEz0] = -ody
                 if(y < M-1): A[I,JEz1] = ody
                 elif(self._periodic_y): A[I,JEz2] = ody
 
                 # Hx at x,y
-                A[I,JHx] = -1j*mu[y,x]
+                if(x > 0):
+                    A[I,JHx] = -1j*mu[y,x]
 
                 # Setup the LHS B matrix
                 B[I,JEy] = 1j*self._dir
@@ -1213,12 +1215,14 @@ class Mode_FullVector(ModeSolver):
                 JEx = y*N + x
 
                 # derivative of Ez
-                A[I,JEz0] = odx
+                if(x > 0):
+                    A[I,JEz0] = odx
                 if(x < N-1): A[I,JEz1] = -odx
                 elif(self._periodic_x): A[I,JEz2] = -odx
 
-                # Ey at x,y
-                A[I,JHy] = -1j*mu[y,x]
+                # Hy at x,y
+                if(y > 0):
+                    A[I,JHy] = -1j*mu[y,x]
 
                 # Setup the LHS B matrix
                 B[I,JEx] = -1j*self._dir
@@ -1241,12 +1245,14 @@ class Mode_FullVector(ModeSolver):
                 JEz = 2*M*N + y*N + x
 
                 # derivative of Ey
-                A[I, JEy0] = -odx
+                if(x > 0):
+                    A[I, JEy0] = -odx
                 if(x < N-1): A[I,JEy1] = odx
                 elif(self._periodic_x): A[I, JEy2] = odx
 
                 # derivative of Ex
-                A[I, JEx0] = ody
+                if(y > 0):
+                    A[I, JEx0] = ody
                 if(y < M-1): A[I, JEx1] = -ody
                 elif(self._periodic_y): A[I, JEx2] = -ody
 
@@ -1255,30 +1261,6 @@ class Mode_FullVector(ModeSolver):
 
                 # Setup the LHS B matrix
                 B[I,JEz] = 0.0
-
-            # (stuff) = n_z B H_z
-            #else:
-            #    y = int((I-6*M*N)/N)
-            #    x = (I-6*M*N) - y * N
-
-            #    JHz = 5*M*N + y*N + x
-
-            #    JHx0 = 3*M*N + y*N + x
-            #    JHx1 = 3*M*N + y*N + x + 1
-
-            #    JHy0 = 4*M*N + y*N + x
-            #    JHy1 = 4*M*N + (y+1)*N + x
-
-            #    # derivative of Hx
-            #    A[I, JHx0] = -odx
-            #    if(x < N-1): A[I, JHx1] = odx * mu[y,x+1]/mu[y,x]
-
-            #    # derivative of Hy
-            #    A[I, JHy0] = -ody
-            #    if(y < M-1): A[I, JHy1] = ody * mu[y+1,x]/mu[y,x]
-
-            #    # RHS (B)
-            #    B[I,JHz] = -1j*self._dir
 
         self._A.assemble()
         self._B.assemble()
@@ -1434,7 +1416,7 @@ class Mode_FullVector(ModeSolver):
         if(NOT_PARALLEL):
             x_assembled = np.concatenate(x_full)
             field = np.reshape(x_assembled, (M,N))
-            return field[1:-1, 1:-1]
+            return field
         else:
             return MathDummy()
 
@@ -1479,6 +1461,10 @@ class Mode_FullVector(ModeSolver):
             interpolated mode field.
         """
         f_raw = self.get_field(i, component)
+        # zero padding is equivalent to including boundary values outside of
+        # the metal boundaries. This is needed to compute the interpolated
+        # values.
+        f_raw = np.pad(f_raw, 1, 'constant', constant_values=0)
 
         if(NOT_PARALLEL):
             if(component == 'Ex'):
@@ -1522,8 +1508,8 @@ class Mode_FullVector(ModeSolver):
             The list of energy fractions corresponding to Ex, Ey, Ez, Hx, Hy,
             Hz
         """
-        eps = self.eps[1:-1, 1:-1]
-        mu = self.mu[1:-1, 1:-1]
+        eps = self.eps
+        mu = self.mu
 
         Ex = self.get_field(i, 'Ex')
         WEx = np.sum(eps.real*np.abs(Ex)**2)
