@@ -542,7 +542,7 @@ class Mode_TE(ModeSolver):
             return self._Hy[i]
         elif(component == 'Hx'):
             Hxi = np.pad(self._Hx[i], 1, 'constant', constant_values=0)
-            Hxi[1:] += Hxi[0:self._N-1]
+            Hxi[1:] += Hxi[0:-1]
             return Hxi[1:-1] / 2.0
         else:
             raise ValueError('Unrecongnized field componenet "%s". The allowed'
