@@ -259,8 +259,8 @@ class Mode_TE(ModeSolver):
         N = len(eps)
         self._N = N
 
-        self.eps = np.concatenate((eps[0:1], eps, eps[-1:]))
-        self.mu = np.concatenate((mu[0:1], mu, mu[-1:]))
+        self.eps = eps#np.concatenate((eps[0:1], eps, eps[-1:]))
+        self.mu = mu#np.concatenate((mu[0:1], mu, mu[-1:]))
 
         self.ds = ds
 
@@ -681,8 +681,8 @@ class Mode_TE(ModeSolver):
             dEzdy = np.diff(Ez)[1:] / dy
             dEzdx = Ez[1:-1] / dy
 
-            Jz = 1j*(self.eps*Ez)[1:-1] + dHydx - dHxdy
-            Mx = dEzdy - 1j*(self.mu*Hx)[1:-1]
+            Jz = 1j*(self.eps*Ez[1:-1]) + dHydx - dHxdy
+            Mx = dEzdy - 1j*(self.mu*Hx[1:-1])
             My = -dEzdx
 
         else:

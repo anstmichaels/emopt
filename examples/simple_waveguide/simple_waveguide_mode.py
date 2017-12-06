@@ -56,7 +56,7 @@ eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
-h_wg = 1.0
+h_wg = 0.22
 waveguide = Rectangle(W/2, H/2, W*2, h_wg)
 waveguide.layer = 1
 waveguide.material_value = n1**2
