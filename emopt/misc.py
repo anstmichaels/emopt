@@ -59,7 +59,7 @@ def n_silicon(wavelength):
 
 @run_on_master
 def plot_iterations(params, fom_list, sim, am, field_comp, \
-                    fname='./current_result.pdf', show_plot=False):
+                    fname='./current_result.pdf', show_plot=False, fom2=None):
     """Update a plot during the course of optimization.
     """
     print('Finished iteration %d. Updating plot' % (len(fom_list)))
@@ -97,10 +97,17 @@ def plot_iterations(params, fom_list, sim, am, field_comp, \
                extent=extent, cmap='seismic')
 
     ax3.plot(fom_list, 'b.-', markersize=10, alpha=0.75)
+
+    if(fom2 is not None):
+        ax4 = ax3.twinx()
+        ax4.plot(fom2, 'r.-', markersize=10, alpha=0.75)
+
     plt.savefig(fname, format='pdf', dpi=300, bbox_inches='tight')
     if(show_plot):
         plt.show()
     plt.close()
+
+    return f, ax1, ax2, ax3
 
 def save_results(fname, data, additional=None):
     """Save an hdf5 file containing common simulation and optimization results.

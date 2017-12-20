@@ -586,7 +586,7 @@ class AdjointMethod(object):
         self.sim.update()
 
         # run the forward simulation
-        if(self.prev_params is not params):
+        if(not np.array_equal(self.prev_params, params)):
             self.sim.solve_forward()
 
         # get dFdx which will be used as the source for the adjoint simulation
@@ -598,6 +598,7 @@ class AdjointMethod(object):
         # This should return only non-null on RANK=0
         dFdx = self.calc_dFdx(self.sim, params)
         dFdx = comm.bcast(dFdx, root=0)
+
 
         # run the adjoint source
         self.sim.set_adjoint_sources(dFdx)

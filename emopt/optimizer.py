@@ -152,7 +152,7 @@ class Optimizer(object):
         EXIT = 2
 
     def __init__(self, am, p0, callback_func=None, opt_method='BFGS', \
-                 Nmax=1000, tol=1e-5, bounds=None):
+                 Nmax=1000, tol=1e-5, bounds=None, scipy_verbose=True):
         self.am = am
 
         self.p0 = p0
@@ -161,6 +161,7 @@ class Optimizer(object):
         self.Nmax = Nmax
         self.tol = tol
         self.bounds = bounds
+        self.scipy_verbose = scipy_verbose
 
         self._comm = MPI.COMM_WORLD
 
@@ -241,7 +242,7 @@ class Optimizer(object):
         result = minimize(self.__fom, self.p0, method=self.opt_method, \
                           jac=self.__gradient, callback=self.callback, \
                           tol=self.tol, options={'maxiter':self.Nmax, \
-                                                 'disp':True})
+                                                 'disp':self.scipy_verbose})
 
         command = self.RunCommands.EXIT
         self._comm.bcast(command, root=0)

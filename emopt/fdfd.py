@@ -319,9 +319,14 @@ class FDFD_TE(FDFD):
         Vacuum wavelength of EM fields.
     w_pml : list of floats
         pml widths in [left, right, top, bottom] format
-    use_iterative : boolean (optional)
-        If True, use the BICGSTAB iterative solver. If false, use the MUMPS
-        direct solve (defulat = False)
+    solver : str
+        The type of solver to use. The possible options are 'direct' (direct LU
+        solver), 'iterative' (unpreconditioned iterative solver), 'iterative_lu'
+        (iterative solver with LU preconditioner, or 'auto'. (default = 'auto')
+    ksp_solver : str
+        The type of Krylov subspace solver to use. See the petsc4py documentation for
+        the possible types. Note: this flag is ignored if 'direct' or 'auto' is
+        chosen for the solver parameter. (default = 'gmres')
     verbose : boolean (Optional)
         Indicates whether or not progress info should be printed on the master
         node. (default=True)
@@ -361,7 +366,8 @@ class FDFD_TE(FDFD):
 
     """
 
-    def __init__(self, W, H, dx, dy, wavelength, w_pml, use_iterative=False, verbose=True):
+    def __init__(self, W, H, dx, dy, wavelength, w_pml, solver='auto',
+                 ksp_solver='gmres', verbose=True):
         super(FDFD_TE, self).__init__()
 
         self._dx = dx
@@ -413,26 +419,33 @@ class FDFD_TE(FDFD):
         self.ib, self.ie = self._A.getOwnershipRange()
         self.A_diag_update = np.zeros(self.ie-self.ib, dtype=np.complex128)
 
-        # use conjugate gradients or bicgstab
-        if(use_iterative):
-            # create a linear solver
-            self.ksp_iter = PETSc.KSP()
-            self.ksp_iter.create(PETSc.COMM_WORLD)
-
-            self.ksp_iter.setType('gmres')
-            pc = self.ksp_iter.getPC()
-            pc.setType('ilu')
-        else:
-            # create a linear solver
-            self.ksp = PETSc.KSP()
-            self.ksp.create(PETSc.COMM_WORLD)
-
-            self.ksp.setType('preonly')
-            pc = self.ksp.getPC()
+        # iterative or direct
+        # create an iterative linear solver
+        self.ksp_iter = PETSc.KSP()
+        self.ksp_iter.create(PETSc.COMM_WORLD)
+        
+        self.ksp_iter.setType(ksp_solver)
+        self.ksp_iter.setInitialGuessNonzero(True)
+        if(ksp_solver == 'gmres'):
+            self.ksp_iter.setGMRESRestart(1000)
+        pc = self.ksp_iter.getPC()
+        if(solver == 'iterative_lu'):
             pc.setType('lu')
             pc.setFactorSolverPackage('mumps')
+            pc.setReusePreconditioner(True)
+        else:
+            pc.setType('none')
 
-        self._use_iterative = use_iterative
+        # create a direct linear solver
+        self.ksp_dir = PETSc.KSP()
+        self.ksp_dir.create(PETSc.COMM_WORLD)
+
+        self.ksp_dir.setType('preonly')
+        pc = self.ksp_dir.getPC()
+        pc.setType('lu')
+        pc.setFactorSolverPackage('mumps')
+
+        self._solver_type = solver
 
         self.Ez = np.array([])
         self.Hx = np.array([])
@@ -444,6 +457,8 @@ class FDFD_TE(FDFD):
 
         self.verbose = verbose
         self._built = False
+
+        self._permute_A = False
 
     @property
     def dx(self):
@@ -499,10 +514,19 @@ class FDFD_TE(FDFD):
     def w_pml_bottom(self):
         return self._w_pml_bottom
 
+    @property
+    def solver_type(self):
+        return self._solver_type
+
+    @solver_type.setter
+    def solver_type(self, val):
+        self._solver_type = val
+
     @wavelength.setter
     def wavelength(self, val):
         if(val > 0):
             self._wlen = val
+            self._R = val/(2*pi)
         else:
             raise ValueError('Wavelength must be a positive number!')
 
@@ -757,6 +781,28 @@ class FDFD_TE(FDFD):
         A.assemblyBegin()
         A.assemblyEnd()
 
+        if(self._permute_A):
+            if(NOT_PARALLEL):
+                info_message('Permuting A...')
+
+            rows = 3*self._M*self._N-1 - np.arange(self.ib, self.ie,1,
+                                                 dtype=np.int32)
+            cols = 3*self._M*self._N-1 - np.arange(0, 3*self._M*self._N, 1,
+                                                 dtype=np.int32)
+
+            Irows = PETSc.IS()
+            Icols = PETSc.IS()
+
+
+            Irows.createGeneral(rows)
+            Irows.setPermutation()
+
+
+            Icols.createGeneral(cols)
+            Icols.setPermutation()
+
+            self._A=A.permute(Irows, Icols)
+
         self._built = True
 
     def update(self, bbox=None):
@@ -807,7 +853,13 @@ class FDFD_TE(FDFD):
                                                x1, x2, y1, y2, \
                                                self.A_diag_update)
 
-        A_update = self.A_diag_update
+        ## TODO: Optimize this. only insert elements within update box.
+        if(self._permute_A):
+           A_update = self.A_diag_update[::-1]
+        else:
+            A_update = self.A_diag_update
+
+        #TODO: Use setDiagonal
         for i in xrange(self.ib, self.ie):
             A[i,i] = A_update[i-self.ib]
 
@@ -836,14 +888,20 @@ class FDFD_TE(FDFD):
         # setup and solve Ax=b using petsc4py
         # unless otherwise specified, MUMPS (direct solver) is used.
         # Alternatively, the bicgstab iterative solver may be used.
-        self.ksp.setOperators(self._A, self._A)
-        self.ksp.setFromOptions()
-        if(self._use_iterative):
-            self.ksp.setInitialGuessNonzero(True)
-        self.ksp.solve(self.b, self.x)
+        if(self._solver_type == 'iterative' or self._solver_type == 'iterative_lu'):
+            ksp = self.ksp_iter
+            ksp.setOperators(self._A, self._A)
+            ksp.setFromOptions()
+
+        elif(self._solver_type == 'direct' or self._solver_type == 'auto'):
+            ksp = self.ksp_dir
+            ksp.setOperators(self._A, self._A)
+            ksp.setFromOptions()
+            
+        ksp.solve(self.b, self.x)
 
         if(RANK == 0):
-            convergence = self.ksp.getConvergedReason()
+            convergence = ksp.getConvergedReason()
             if(convergence < 0):
                 error_message('Forward solution did not converge with error '
                               'code %d.' % (convergence))
@@ -888,15 +946,23 @@ class FDFD_TE(FDFD):
         if(self.verbose and NOT_PARALLEL):
             info_message('Running adjoint solver...')
 
-        # solve A^T u = c
-        self.ksp.setOperators(self._A)
-        self.ksp.setFromOptions()
-        if(self._use_iterative):
-            self.ksp.setInitialGuessNonzero(True)
-        self.ksp.solveTranspose(self.b_adj, self.x_adj)
+        # setup and solve A^Tu=c using petsc4py
+        # unless otherwise specified, MUMPS (direct solver) is used.
+        # Alternatively, the bicgstab iterative solver may be used.
+        if(self._solver_type == 'iterative' or self._solver_type == 'iterative_lu'):
+            ksp = self.ksp_iter
+            ksp.setOperators(self._A, self._A)
+            ksp.setFromOptions()
+
+        elif(self._solver_type == 'direct' or self._solver_type == 'auto'):
+            ksp = self.ksp_dir
+            ksp.setOperators(self._A, self._A)
+            ksp.setFromOptions()
+
+        ksp.solveTranspose(self.b_adj, self.x_adj)
 
         if(NOT_PARALLEL):
-            convergence = self.ksp.getConvergedReason()
+            convergence = ksp.getConvergedReason()
             if(convergence < 0):
                 error_message('Adjoint solution did not converge.')
 
@@ -1163,8 +1229,10 @@ class FDFD_TE(FDFD):
 class FDFD_TM(FDFD_TE):
     """Simulate Maxwell's equations in 2D with TM-polarized fields."""
 
-    def __init__(self, W, H, dx, dy, wavelength, w_pml, use_iterative=False, verbose=True):
-        super(FDFD_TM, self).__init__(W, H, dx, dy, wavelength, w_pml, use_iterative=False, verbose=True)
+    def __init__(self, W, H, dx, dy, wavelength, w_pml, solver='auto',
+                 ksp_solver='gmres', verbose=True):
+        super(FDFD_TM, self).__init__(W, H, dx, dy, wavelength, w_pml, solver=solver,
+              ksp_solver=ksp_solver, verbose=True)
 
     @property
     def eps(self):

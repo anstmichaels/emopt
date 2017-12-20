@@ -290,5 +290,10 @@ Example projects can be found in the *examples/* folder. Each example is documen
 Andrew Michaels 
 
 ## License
-EMopt is currently released under the Apache 2.0 license (see LICENSE.md for details)
+EMOpt is currently released under the GPL license (see LICENSE.md for details)
+
+## References
+The methods employed by EMOpt are described in:
+
+A. Michaels and E. Yablonovitch, “Gradient-Based Inverse Electromagnetic Design Using Continuously-Smoothed Boundaries,” Arxiv (2017).
 
