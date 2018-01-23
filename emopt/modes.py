@@ -232,6 +232,17 @@ class Mode_TE(ModeSolver):
         The effective index near which modes are found
     neigs : int
         The number of modes to solve for.
+    dir : int
+        Direction of mode propagation (1 = forward, -1 = backward)
+    bc : str
+        The boundary conditions used. The possible boundary conditions are:
+            0 -- Perfect electric conductor (top and bottom)
+            M -- Perfect magnetic conductor (top and bottom)
+            E -- Electric field symmetry (bottom) and PEC (top)
+            H -- Magnetic field symmetry (bottom) and PEC (top)
+            P -- Periodicity (top and bottom)
+            EM -- Electric field symmetry (bottom) PMC (top)
+            HM -- Magnetic field symmetry (bottom) PMC (top)
 
     Methods
     -------
@@ -268,6 +279,8 @@ class Mode_TE(ModeSolver):
             self._dir = -1.0
         else:
             self._dir = 1.0
+
+        self._bc = '0'
 
         # non-dimensionalization for spatial variables
         self.R = self.wavelength/(2*np.pi)
@@ -325,6 +338,29 @@ class Mode_TE(ModeSolver):
         self.ib = ib
         self.ie = ie
 
+    @property
+    def dir(self):
+        return self._dir
+
+    @dir.setter
+    def dir(self, new_dir):
+        if(np.abs(new_dir) != 1):
+            error_message('Direction must be 1 or -1 (forward or backwards).')
+
+        self._dir = new_dir
+
+    @property
+    def bc(self):
+        return self._bc
+
+    @bc.setter
+    def bc(self, bc):
+        if(bc not in ['0', 'M', 'E', 'H', 'P', 'EM', 'HM']):
+            error_message("Boundary condition type '%s' not found. Use "
+                          "0, M, E, H, P, EM, HM.", "emopt.modes")
+
+        self._bc = bc
+
     def build(self):
         """Build the system of equations and prepare the mode solver for the solution
         process.
@@ -348,49 +384,90 @@ class Mode_TE(ModeSolver):
 
         for I in xrange(self.ib, self.ie):
 
-            # (stuff) = n_x B E_z
+            # (stuff) = n_x B H_y
             if(I < N):
                 i = I
-                j0 = I+2*N
+                y = I
 
-                if(i > 0):
-                    A[i,j0] = 1j*mu[i]
+                j0 = I
+                j1 = I+N
+
+                A[i,j0] = 1j*eps[j0]
+
+                A[i,j1] = -1.0/ds
+                if(j0 > 0):
+                    A[i,j1-1] = 1.0/ds
+
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(y == 0):
+                    if(self._bc == 'E'):
+                        A[i,j1] = -2.0/ds
+                    elif(self._bc == 'H'):
+                        A[i,j1] = 0.0
+                    elif(self._bc == 'P'):
+                        j2 = j1 + N-1
+                        A[i,j2] = 1.0/ds
+                elif(y == N-1):
+                    if(self._bc == 'M' or self._bc == 'EM' or self._bc == 'HM'):
+                        A[i,j1] = 0
 
             # (stuff) = n_x B H_x
             elif(I < 2*N):
                 i = I
+                y = I-N
+
                 j0 = I
                 j1 = I-N
 
-                A[i,j0] = -1j*mu[I-N]
-                if(j1 > 0):
-                    A[i,j1] = -1.0/ds
+                # the second or should be an and, but that results in a
+                # singular matrix -- is this a code error or physics error?
+                A[i,j0] = -1j*mu[j1]
+
+                A[i,j1] = -1.0/ds
 
                 if(j1 < N-1):
                     A[i,j1+1] = 1.0/ds
 
-            # (stuff) = n_x B H_y
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(y == 0):
+                    if(self._bc == '0'):
+                        A[i,j1] = 0
+                elif(y == N-1):
+                    if(self._bc == 'P'):
+                        j2 = 0
+                        A[i,j2] = 1.0/ds
+
+
+            # (stuff) = n_x B E_z
             else:
                 i = I
-                j0 = I-2*N
-                j1 = I-N
+                y = I-2*N
+                j0 = I
 
-                A[i,j0] = 1j*eps[j0]
-                #if(j0 < N-1):
-                A[i,j1] = -1.0/ds
+                A[i,j0] = 1j*mu[i-2*N]
 
-                if(j1 > N):
-                    A[i,j1-1] = 1.0/ds
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(y == 0):
+                    if(self._bc == '0'):
+                        A[i,j0] = 0
+                elif(y == N-1):
+                    pass
 
         # Define B. It contains ones on the first and last third of the
         # diagonals
         for i in xrange(self.ib, self.ie):
             if(i < N):
-                B[i,i] = -1j*self._dir
+                B[i,i+2*N] = -1j*self._dir # _dir=1 corresponds to exp(-ikx)
             elif(i < 2*N):
                 B[i,i] = 0
             else:
-                B[i,i] = -1j*self._dir
+                B[i,i-2*N] = -1j*self._dir
 
         self._A.assemble()
         self._B.assemble()
@@ -444,6 +521,10 @@ class Mode_TE(ModeSolver):
                 self._Ez[i] = field[0:N]
                 self._Hx[i] = field[N:2*N]
                 self._Hy[i] = field[2*N:3*N]
+
+                # unfortunate hacks for PMC :(
+                if(self._bc == 'M'):
+                    self._Hx[i][-1] = 0
 
     @run_on_master
     def get_field(self, i, component):
@@ -580,6 +661,13 @@ class Mode_TE(ModeSolver):
             The number X of the specified TE_X mode.
         """
         Ez = self._Ez[i]
+        if(self._bc == 'E'):
+            Ez = np.concatenate([Ez[::-1], Ez])
+        if( self._bc == 'H'):
+            Ez = np.concatenate([-1*Ez[::-1], Ez])
+        if(self._bc == 'P'):
+            warning_message('get_mode_number may not work as expected for ' \
+                            'periodic boundary conditions.', 'emopt.modes')
 
         dphase = 0.5
         thresh_frac = 0.05
@@ -671,6 +759,24 @@ class Mode_TE(ModeSolver):
             Ez = np.pad(self._Ez[i], 1, 'constant', constant_values=0)
             Hx = np.pad(self._Hx[i], 1, 'constant', constant_values=0)
             Hy = np.pad(self._Hy[i], 1, 'constant', constant_values=0)
+
+            # account for symmetry and periodic boundary conditions
+            if(self._bc[0] == 'E'):
+                Ez[0] = Ez[1]
+                Hx[0] = -Hx[1]
+                Hy[0] = Hy[1]
+            elif(self._bc[0] == 'H'):
+                Ez[0] = -Ez[1]
+                Hx[0] = Hx[1]
+                Hy[0] = -Hy[1]
+            elif(self._bc[0] == 'P'):
+                Ez[0] = Ez[-2]
+                Ez[-1] = Ez[1]
+                Hx[0] = Hx[-2]
+                Hx[-1] = Hx[1]
+                Hy[0] = Hy[-2]
+                Hy[-1] = Hy[1]
+
             neff = self.neff[i]
             dx = dx/self.R # non-dimensionalize
             dy = dy/self.R # non-dimensionalize
@@ -772,7 +878,43 @@ class Mode_TM(Mode_TE):
         # permittivity and permeability smapped and the E and H and J and M
         # components swapped around.
         super(Mode_TM, self).__init__(wavelength, ds, mu, eps, n0, neigs, \
-                                      backwards)
+                                      backwards, bc_type)
+
+        self.bc = 'M' # really PEC since we use TE mode solver
+
+    @property
+    def bc(self):
+        # since we use the TE solver, we internally swap E for H and 0 for M.
+        # We need to unmix this up so the user isnt confused.
+        bc = self._bc + ''
+        if(len(bc) == 2):
+            if(bc[0] == 'E'): return 'H'
+            else: return 'E'
+        else:
+            if(bc[0] == 'E'): return 'HM'
+            elif(bc[0] == 'H'): return 'EM'
+            elif(bc[0] == '0'): return 'M'
+            elif(bc[0] == 'M'): return '0'
+            else: return bc
+
+    @bc.setter
+    def bc(self, bc):
+        if(bc not in ['0', 'M', 'E', 'H', 'P', 'EM', 'HM']):
+            error_message("Boundary condition type '%s' not found. Use "
+                          "0, M, E, H, P, EM, HM.", "emopt.modes")
+
+        # we need to swap Es and Hs and 0s and Ms since we use the TE solver to
+        # find the TM fields
+        if(len(bc) == 2):
+            if(bc[0] == 'E'): self._bc = 'H'
+            else: self._bc = 'E'
+        else:
+            if(bc[0] == 'E'): self._bc = 'HM'
+            elif(bc[0] == 'H'): self._bc = 'EM'
+            elif(bc[0] == '0'): self._bc = 'M'
+            elif(bc[0] == 'M'): self._bc = '0'
+            else: self._bc = bc
+
     @run_on_master
     def get_field(self, i, component):
         """Get the desired raw field component of the i'th mode.

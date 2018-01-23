@@ -317,8 +317,6 @@ class FDFD_TE(FDFD):
         Grid spacing in the y direction.
     wavelength : float
         Vacuum wavelength of EM fields.
-    w_pml : list of floats
-        pml widths in [left, right, top, bottom] format
     solver : str
         The type of solver to use. The possible options are 'direct' (direct LU
         solver), 'iterative' (unpreconditioned iterative solver), 'iterative_lu'
@@ -349,25 +347,28 @@ class FDFD_TE(FDFD):
         The wavelength used for simulation. [arbitrary length unit]
     w_pml_left : int
         The number of grid cells which make up the left PML region
-    w_pml_right
+    w_pml_right : int
         The number of grid cells which make up the right PML region
-    w_pml_top
+    w_pml_top : int
         The number of grid cells which make up the top PML region
-    w_pml_bottom
+    w_pml_bottom : int
         The number of grid cells which make up the bottom PML region
-    field_domains
+    field_domains : list of DomainCoordinates
         The list of DomainCoordinates in which fields are recorded immediately
         following a forward solve.
-    saved_fields
+    saved_fields : list of numpy.ndarray
         The list of (Ez, Hx, Hy) fields saved in in the stored
         DomainCoordinates
-    source_power
+    source_power : float
         The source power injected into the system.
+    w_pml : list of float
+        List of PML widths in real spatial units. This variable can be
+        reinitialized in order to change the PML widths
 
     """
 
-    def __init__(self, W, H, dx, dy, wavelength, w_pml, solver='auto',
-                 ksp_solver='gmres', verbose=True):
+    def __init__(self, W, H, dx, dy, wavelength, solver='auto',
+                 ksp_solver='gmres'):
         super(FDFD_TE, self).__init__()
 
         self._dx = dx
@@ -377,12 +378,19 @@ class FDFD_TE(FDFD):
         # scalaing factor used in non-dimensionalizing spatial units
         self._R = wavelength/(2*pi)
 
-        # pml widths for left, right, top, bottom snap to nearest number of grid
-        # cells
-        self._w_pml_left = int(w_pml[0]/dx)
-        self._w_pml_right = int(w_pml[1]/dx)
-        self._w_pml_top = int(w_pml[2]/dy)
-        self._w_pml_bottom = int(w_pml[3]/dy)
+        # pml widths for left, right, top, bottom
+        self._w_pml = [wavelength/2 for i in range(4)]
+        Npx = wavelength/2/dx
+        Npy = wavelength/2/dy
+        self._w_pml_left = int(Npx)
+        self._w_pml_right = int(Npx)
+        self._w_pml_top = int(Npy)
+        self._w_pml_bottom = int(Npy)
+
+        # Boundary conditions. Default type is PEC on all sim boundaries
+        # Note: This will result in PMC boundaries for the 2D TM simulations.
+        # This should be a non-issue as long as PMLs are used
+        self._bc = ['0', '0']
 
         # PML parameters -- these can be changed
         self.pml_sigma = 2.0 * wavelength
@@ -423,7 +431,7 @@ class FDFD_TE(FDFD):
         # create an iterative linear solver
         self.ksp_iter = PETSc.KSP()
         self.ksp_iter.create(PETSc.COMM_WORLD)
-        
+
         self.ksp_iter.setType(ksp_solver)
         self.ksp_iter.setInitialGuessNonzero(True)
         if(ksp_solver == 'gmres'):
@@ -455,10 +463,8 @@ class FDFD_TE(FDFD):
         self.Hx_adj = np.array([])
         self.Hy_adj = np.array([])
 
-        self.verbose = verbose
+        self.verbose = True
         self._built = False
-
-        self._permute_A = False
 
     @property
     def dx(self):
@@ -527,6 +533,7 @@ class FDFD_TE(FDFD):
         if(val > 0):
             self._wlen = val
             self._R = val/(2*pi)
+            self._built = False
         else:
             raise ValueError('Wavelength must be a positive number!')
 
@@ -537,6 +544,53 @@ class FDFD_TE(FDFD):
     @property
     def mu(self):
         return self._mu
+
+    @property
+    def w_pml(self):
+        return self._w_pml
+
+    @w_pml.setter
+    def w_pml(self, val):
+        self._w_pml = val
+
+        dx = self._dx
+        dy = self._dy
+        self._w_pml_left = int(val[0]/dx)
+        self._w_pml_right = int(val[1]/dx)
+        self._w_pml_top = int(val[2]/dy)
+        self._w_pml_bottom = int(val[3]/dy)
+
+        self._built = False
+
+    @property
+    def bc(self):
+        return ''.join(self._bc)
+
+    @bc.setter
+    def bc(self, val):
+        self._bc = list(val)
+        self._built = False
+
+        if(val[0] in 'EH' and self._w_pml_left != 0):
+            warning_message('Symmetry imposed on right boundary with finite width PML.',
+                            'emopt.fdfd')
+
+        if(val[1] in 'EH' and self._w_pml_bottom != 0):
+            warning_message('Symmetry imposed on bottom boundary with finite width PML.',
+                            'emopt.fdfd')
+
+        if(val[0] in 'PB' and (self._w_pml_left != 0 or self._w_pml_right !=0)):
+            warning_message('Periodicity imposed along x direction with finite width PML.',
+                            'emopt.fdfd')
+
+        if(val[1] in 'PB' and (self._w_pml_top != 0 or self._w_pml_bottom !=0)):
+            warning_message('Periodicity imposed along y direction with finite width PML.',
+                            'emopt.fdfd')
+
+        for v in val:
+            if(v not in '0MEHPB'):
+                error_message('Boundary condition type %s unknown. Use 0, M, E, H, '
+                              'P, or B.' % (v))
 
     def set_materials(self, eps, mu):
         """Set the material distributions of the system to be simulated.
@@ -705,6 +759,7 @@ class FDFD_TE(FDFD):
         N = self._N
         eps = self._eps
         mu = self._mu
+        bc = self._bc
 
         odx = self._R / self._dx
         ody = self._R / self._dy
@@ -744,6 +799,36 @@ class FDFD_TE(FDFD):
                 if(x < N-1):
                     A[i,j1 + 2*M*N] = odx[y,x]
 
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(y == 0):
+                    if(bc[1] == '0'):
+                        A[i,j0+2*M*N] = 0
+                        if(x < N-1): A[i,j1+2*M*N] = 0
+                    elif(bc[1] == 'E'):
+                        A[i,j0+M*N] = -2*ody[y,x]
+                    elif(bc[1] == 'H'):
+                        A[i,j0+M*N] = 0
+                    elif(bc[1] == 'P'):
+                        j3 = x + (M-1)*N
+                        A[i,j3+M*N] = ody[y,x]
+
+                elif(y == M-1):
+                    if(bc[1] == 'M'):
+                        A[i,j0+M*N] = 0
+
+                if(x == N-1):
+                    if(bc[0] == '0'):
+                        A[i,j0+M*N] = 0
+                        if(y > 0): A[i,j2+M*N] = 0
+                    elif(bc[0] == 'P'):
+                        j3 = i - N-1
+                        A[i,j3+2*M*N] = odx[y,x]
+                elif(x == 0):
+                    if(bc[0] == 'M'):
+                        A[i,j0+2*M*N] = 0
+
             elif(i < 2 * M*N ): # Mx row
                 y = int((i-M*N)/N)
                 x = (i-M*N) - y * N
@@ -761,6 +846,24 @@ class FDFD_TE(FDFD):
                 if(y < M-1):
                     A[i,j1-M*N] = ody[y,x]
 
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(y == 0):
+                    if(bc[1] == '0'):
+                        A[i,j0-M*N] = 0
+                elif(y == M-1):
+                    if(bc[1] == 'P'):
+                        j2 = x + M*N
+                        A[i,j2-M*N] = ody[y,x]
+
+                if(x == N-1):
+                    if(bc[0] == '0'):
+                        A[i,j0-M*N] = 0
+                        if(y < M-1): A[i,j1-M*N] = 0
+                elif(x == 0):
+                    pass
+
             else: # My row
                 y = int((i-2*M*N)/N)
                 x = (i-2*M*N) - y * N
@@ -776,32 +879,32 @@ class FDFD_TE(FDFD):
                 if(x > 0):
                     A[i,j1-2*M*N] = odx[y,x]
 
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(y == 0):
+                    if(bc[1] == '0'):
+                        A[i,j0-2*M*N] = 0
+                        if(x > 0): A[i,j1-2*M*N] = 0
+                elif(y == M-1):
+                    pass
+
+                if(x == N-1):
+                    if(bc[0] == '0'):
+                        A[i,j0-2*M*N] = 0
+                elif(x == 0):
+                    if(bc[0] == 'E'):
+                        A[i,j0-2*M*N] = 0
+                    elif(bc[0] == 'H'):
+                        A[i,j0-2*M*N] = -2*odx[y,x]
+                    elif(bc[0] == 'P'):
+                        j2 = i + N-1
+                        A[i,j2-2*M*N] = odx[y,x]
+
         # communicate off-processor values and setup internal data structures for
         # performing parallel operations
         A.assemblyBegin()
         A.assemblyEnd()
-
-        if(self._permute_A):
-            if(NOT_PARALLEL):
-                info_message('Permuting A...')
-
-            rows = 3*self._M*self._N-1 - np.arange(self.ib, self.ie,1,
-                                                 dtype=np.int32)
-            cols = 3*self._M*self._N-1 - np.arange(0, 3*self._M*self._N, 1,
-                                                 dtype=np.int32)
-
-            Irows = PETSc.IS()
-            Icols = PETSc.IS()
-
-
-            Irows.createGeneral(rows)
-            Irows.setPermutation()
-
-
-            Icols.createGeneral(cols)
-            Icols.setPermutation()
-
-            self._A=A.permute(Irows, Icols)
 
         self._built = True
 
@@ -853,11 +956,7 @@ class FDFD_TE(FDFD):
                                                x1, x2, y1, y2, \
                                                self.A_diag_update)
 
-        ## TODO: Optimize this. only insert elements within update box.
-        if(self._permute_A):
-           A_update = self.A_diag_update[::-1]
-        else:
-            A_update = self.A_diag_update
+        A_update = self.A_diag_update
 
         #TODO: Use setDiagonal
         for i in xrange(self.ib, self.ie):
@@ -897,7 +996,7 @@ class FDFD_TE(FDFD):
             ksp = self.ksp_dir
             ksp.setOperators(self._A, self._A)
             ksp.setFromOptions()
-            
+
         ksp.solve(self.b, self.x)
 
         if(RANK == 0):
@@ -1202,10 +1301,10 @@ class FDFD_TE(FDFD):
         Sx = -0.5*(Ez*np.conj(Hy)).real
         Sy = 0.5*(Ez*np.conj(Hx)).real
 
-        S1 = -Sy[w_pml_b, w_pml_l:N-w_pml_r]
-        S2 = Sy[M-w_pml_t, w_pml_l:N-w_pml_r]
-        S3 = -Sx[w_pml_b:M-w_pml_t, w_pml_l]
-        S4 = Sx[w_pml_b:M-w_pml_t, N-w_pml_r]
+        S1 = -Sy[w_pml_b, w_pml_l:N-1-w_pml_r]
+        S2 = Sy[M-1-w_pml_t, w_pml_l:N-1-w_pml_r]
+        S3 = -Sx[w_pml_b:M-1-w_pml_t, w_pml_l]
+        S4 = Sx[w_pml_b:M-1-w_pml_t, N-1-w_pml_r]
 
         # total power flowing our of boundaries
         P_S = np.sum(S1 + S2) * dx + np.sum(S3 + S4) * dy
@@ -1229,10 +1328,12 @@ class FDFD_TE(FDFD):
 class FDFD_TM(FDFD_TE):
     """Simulate Maxwell's equations in 2D with TM-polarized fields."""
 
-    def __init__(self, W, H, dx, dy, wavelength, w_pml, solver='auto',
-                 ksp_solver='gmres', verbose=True):
-        super(FDFD_TM, self).__init__(W, H, dx, dy, wavelength, w_pml, solver=solver,
-              ksp_solver=ksp_solver, verbose=True)
+    def __init__(self, W, H, dx, dy, wavelength, solver='auto',
+                 ksp_solver='gmres'):
+        super(FDFD_TM, self).__init__(W, H, dx, dy, wavelength, solver=solver,
+              ksp_solver=ksp_solver)
+
+        self._bc = ['M', 'M']
 
     @property
     def eps(self):
@@ -1241,6 +1342,51 @@ class FDFD_TM(FDFD_TE):
     @property
     def mu(self):
         return self._mu_actual
+
+    @property
+    def bc(self):
+        val = self._bc[:]
+        for i in range(2):
+            if(val[i] == 'E'): val[i] = 'H'
+            elif(val[i] == 'H'): val[i] = 'E'
+            if(val[i] == '0'): val[i] = 'M'
+            elif(val[i] == 'M'): val[i] = '0'
+
+        return ''.join(val)
+
+    @bc.setter
+    def bc(self, val):
+        self._bc = list(val)
+        self._built = False
+
+        # since TM solver uses TE build() function, we need to swap E and H
+        # boundary conditions as well as 0 and M
+        for i in range(2):
+            if(self._bc[i] == 'E'): self._bc[i] = 'H'
+            elif(self._bc[i] == 'H'): self._bc[i] = 'E'
+            if(self._bc[i] == '0'): self._bc[i] = 'M'
+            elif(self._bc[i] == 'M'): self._bc[i] = '0'
+
+        if(val[0] in 'EH' and self._w_pml_left != 0):
+            warning_message('Symmetry imposed on right boundary with finite width PML.',
+                            'emopt.fdfd')
+
+        if(val[1] in 'EH' and self._w_pml_bottom != 0):
+            warning_message('Symmetry imposed on bottom boundary with finite width PML.',
+                            'emopt.fdfd')
+
+        if(val[0] in 'PB' and (self._w_pml_left != 0 or self._w_pml_right !=0)):
+            warning_message('Periodicity imposed along x direction with finite width PML.',
+                            'emopt.fdfd')
+
+        if(val[1] in 'PB' and (self._w_pml_top != 0 or self._w_pml_bottom !=0)):
+            warning_message('Periodicity imposed along y direction with finite width PML.',
+                            'emopt.fdfd')
+
+        for v in val:
+            if(v not in '0MEHPB'):
+                error_message('Boundary condition type %s unknown. Use 0, M, E, H, '
+                              'P, or B.' % (v))
 
 
     def set_materials(self, eps, mu):
@@ -1525,10 +1671,10 @@ class FDFD_TM(FDFD_TE):
         Sx = 0.5*(Ey*np.conj(Hz)).real
         Sy = -0.5*(Ex*np.conj(Hz)).real
 
-        S1 = -Sy[w_pml_b, w_pml_l:N-w_pml_r]
-        S2 = Sy[M-w_pml_t, w_pml_l:N-w_pml_r]
-        S3 = -Sx[w_pml_b:M-w_pml_t, w_pml_l]
-        S4 = Sx[w_pml_b:M-w_pml_t, N-w_pml_r]
+        S1 = -Sy[w_pml_b, w_pml_l:N-1-w_pml_r]
+        S2 = Sy[M-1-w_pml_t, w_pml_l:N-1-w_pml_r]
+        S3 = -Sx[w_pml_b:M-1-w_pml_t, w_pml_l]
+        S4 = Sx[w_pml_b:M-1-w_pml_t, N-1-w_pml_r]
 
         # total power flowing our of boundaries
         P_S = np.sum(S1 + S2) * dx + np.sum(S3 + S4) * dy

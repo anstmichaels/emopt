@@ -239,10 +239,11 @@ class Optimizer(object):
         """
         self.__fom(self.p0)
         self.callback(self.p0)
-        result = minimize(self.__fom, self.p0, method=self.opt_method, \
-                          jac=self.__gradient, callback=self.callback, \
-                          tol=self.tol, options={'maxiter':self.Nmax, \
-                                                 'disp':self.scipy_verbose})
+        result = minimize(self.__fom, self.p0, method=self.opt_method,
+                          jac=self.__gradient, callback=self.callback,
+                          tol=self.tol, bounds=self.bounds,
+                          options={'maxiter':self.Nmax, \
+                                   'disp':self.scipy_verbose})
 
         command = self.RunCommands.EXIT
         self._comm.bcast(command, root=0)

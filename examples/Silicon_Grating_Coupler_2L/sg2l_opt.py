@@ -246,7 +246,8 @@ if __name__ == '__main__':
     w_src= 5.0
 
     # create the simulation object.
-    sim = FDFD_TE(W, H, dx, dy, wavelength, [1.0,1.0,1.0,1.0])
+    sim = FDFD_TE(W, H, dx, dy, wavelength)
+    sim.w_pml = [1.0, 1.0, 1.0, 1.0]
 
     # Get the actual width and height
     W = sim.W

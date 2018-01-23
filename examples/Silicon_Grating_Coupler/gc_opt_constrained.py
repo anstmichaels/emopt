@@ -37,7 +37,7 @@ adjoint-method-based optimization.
 
 Finally, to run the code, execute::
 
-    mpirun -n 16 python gc_opt.py
+    mpirun -n 16 python gc_opt_constrained.py
 
 in the command line which will run the optimization using 16 cores on the current
 machine.
@@ -334,7 +334,7 @@ if __name__ == '__main__':
 
     # create the simulation object.
     # TE => Ez, Hx, Hy
-    sim = FDFD_TE(W, H, dx, dy, wavelength, [w_pml, w_pml, w_pml, w_pml])
+    sim = FDFD_TE(W, H, dx, dy, wavelength)
 
     # Get the actual width and height
     W = sim.W

@@ -261,8 +261,9 @@ if __name__ == '__main__':
     H = 8.0
     dx = 0.02
     dy = 0.02
+    sim = FDFD_TM(W, H, dx, dy, wlen)
     pmls = [0.5,0.5,0.5,0.5]
-    sim = FDFD_TM(W, H, dx, dy, wlen, pmls)
+    sim.w_pml = pmls
 
     # Get the actual width and height
     # The true width/height will not necessarily match what we used when

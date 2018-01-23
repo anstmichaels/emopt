@@ -24,11 +24,13 @@ from math import pi
 #Simulation Region parameters
 ####################################################################################
 W = 10.0
-H = 7.0
+H = 3.5
 dx = 0.02
 dy = 0.02
 wlen = 1.55
 sim = FDFD_TE(W, H, dx, dy, wlen)
+sim.w_pml = [0.75, 0.75, 0.75, 0]
+sim.bc = '0E'
 
 # Get the actual width and height
 # The true width/height will not necessarily match what we used when
@@ -47,13 +49,13 @@ n0 = 1.0
 n1 = 3.0
 
 # set a background permittivity of 1
-eps_background = Rectangle(W/2, H/2, 2*W, H)
+eps_background = Rectangle(W/2, 0, 2*W, H)
 eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
 h_wg = 0.5
-waveguide = Rectangle(W/2, H/2, 2*W, h_wg)
+waveguide = Rectangle(W/2, 0, 2*W, h_wg)
 waveguide.layer = 1
 waveguide.material_value = n1**2
 
@@ -78,7 +80,7 @@ sim.set_materials(eps, mu)
 Jz = np.zeros([M,N], dtype=np.complex128)
 Mx = np.zeros([M,N], dtype=np.complex128)
 My = np.zeros([M,N], dtype=np.complex128)
-Jz[M/2, N/2] = 1.0
+Jz[0, N/2] = 1.0
 
 sim.set_sources((Jz, Mx, My))
 
@@ -89,7 +91,7 @@ sim.build()
 sim.solve_forward()
 
 # Get the fields we just solved for
-sim_area = PlaneCoordinates('z', 1.0, W-1.0, 1.0, H-1.0, dx, dy)
+sim_area = PlaneCoordinates('z', 1.0, W-1.0, 0.0, H-1.0, dx, dy)
 Ez = sim.get_field_interp('Ez', sim_area)
 
 # Simulate the field.  Since we are running this using MPI, we only generate
@@ -100,6 +102,7 @@ if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
     extent = sim_area.get_bounding_box()[0:4]
+    Ez = np.flipud(Ez)
 
     f = plt.figure()
     ax = f.add_subplot(111)

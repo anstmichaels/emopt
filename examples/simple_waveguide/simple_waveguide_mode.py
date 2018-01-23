@@ -4,7 +4,7 @@ of the waveguide.
 
 On most *nix-based machines, run the script with:
 
-    $ mpirun -n 8 python simple_waveguide.py
+    $ mpirun -n 8 python simple_waveguide_mode.py
 
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
@@ -32,7 +32,7 @@ wlen = 1.55
 
 # set up TE simulation. TE refers to the field polarization which has E
 # strictly perpendicular to the direction of propagation, i.e. E = Ez
-sim = FDFD_TE(W, H, dx, dy, wlen, [1.0,1.0,1.0,1.0])
+sim = FDFD_TE(W, H, dx, dy, wlen)
 
 # Get the actual width and height
 # The true width/height will not necessarily match what we used when

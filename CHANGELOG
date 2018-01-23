@@ -1,0 +1,59 @@
+Released on January 23, 2017 
+----------------------------
+Note: This is the first entry to the CHANGELOG
+
+1. Fixed boundary condition bugs in mode solver (the problem only manifested if the
+permittivity and permeability were uniform across the entire simulation domain and
+thus likely did not affect most if any actual simulations.)
+
+2. Changed how PMLs are set. Now, PML is not passed to the constructor of the FDFD
+object. Instead, it defaults to a half wavelength everywhere and can be set using the
+w_pml property. e.g.
+
+     sim = FDFD_TE(W,H,dx,dy,wlen) 
+     sim.w_pml = [1, 1, 1, 1]
+
+3. Introduced ability to change boundary conditions in FDFD_TE and FDFD_TM. This is
+accomplished using the "bc" property. The bc property is a 2 character string which
+specifies the boundary condition along the x and y directions in the simulation
+region. The default value is '00' which corresponds to perfect electrical conductors
+on all four edges. The boundary conditions that are currently implemented are
+
+     0 - "perfect electric conductor" : the boundaries of the simulation perfectly
+     conduct electrical current.
+
+     M - "perfect Magnetic conductor" : the boundaries of the simulation perfectly
+     conduct magnetic current (magnetic monopoles). In most cases, this likely be
+     used explicitly by the user.  
+     
+     E - "Electric field symmetry": the electric field is mirrored across the
+     bottom boundary of the simulation domain (y=0).
+     
+     H - "Magnetic field symmetry": the magnetic field is mirrored across the
+     bottom boundary of the simulation domain (y=0). 
+     
+     P - "Periodic"
+
+Furthermore, in the future, Bloch periodic boundary conditions (B) will be
+implemented.
+
+In addition to choosing the desired boundary conditions, the PML widths must be
+changed accordingly. For example, if you choose your boundary condition to be '0E'
+(PEC on left and right boundaries, E symmetry on bottom boundary, and PEC on top
+boundary), then you must be also careful to set the bottom PML width to be 0.0. EMOpt
+will throw a warning if you do not do this, so keep an eye out.
+
+Important note: some testing has been done to verify the different boundary
+conditions work as intended, however this testing is not exhaustive. 
+
+Examples demonstrating the new boundary conditions can be found in
+examples/simple_waveguide/ and examples/periodic_Mie
+
+4. These same boundary conditions have been implemented in the 1D mode solver. The
+boundary condition for the mode solver is specified (in most cases) with a length-1
+string (i.e. '0', 'M', 'E', 'H', or 'P'). These boundary conditions are designed to
+be compatible with the FDFD solver's boundary conditions. In particular, if you
+choose E-field symmetry ('E'), for example, the result modes will have an electric
+field which is mirrored across the bottom (y=0) boundary. 
+
+5. Fixed bug in source power calculation which occurs when zero-width PMLs are used.
