@@ -296,10 +296,7 @@ class FDFD_TE(FDFD):
     1. Units used for length parameters do not matter as long as they are
     consistent with one another
 
-    2. In the photonics community "TE" is called "TM" and vice versa.  It is
-    silly.
-
-    3. The width and the height of the system will be modified in order to
+    2. The width and the height of the system will be modified in order to
     ensure that they are an integer multiple of dx and dy. It is important that
     this modified width and height be used in any future calculations.
 
@@ -1326,7 +1323,79 @@ class FDFD_TE(FDFD):
         return P_S + P_loss.real
 
 class FDFD_TM(FDFD_TE):
-    """Simulate Maxwell's equations in 2D with TM-polarized fields."""
+    """Simulate Maxwell's equations in 2D with TM-polarized fields.
+
+    Notes
+    -----
+    1. Units used for length parameters do not matter as long as they are
+    consistent with one another
+
+    2. The width and the height of the system will be modified in order to
+    ensure that they are an integer multiple of dx and dy. It is important that
+    this modified width and height be used in any future calculations.
+
+    Parameters
+    ----------
+    W : float
+        Approximate width of the simulation region. If this is not an integer
+        multiple of dx, this will be increased slightly
+    H : float
+        Approximate height of the simulation region. If this is not an integer
+        multiple of dy, this will be increased slightly
+    dx : float
+        Grid spacing in the x direction.
+    dy : float
+        Grid spacing in the y direction.
+    wavelength : float
+        Vacuum wavelength of EM fields.
+    solver : str
+        The type of solver to use. The possible options are 'direct' (direct LU
+        solver), 'iterative' (unpreconditioned iterative solver), 'iterative_lu'
+        (iterative solver with LU preconditioner, or 'auto'. (default = 'auto')
+    ksp_solver : str
+        The type of Krylov subspace solver to use. See the petsc4py documentation for
+        the possible types. Note: this flag is ignored if 'direct' or 'auto' is
+        chosen for the solver parameter. (default = 'gmres')
+    verbose : boolean (Optional)
+        Indicates whether or not progress info should be printed on the master
+        node. (default=True)
+
+    Attributes
+    ----------
+    dx : float
+        The grid spacing in the x direction
+    dy : float
+        The grid spacing in the y direction
+    W : float
+        The width of the simulation region (including PMLs)
+    H : float
+        The height of the simulation region (including PMLs)
+    M : int
+        The number of grid cells in the y direction
+    N : int
+        The number of grid cells in the x direction
+    wavelength : float
+        The wavelength used for simulation. [arbitrary length unit]
+    w_pml_left : int
+        The number of grid cells which make up the left PML region
+    w_pml_right : int
+        The number of grid cells which make up the right PML region
+    w_pml_top : int
+        The number of grid cells which make up the top PML region
+    w_pml_bottom : int
+        The number of grid cells which make up the bottom PML region
+    field_domains : list of DomainCoordinates
+        The list of DomainCoordinates in which fields are recorded immediately
+        following a forward solve.
+    saved_fields : list of numpy.ndarray
+        The list of (Ez, Hx, Hy) fields saved in in the stored
+        DomainCoordinates
+    source_power : float
+        The source power injected into the system.
+    w_pml : list of float
+        List of PML widths in real spatial units. This variable can be
+        reinitialized in order to change the PML widths
+    """
 
     def __init__(self, W, H, dx, dy, wavelength, solver='auto',
                  ksp_solver='gmres'):
@@ -1727,3 +1796,5 @@ class FDFD_TM(FDFD_TE):
 
         vdiag *= -1
         return vdiag
+
+
