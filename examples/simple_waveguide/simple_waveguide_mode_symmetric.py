@@ -10,14 +10,8 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
-import emopt.fdfd
-from emopt.fdfd import FDFD_TE
-
-from emopt.grid import StructuredMaterial, Rectangle
-from emopt.misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, LineCoordinates, PlaneCoordinates
-
-from emopt.modes import Mode_TE
+import emopt
+from emopt.misc import NOT_PARALLEL
 
 import numpy as np
 from math import pi
@@ -33,7 +27,7 @@ wlen = 1.55
 
 # set up TE simulation. TE refers to the field polarization which has E
 # strictly perpendicular to the direction of propagation, i.e. E = Ez
-sim = FDFD_TE(W, H, dx, dy, wlen)
+sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
 sim.w_pml = [wlen/2, wlen/2, wlen/2, 0]
 sim.bc = '0E'
 
@@ -54,29 +48,24 @@ n0 = 1.44
 n1 = 3.45
 
 # set a background permittivity of 1
-eps_background = Rectangle(W/2, 0, 2*W, 2*H)
+eps_background = emopt.grid.Rectangle(W/2, 0, 2*W, 2*H)
 eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
 h_wg = 0.22
-waveguide = Rectangle(W/2, 0, W*2, h_wg)
+waveguide = emopt.grid.Rectangle(W/2, 0, W*2, h_wg)
 waveguide.layer = 1
 waveguide.material_value = n1**2
 
 # Create the a structured material which holds the waveguide and background
-eps = StructuredMaterial(W, H, dx, dy)
+eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
 eps.add_primitive(waveguide)
 eps.add_primitive(eps_background)
 
 # Basic magnetic materials are supported, however in most situations the
 # permeability will be 1.
-mu_background = Rectangle(W/2, 0, 2*W, 2*H)
-mu_background.layer = 2
-mu_background.material_value = 1.0
-
-mu = StructuredMaterial(W, H, dx, dy)
-mu.add_primitive(mu_background)
+mu = emopt.grid.ConstantMaterial2D(1.0)
 
 # set the materials used for simulation
 sim.set_materials(eps, mu)
@@ -91,7 +80,7 @@ Mx = np.zeros([M,N], dtype=np.complex128)
 My = np.zeros([M,N], dtype=np.complex128)
 
 # Specify a line of coordinates where the source is defined
-src_line = LineCoordinates('y', 2.0, 0, 2.5, dx, dy)
+src_line = emopt.misc.DomainCoordinates(2.0, 2.0, 0, 2.5, 0.0, 0.0, dx, dy, 1.0)
 
 # We need a slice of the material distribution in order to calculate the
 # desired mode that we will launch
@@ -99,7 +88,7 @@ eps_slice = eps.get_values_on(src_line)
 mu_slice = mu.get_values_on(src_line)
 
 # setup, build the system, and solve
-mode = Mode_TE(wlen, dy, eps_slice, mu_slice, n0=3.0, neigs=8)
+mode = emopt.modes.Mode_TE(wlen, dy, eps_slice, mu_slice, n0=3.0, neigs=8)
 mode.bc = 'E'
 mode.build()
 mode.solve()
@@ -126,7 +115,7 @@ sim.build()
 sim.solve_forward()
 
 # Get the fields we just solved for
-sim_area = PlaneCoordinates('z', 1.0, W-1.0, 0.0, H-1.0, dx, dy)
+sim_area = emopt.misc.DomainCoordinates(1.0, W-1.0, 0.0, H-1.0, 0.0, 0.0, dx, dy, 1.0)
 Ez = sim.get_field_interp('Ez', sim_area)
 
 # Visualize the field.  Since we are running this using MPI, we only generate

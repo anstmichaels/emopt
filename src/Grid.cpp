@@ -9,9 +9,9 @@ using namespace Grid;
 
 /**************************************** Materials ****************************************/
 //------------------------------ Grid Material ------------------------------------/
-GridMaterial::GridMaterial(int M, int N, ArrayXXcd grid) : _M(M), _N(N), _grid(grid) {}
+GridMaterial2D::GridMaterial2D(int M, int N, ArrayXXcd grid) : _M(M), _N(N), _grid(grid) {}
 
-std::complex<double> GridMaterial::get_value(int x, int y)
+std::complex<double> GridMaterial2D::get_value(int x, int y)
 {
 	if(x > 0 && x < _M && y > 0 && y < _N) 
 		return _grid(y,x);
@@ -20,24 +20,26 @@ std::complex<double> GridMaterial::get_value(int x, int y)
 }
 
 
-void GridMaterial::get_values(ArrayXXcd& grid, int m1, int m2, int n1, int n2)
+void GridMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2)
 {
-    for(int i = m1; i < m2; i++) {
-        for(int j = n1; j < n2; j++) {
-            grid(i-m1,j-n1) = _grid(i,j);
+    int N = k2 - k1;
+
+    for(int i = j1; i < j2; i++) {
+        for(int j = k1; j < k2; j++) {
+            grid((i-j1)*N + j-k1) = _grid(i,j);
         }
     }
 }
 
-void GridMaterial::set_grid(int M, int N, ArrayXXcd grid)
+void GridMaterial2D::set_grid(int M, int N, ArrayXXcd grid)
 {
 	_M = M;
 	_N = N;
 	_grid = grid;
 }
 
-int GridMaterial::get_M() { return _M; }
-int GridMaterial::get_N() { return _N; }
+int GridMaterial2D::get_M() { return _M; }
+int GridMaterial2D::get_N() { return _N; }
 
 
 //------------------------------ MaterialPrimitives ------------------------------------/
@@ -386,18 +388,18 @@ void Polygon::set_material(std::complex<double> mat)
 }
 
 //------------------------------ Structured Material ------------------------------------/
-StructuredMaterial::StructuredMaterial(double w, double h, double dx, double dy) :
+StructuredMaterial2D::StructuredMaterial2D(double w, double h, double dx, double dy) :
 	_w(w), _h(h), _dx(dx), _dy(dy)
 {}
 
-StructuredMaterial::~StructuredMaterial() {}
+StructuredMaterial2D::~StructuredMaterial2D() {}
 
 /* It is important to the material averaging algorithm that primitives be stored in an 
  * ordered list according to their layer.  Lower layers are stored first (have priority).
  * This means that once you have added a primitive to a list, you cannot change its
  * layer!
  */
-void StructuredMaterial::add_primitive(MaterialPrimitive* prim)
+void StructuredMaterial2D::add_primitive(MaterialPrimitive* prim)
 {
 	std::list<MaterialPrimitive*>::iterator it, insert_pos = _primitives.end();
 
@@ -418,15 +420,26 @@ void StructuredMaterial::add_primitive(MaterialPrimitive* prim)
 }
 
 
-std::complex<double> StructuredMaterial::get_value(int x, int y) {
+void StructuredMaterial2D::add_primitives(std::list<MaterialPrimitive*> primitives)
+{
+    std::list<MaterialPrimitive*>::iterator it;
+    for(it = primitives.begin(); it != primitives.end(); it++) {
+        add_primitive(*it);
+    }
+}
+
+
+std::complex<double> StructuredMaterial2D::get_value(int x, int y) {
     return get_value(double(x), double(y));
 }
 
-void StructuredMaterial::get_values(ArrayXXcd& grid, int m1, int m2, int n1, int n2)
+void StructuredMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2)
 {
-    for(int i = m1; i < m2; i++) {
-        for(int j = n1; j < n2; j++) {
-            grid(i-m1,j-n1) = get_value(j, i);
+    int N = k2 - k1;
+
+    for(int i = j1; i < j2; i++) {
+        for(int j = k1; j < k2; j++) {
+            grid((i-j1)*N+j-k1) = get_value(j, i);
         }
     }
 }
@@ -435,7 +448,7 @@ void StructuredMaterial::get_values(ArrayXXcd& grid, int m1, int m2, int n1, int
 // Note that there are a few situations where this average will not quite be what they
 // should be.  In particular, if three or more materials intersect a cell, this 
 // average will begin to deviate from the "correct" average
-std::complex<double> StructuredMaterial::get_value(double x, double y)
+std::complex<double> StructuredMaterial2D::get_value(double x, double y)
 {
 	std::complex<double> val = 0.0;
 	std::list<MaterialPrimitive*>::iterator it = _primitives.begin();
@@ -500,4 +513,190 @@ std::complex<double> StructuredMaterial::get_value(double x, double y)
 	}
 
 	return val;
+}
+
+
+std::list<MaterialPrimitive*> StructuredMaterial2D::get_primitives()
+{
+    return _primitives;
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+// Constant Material
+////////////////////////////////////////////////////////////////////////////////////
+ConstantMaterial2D::ConstantMaterial2D(std::complex<double> value)
+{
+    _value = value;
+}
+
+std::complex<double> ConstantMaterial2D::get_value(int x, int y)
+{
+    return _value;
+}
+
+void ConstantMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2)
+{
+    int N = k2 - k1;
+
+    for(int i = j1; i < j2; i++) {
+        for(int j = k1; j < k2; j++) {
+            grid((i-j1)*N + j-k1) = _value;
+        }
+    }
+}
+
+void ConstantMaterial2D::set_material(std::complex<double> val)
+{
+    _value = val;
+}
+
+std::complex<double> ConstantMaterial2D::get_material()
+{
+    return _value;
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+// Structured 3D Material
+////////////////////////////////////////////////////////////////////////////////////
+
+Structured3DMaterial::Structured3DMaterial(double X, double Y, double Z,
+                                           double dx, double dy, double dz) :
+                                           _X(X), _Y(Y), _Z(Z), 
+                                           _dx(dx), _dy(dy), _dz(dz)
+{}
+
+// We allocate memory -- Need to free it!
+Structured3DMaterial::~Structured3DMaterial()
+{
+	for(auto it = _layers.begin(); it != _layers.end(); it++) {
+        delete (*it);
+    }
+}
+
+void Structured3DMaterial::add_primitive(MaterialPrimitive* prim, double z1, double z2)
+{
+    // Dummy variables
+    StructuredMaterial2D* layer;
+    double znew[2] = {z1, z2},
+           z = 0;
+
+    // Get access to relevant lists
+    auto itl = _layers.begin();
+    auto itz = _zs.begin();
+    
+    std::list<StructuredMaterial2D*>::iterator itl_ins;
+    std::list<double>::iterator itz_ins;
+
+    // Make sure the layer has a thickness
+    if(z1 == z2) {
+        std::cout << "Warning in Structured3DMaterial: Provided layer has no \
+                      thickness. It will be ignored." << std :: endl;
+
+        return;
+    }
+    else if(z2 < z1) {
+        std::cout << "Warning in Structured3DMaterial: Provided layer has negative \
+                      thickness. It will be ignored." << std :: endl;
+
+        return;
+    }
+
+    // If this is the first addition, things are simple
+    if(itz == _zs.end()) {
+        _zs.push_back(z1);
+        _zs.push_back(z2);
+        
+        layer = new StructuredMaterial2D(_X, _Y, _dx, _dy);
+        layer->add_primitive(prim);
+        _layers.push_back(layer);
+
+        return;
+    }
+
+    // now we insert the beginning and end point of the layer one at a time, breaking
+    // up or inserting new layers as necessary
+    for(int i = 0; i < 2; i++) {
+        z = znew[i];
+
+        itz = _zs.begin();
+        itl = _layers.begin();
+        itz_ins = _zs.end();
+        itl_ins = _layers.end();
+
+        // figure out where the point is going to go
+        while(itz != _zs.end()) {
+            if(z >= *itz) {
+                itz_ins = itz;
+                itl_ins = itl;
+            }
+            itz++;
+            if(itl != _layers.end())
+                itl++;
+        }
+
+        // Three cases to consider: (1) point below stack (2) point above stack (3)
+        // point in stack
+        if(itz_ins == _zs.end()) {
+            layer = new StructuredMaterial2D(_X, _Y, _dx, _dy);
+            _layers.push_front(layer);
+            _zs.push_front(z);
+        }
+        else if(itz_ins == --_zs.end()) {
+            layer = new StructuredMaterial2D(_X, _Y, _dx, _dy);
+            _layers.push_back(layer);
+            _zs.push_back(z);
+        }
+        else {
+            // make sure the point to insert is not already in the stack
+            if(z != *itz_ins) {
+                layer = new StructuredMaterial2D(_X, _Y, _dx, _dy);
+                layer->add_primitives( (*itl_ins)->get_primitives() );
+                _layers.insert(itl_ins, layer);
+                _zs.insert(++itz_ins, z);
+            }
+        }
+    }
+
+    // Finally, insert the supplied MaterialPrimitve into the desired locations
+    itz = _zs.begin();
+    itl = _layers.begin();
+
+    // figure out where the point is going to go
+    while(itl != _layers.end()) {
+        z = (*itz);
+        if(z >= z1 && z <= z2) {
+            (*itl)->add_primitive(prim);
+        }
+        itz++;
+        itl++;
+    }
+
+    // aaannnddd we're done!
+}
+
+std::complex<double> Structured3DMaterial::get_value(int k, int j, int i)
+{
+    return get_value(double(k), double(j), double(i));
+}
+
+std::complex<double> Structured3DMaterial::get_value(double k, double j, double i)
+{
+
+}
+
+// Note that this takes a 1D array!
+void Structured3DMaterial::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, int i1, int i2)
+{
+    int index = 0,
+        Nx = k2-k1,
+        Ny = j2-j1;
+
+    for(int i = i1; i < i2; i++) {
+        for(int j = j1; j < j2; j++) {
+            for(int k = k1; k < k2; k++) {
+                index = (i-i1)*Nx*Ny + (j-j1)*Nx + (k-k1);
+                grid(index) = get_value(k, j, i);
+            }
+        }
+    }
 }

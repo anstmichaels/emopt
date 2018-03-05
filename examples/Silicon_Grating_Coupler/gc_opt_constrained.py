@@ -44,17 +44,9 @@ machine.
 
 """
 # We need to import a lot of things from emopt
-import emopt.fdfd
-from emopt.fdfd import FDFD_TE
+import emopt
+from emopt.misc import NOT_PARALLEL
 from emopt.adjoint_method import AdjointMethodPNF
-from emopt.optimizer import Optimizer
-from emopt.grid import StructuredMaterial, Rectangle
-from emopt.misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, n_silicon, LineCoordinates, plot_iterations, \
-save_results, load_results, PlaneCoordinates
-from emopt.modedata import gen_mode_data_TE
-import emopt.fomutils as FOMUtils
-from emopt.modes import Mode_TE
 
 # We define the desired Gaussian modes in a separate file
 from mode_data import Ez_Gauss, Hx_Gauss, Hy_Gauss
@@ -122,7 +114,7 @@ class SiliconGratingAM(AdjointMethodPNF):
         Ezm = Ez_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
         Hxm = Hx_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
         Hym = Hy_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
-        self.mode_match = FOMUtils.ModeMatch([0,1,0], sim.dx, Ezm=Ezm, Hxm=Hxm, Hym=Hym)
+        self.mode_match = emopt.fomutils.ModeMatch([0,1,0], sim.dx, Ezm=Ezm, Hxm=Hxm, Hym=Hym)
 
         self.current_fom = 0.0
 
@@ -204,10 +196,10 @@ class SiliconGratingAM(AdjointMethodPNF):
         slots. In our constrained optimization, we will try to eliminate these
         slots without reducing the coupling
         """
-        p = np.sum(self.penalty*FOMUtils.rect(params[0:self.Ng] -
-                                              self.min_feature/2.0,
-                                              self.min_feature,
-                                              self.c_steepness))
+        p = np.sum(self.penalty*emopt.fomutils.rect(params[0:self.Ng] -
+                                                     self.min_feature/2.0,
+                                                     self.min_feature,
+                                                     self.c_steepness))
 
         return p
 
@@ -281,40 +273,44 @@ class SiliconGratingAM(AdjointMethodPNF):
         """
         Ng = self.Ng
         dparams = np.zeros(params.shape)
-        dparams[0:Ng] = self.penalty*FOMUtils.rect_derivative(params[0:Ng] -
+        dparams[0:Ng] = self.penalty*emopt.fomutils.rect_derivative(params[0:Ng] -
                                                               self.min_feature/2.0,
                                                               self.min_feature,
                                                               self.c_steepness)
         return dparams
 
 
-def plot_update(x, fom_list, fom_unconstrained, sim, am):
+def plot_update(params, fom_list, fom_unconstrained, sim, am):
     """Save a snapshot of the current state of the structure.
 
     This function is passed to an Optimizer object and is called after each
     iteration of the optimization. It plots the current refractive index
     distribution, the electric field, and the full figure of merit history.
     """
-    fom = am.calc_fom(sim, x)
-    y = am.calc_y(sim, x)
-    fom_unconstrained.append(-1*(fom-y))
+    current_fom = -1*am.calc_fom(sim, params)
+    fom_nopenalty = current_fom + am.calc_y(sim, params)
+    fom_list.append(current_fom)
+    fom_unconstrained.append(fom_nopenalty)
 
-    f, ax1, ax2, ax3 = plot_iterations(x, fom_list, sim, am, 'Ez',
-                                       fom2=fom_unconstrained)
-
-    data = {}
     Ez, Hx, Hy = sim.saved_fields[1]
     eps = sim.eps.get_values_on(sim.field_domains[1])
+
+    foms = {'FOM' : fom_list,
+            'Insertion Loss' : fom_unconstrained}
+    emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Wreal,
+                            sim.Hreal, foms, fname='current_result.pdf')
+
+    data = {}
     data['Ez'] = Ez
     data['Hx'] = Hx
     data['Hy'] = Hy
     data['eps'] = eps
-    data['params'] = x
+    data['params'] = params
     data['foms'] = fom_list
 
     i = len(fom_list)
     fname = 'data/gc_8deg_opt_constrained'
-    save_results(fname, data)
+    emopt.io.save_results(fname, data)
 
 if __name__ == '__main__':
     ####################################################################################
@@ -334,7 +330,7 @@ if __name__ == '__main__':
 
     # create the simulation object.
     # TE => Ez, Hx, Hy
-    sim = FDFD_TE(W, H, dx, dy, wavelength)
+    sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wavelength)
 
     # Get the actual width and height
     W = sim.W
@@ -345,7 +341,7 @@ if __name__ == '__main__':
     ####################################################################################
     # Define the structure
     ####################################################################################
-    n_si = n_silicon(wavelength)
+    n_si = emopt.misc.n_silicon(wavelength)
     eps_core = n_si**2
     eps_clad = 1.444**2
 
@@ -378,22 +374,22 @@ if __name__ == '__main__':
     grating_etch = []
 
     for i in range(Ng):
-        rect_etch = Rectangle(0,y_etch, (1-df)*period, h_etch)
+        rect_etch = emopt.grid.Rectangle(0,y_etch, (1-df)*period, h_etch)
         rect_etch.layer = 1
         rect_etch.material_value = eps_clad
         grating_etch.append(rect_etch)
 
     # input waveguide
     Lwg = Ng*period + w_wg_input
-    wg = Rectangle(Lwg/2.0, y_ts, Lwg, h_wg)
+    wg = emopt.grid.Rectangle(Lwg/2.0, y_ts, Lwg, h_wg)
 
     # define substrate
     h_BOX = 2.0
     h_subs = H/2.0 - h_wg/2.0 - h_BOX
-    substrate = Rectangle(W/2.0, h_subs/2.0, W, h_subs)
+    substrate = emopt.grid.Rectangle(W/2.0, h_subs/2.0, W, h_subs)
 
     # set the background material using a rectangle equal in size to the system
-    background = Rectangle(W/2,H/2,W,H)
+    background = emopt.grid.Rectangle(W/2,H/2,W,H)
 
     # set the relative layers of the permitivity primitives
     wg.layer = 2
@@ -409,7 +405,7 @@ if __name__ == '__main__':
     # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
     # This Material defines the distribution of the permittivity within the simulated
     # environment
-    eps = StructuredMaterial(W,H,dx,dy)
+    eps = emopt.grid.StructuredMaterial2D(W,H,dx,dy)
 
     for g in grating_etch:
         eps.add_primitive(g)
@@ -419,11 +415,7 @@ if __name__ == '__main__':
     eps.add_primitive(background)
 
     # set up the magnetic permeability -- just 1.0 everywhere
-    mu_background = Rectangle(W/2,H/2,W,H)
-    mu_background.material_value = 1.0
-    mu_background.layer = 1
-    mu = StructuredMaterial(W,H,dx,dy)
-    mu.add_primitive(mu_background)
+    mu = emopt.grid.ConstantMaterial2D(1.0)
 
     # add the materials and build the system
     sim.set_materials(eps, mu)
@@ -441,7 +433,8 @@ if __name__ == '__main__':
     My = np.zeros([M,N], dtype=np.complex128)
 
     # place the source in the simulation domain
-    src_line = LineCoordinates('y', w_pml+2*dx, H/2-w_src/2, H/2+w_src/2, dx, dy)
+    src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, H/2-w_src/2,
+                                 H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver. This simply involves getting a slice of the
     # permittivity and permeability along our source line and passing them
@@ -449,7 +442,7 @@ if __name__ == '__main__':
     eps_slice = eps.get_values_on(src_line)
     mu_slice = mu.get_values_on(src_line)
 
-    mode = Mode_TE(wavelength, dy, eps_slice, mu_slice, n0=2.5, neigs=4)
+    mode = emopt.modes.Mode_TE(wavelength, dy, eps_slice, mu_slice, n0=2.5, neigs=4)
     mode.build()
     mode.solve()
 
@@ -470,8 +463,10 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the mode match domain
     ####################################################################################
-    mm_line = LineCoordinates('x', H/2.0+2.0, w_pml, W-w_pml, dx, dy)
-    full_field = PlaneCoordinates('z', w_pml, W-w_pml, w_pml, H-w_pml, dx, dy)
+    mm_line = emopt.misc.DomainCoordinates(w_pml, W-w_pml, H/2.0+2.0, H/2.0+2.0, 0, 0,
+                                dx, dy, 1.0)
+    full_field = emopt.misc.DomainCoordinates(w_pml, W-w_pml, w_pml, H-w_pml, 0.0, 0.0,
+                                   dx, dy, 1.0)
     sim.field_domains = [mm_line, full_field]
 
     ####################################################################################
@@ -502,7 +497,7 @@ if __name__ == '__main__':
     # load the results of the unconstrained parameterization
     params = None
     if(NOT_PARALLEL):
-        data = load_results('data/gc_8deg_opt_final')
+        data = emopt.io.load_results('data/gc_8deg_opt')
         params = data['params']
 
     params = comm.bcast(params, root=0)
@@ -534,9 +529,9 @@ if __name__ == '__main__':
     # setup and run the optimization!
     # Note: For this optimization, it turns out that L-BFGS-B works a lot
     # better than normal BFGS (this is not totally unusual)
-    opt = Optimizer(am, design_params, tol=1e-5,
-                    callback_func=callback,
-                    opt_method='L-BFGS-B', Nmax=30)
+    opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
+                                    callback_func=callback,
+                                    opt_method='L-BFGS-B', Nmax=30)
 
     # Run the optimization
     # A good thing to do would be to save the results of the optimization. This

@@ -3,34 +3,41 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
-//----------------- Material ---------------------------
+/////////////////////////////////////////////////////////////////////////////////////
+// Material
+/////////////////////////////////////////////////////////////////////////////////////
 
-double Material_get_value_real(Material* mat, double x, double y) { 
+double Material2D_get_value_real(Material2D* mat, double x, double y) { 
 	return std::real(mat->get_value(x,y)); 
 }
 
-double Material_get_value_imag(Material* mat, double x, double y) { 
+double Material2D_get_value_imag(Material2D* mat, double x, double y) { 
 	return std::imag(mat->get_value(x,y)); 
 } 
 
 
-void Material_get_values(Material* mat, int m1, int m2, int n1, int n2, complex64* arr)
+void Material2D_get_values(Material2D* mat, int k1, int k2, int j1, int j2,
+                         complex64* arr)
 {
     std::complex<double> val;
-    int N = n2-n1;
+    int Ny = j2-j1,
+        Nx = k2-k1;
 
-    for(int i = m1; i < m2; i++) {
-        for(int j = n1; j < n2; j++) {
-            val = mat->get_value(double(j), double(i));
-            arr[(i-m1)*N + j-n1].real = std::real(val);
-            arr[(i-m1)*N + j-n1].imag = std::imag(val);
-        }
+	ArrayXcd grid(Nx*Ny);
+    mat->get_values(grid, k1, k2, j1, j2);
+
+    for(int i = 0; i < Nx*Ny; i++) {
+        val = grid(i);
+        arr[i].real = std::real(val);
+        arr[i].imag = std::imag(val);
     }
 }
 
-//----------------- Grid Material ---------------------------
+///////////////////////////////////////////////////////////////////////////////////// 
+// Grid Material
+/////////////////////////////////////////////////////////////////////////////////////
 
-GridMaterial* GridMaterial_new(int M, int N, complex64* arr) {
+GridMaterial2D* GridMaterial2D_new(int M, int N, complex64* arr) {
 	
 	ArrayXXcd grid(N,M);
 	complex64 val;
@@ -42,14 +49,14 @@ GridMaterial* GridMaterial_new(int M, int N, complex64* arr) {
 		}
 	}
 
-	return new GridMaterial(M, N, grid); 
+	return new GridMaterial2D(M, N, grid); 
 }
 
-void GridMaterial_delete(GridMaterial* mat) {
+void GridMaterial2D_delete(GridMaterial2D* mat) {
 	delete mat;
 }
 
-void GridMaterial_set_grid(GridMaterial* mat, int M, int N, complex64* arr)
+void GridMaterial2D_set_grid(GridMaterial2D* mat, int M, int N, complex64* arr)
 {
 	ArrayXXcd grid(N,M);
 	complex64 val;
@@ -64,34 +71,39 @@ void GridMaterial_set_grid(GridMaterial* mat, int M, int N, complex64* arr)
 	mat->set_grid(M, N, grid);
 }
 
-int GridMaterial_get_M(GridMaterial* mat) {
+int GridMaterial2D_get_M(GridMaterial2D* mat) {
 	return mat->get_M();
 }
 
-int GridMaterial_get_N(GridMaterial* mat) {
+int GridMaterial2D_get_N(GridMaterial2D* mat) {
 	return mat->get_N();
 }
 
-//----------------- Structured Material ---------------------------
+/////////////////////////////////////////////////////////////////////////////////////
+// Structured Material
+/////////////////////////////////////////////////////////////////////////////////////
 
-StructuredMaterial* StructuredMaterial_new(double w, double h, double dx, double dy)
+StructuredMaterial2D* StructuredMaterial2D_new(double w, double h, double dx, double dy)
 {
-	return new StructuredMaterial(w,h,dx,dy);
+	return new StructuredMaterial2D(w,h,dx,dy);
 }
 
 
-void StructuredMaterial_delete(StructuredMaterial* sm)
+void StructuredMaterial2D_delete(StructuredMaterial2D* sm)
 {
 	delete sm;
 }
 
 
-void StructuredMaterial_add_primitive(StructuredMaterial* sm, MaterialPrimitive* prim)
+void StructuredMaterial2D_add_primitive(StructuredMaterial2D* sm, 
+                                      MaterialPrimitive* prim)
 {
 	sm->add_primitive(prim);
 }
 
-//---------------------- MaterialPrimitives --------------------------
+/////////////////////////////////////////////////////////////////////////////////////
+// MaterialPrimitives
+/////////////////////////////////////////////////////////////////////////////////////
 
 void MaterialPrimitive_set_layer(MaterialPrimitive* prim, int layer)
 {
@@ -103,19 +115,26 @@ int MaterialPrimitive_get_layer(MaterialPrimitive* prim)
 	return prim->get_layer();
 }
 
-bool MaterialPrimitive_contains_point(MaterialPrimitive* prim, double x, double y) {
+bool MaterialPrimitive_contains_point(MaterialPrimitive* prim, double x, double y)
+{
 	return prim->contains_point(x,y);
 }
 
-double MaterialPrimitive_get_material_real(MaterialPrimitive* prim, double x, double y) {
+double MaterialPrimitive_get_material_real(MaterialPrimitive* prim, 
+                                           double x, double y)
+{
 	return std::real(prim->get_material(x,y));
 }
 
-double MaterialPrimitive_get_material_imag(MaterialPrimitive* prim, double x, double y) {
+double MaterialPrimitive_get_material_imag(MaterialPrimitive* prim,
+                                           double x, double y)
+{
 	return std::imag(prim->get_material(x,y));
 }
 
-//---------------------- Circle Primitives --------------------------
+/////////////////////////////////////////////////////////////////////////////////////
+// Circle Primitives
+/////////////////////////////////////////////////////////////////////////////////////
 
 Circle* Circle_new(double x0, double y0, double r) {
 	return new Circle(x0, y0, r);
@@ -156,7 +175,9 @@ double Circle_get_r(Circle* c)
 }
 
 
-//---------------------- Rectangle Primitives --------------------------
+/////////////////////////////////////////////////////////////////////////////////////
+//Rectangle Primitives
+/////////////////////////////////////////////////////////////////////////////////////
 
 Rectangle* Rectangle_new(double x0, double y0, double xspan, double yspan)
 {
@@ -187,7 +208,9 @@ void Rectangle_set_height(Rectangle* r, double height)
 	r->set_height(height);
 }
 
-//---------------------- Polygon Primitives --------------------------
+/////////////////////////////////////////////////////////////////////////////////////
+// Polygon Primitives
+/////////////////////////////////////////////////////////////////////////////////////
 
 Polygon* Polygon_new()
 {
@@ -225,8 +248,55 @@ void Polygon_set_material(Polygon* poly, double real, double imag)
 	poly->set_material(std::complex<double>(real, imag));
 }
 
-//-------------------------------- MISC --------------------------------
-void row_wise_A_update(Material* eps, Material* mu, int ib, int ie, int M, int N, int x1, int x2, int y1, int y2, complex64* vdiag)
+/////////////////////////////////////////////////////////////////////////////////////
+// ConstantMaterial
+/////////////////////////////////////////////////////////////////////////////////////
+ConstantMaterial2D* ConstantMaterial2D_new(double real, double imag)
+{
+    return new ConstantMaterial2D(std::complex<double>(real, imag));
+}
+
+void ConstantMaterial2D_set_material(ConstantMaterial2D* cm, double real, double imag)
+{
+    cm->set_material(std::complex<double>(real, imag));
+}
+
+double ConstantMaterial2D_get_material_real(ConstantMaterial2D* cm)
+{
+    return std::real(cm->get_material());
+}
+
+double ConstantMaterial2D_get_material_imag(ConstantMaterial2D* cm)
+{
+    return std::imag(cm->get_material());
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+// Structured3DMaterial
+/////////////////////////////////////////////////////////////////////////////////////
+Structured3DMaterial* Structured3DMaterial_new(double X, double Y, double Z,
+                                               double dx, double dy, double dz)
+{
+    return new Structured3DMaterial(X, Y, Z, dx, dy ,dz);
+}
+
+void Structured3DMaterial_delete(Structured3DMaterial* sm)
+{
+    delete sm;
+}
+
+void Structured3DMaterial_add_primitive(Structured3DMaterial* sm, 
+                                        MaterialPrimitive* prim, 
+                                        double z1, double z2)
+{
+  sm->add_primitive(prim, z1, z2);  
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+// MISC
+/////////////////////////////////////////////////////////////////////////////////////
+void row_wise_A_update(Material2D* eps, Material2D* mu, int ib, int ie, int M, int N,
+                       int x1, int x2, int y1, int y2, complex64* vdiag)
 {
     int x = 0,
         y = 0,

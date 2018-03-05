@@ -8,13 +8,8 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
-import emopt.modes
-from emopt.modes import Mode_TE
-
-from emopt.misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, n_silicon
-
-import emopt.fomutils as FOMUtils
+import emopt
+from emopt.misc import NOT_PARALLEL
 
 import numpy as np
 from math import pi
@@ -53,7 +48,7 @@ eps[(x <= w_wg/6)] = 2.8**2
 # eigenvectors that we find.  We thus solve for more vectors than we really
 # need to be sure that we can pick out the desired modes.
 neigs = 8
-modes = Mode_TE(wavelength, dy, eps, mu, n0=3.0, neigs=neigs)
+modes = emopt.modes.Mode_TE(wavelength, dy, eps, mu, n0=3.0, neigs=neigs)
 
 # set the boundary condition type. 'E' refers to electric field symmetry on the
 # bottom y=0 boundary (i.e. the electric field is mirrored across the

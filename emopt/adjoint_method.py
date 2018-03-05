@@ -187,7 +187,6 @@ References
 """
 
 import fdfd # this needs to come first
-from grid import StructuredMaterial, Rectangle
 from misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master
 import fomutils
@@ -199,7 +198,7 @@ from petsc4py import PETSc
 from mpi4py import MPI
 
 __author__ = "Andrew Michaels"
-__license__ = "Apache License, Version 2.0"
+__license__ = "GPL License, Version 3.0"
 __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
@@ -615,7 +614,7 @@ class AdjointMethod(object):
         else:
             return None
 
-    def check_gradient(self, params, indices=[]):
+    def check_gradient(self, params, indices=[], plot=True):
         """Verify that the gradient is accurate.
 
         It is highly recommended that the accuracy of the gradients be checked
@@ -692,21 +691,28 @@ class AdjointMethod(object):
                                 'which is over 1%%' % (error_tot), \
                                 'emopt.adjoint_method')
 
-            import matplotlib.pyplot as plt
-            f = plt.figure()
-            ax1 = f.add_subplot(311)
-            ax2 = f.add_subplot(312)
-            ax3 = f.add_subplot(313)
+            if(plot):
+                import matplotlib.pyplot as plt
+                f = plt.figure()
+                ax1 = f.add_subplot(311)
+                ax2 = f.add_subplot(312)
+                ax3 = f.add_subplot(313)
 
-            ax1.bar(indices, grad_fd)
-            ax2.bar(indices, grad_am[indices])
-            ax3.bar(indices, errors)
 
-            ax3.set_yscale('log', nonposy='clip')
+                ax1.bar(indices, grad_fd)
+                ax1.set_title('Finite Differences')
+                ax2.bar(indices, grad_am[indices])
+                ax2.set_title('Adjoint Method')
+                ax3.bar(indices, errors)
+                ax3.set_title('Error in Adjoint Method')
 
-            plt.show()
+                ax3.set_yscale('log', nonposy='clip')
+
+                plt.show()
 
             return error_tot
+        else:
+            return None
 
 class AdjointMethodMO(AdjointMethod):
     """An AdjointMethod object for an ensemble of different figures of merit

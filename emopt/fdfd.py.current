@@ -1338,8 +1338,8 @@ class FDFD_TE(FDFD):
         y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int)
 
         if(not self.real_materials):
-            eps = self._eps.get_values(0, N, 0, M)
-            mu = self._mu.get_values(0, N, 0, M)
+            eps = self._eps.get_values(0, M, 0, N)
+            mu = self._mu.get_values(0, M, 0, N)
         else:
             eps = np.zeros(Ez.shape, dtype=np.complex128)
             mu = np.zeros(Ez.shape, dtype=np.complex128)
@@ -1785,8 +1785,8 @@ class FDFD_TM(FDFD_TE):
         y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int)
 
         if(not self.real_materials):
-            eps = self._eps_actual.get_values(0, N, 0, M)
-            mu = self._mu_actual.get_values(0, N, 0, M)
+            eps = self._eps_actual.get_values(0, M, 0, N)
+            mu = self._mu_actual.get_values(0, M, 0, N)
         else:
             eps = np.zeros(Hz.shape, dtype=np.complex128)
             mu = np.zeros(Hz.shape, dtype=np.complex128)
@@ -1981,15 +1981,15 @@ class FDFD_3D(FDFD):
         self.ksp_iter = PETSc.KSP()
         self.ksp_iter.create(PETSc.COMM_WORLD)
 
-        #ksp_solver = 'gcr'
-        #self.ksp_iter.setType(ksp_solver)
+        #ksp_solver = 'bcgsl'
+        ksp_solver = 'fgmres'
+        self.ksp_iter.setType(ksp_solver)
         self.ksp_iter.setInitialGuessNonzero(True)
-        #self.ksp_iter.setGMRESRestart(10)
+        self.ksp_iter.setGMRESRestart(10)
         self.ksp_iter.setTolerances(rtol=rtol)
 
-        #self._A.setBlockSize(6)
-        #pc = self.ksp_iter.getPC()
-        #pc.setType('bjacobi')
+        pc = self.ksp_iter.getPC()
+        pc.setType('jacobi')
 
         # create a direct linear solver
         self.ksp_dir = PETSc.KSP()
@@ -2175,24 +2175,18 @@ class FDFD_3D(FDFD):
         if(self.verbose and NOT_PARALLEL):
             info_message('Building system matrix...')
 
-        ig = 0
-        component = 0
-        x = 0; y = 0; z = 0
-        Nc = 6 # 6 field components
         for i in xrange(self.ib, self.ie):
+            if(i < Ngrid): # Jx row
+                iloc = i
+                z = int(iloc/NxNy)
+                y = int((iloc-z*NxNy)/Nx)
+                x = iloc - z*NxNy - y*Nx
 
-            ig = int(i/Nc)
-            component = int(i - 6*ig)
-            z = int(ig/NxNy)
-            y = int((ig-z*NxNy)/Nx)
-            x = ig - z*NxNy - y*Nx
-
-            if(component == 0): # Jx row
                 jEx = i
-                jHz0 = (ig - Nx)*Nc + 5
-                jHz1 = ig*Nc + 5
-                jHy0 = (ig - NxNy)*Nc + 4
-                jHy1 = ig*Nc + 4
+                jHz0 = 5*Ngrid + iloc - Nx
+                jHz1 = 5*Ngrid + iloc
+                jHy0 = 4*Ngrid + iloc - NxNy
+                jHy1 = 4*Ngrid + iloc
 
                 # Ex
                 A[i, jEx] = 1j*eps.get_value(x,y,z) # todo: partial grid steps
@@ -2227,12 +2221,17 @@ class FDFD_3D(FDFD):
                 elif(x == Nx-1):
                     pass
 
-            elif(component == 1): #Jy row
+            elif(i < 2*Ngrid): #Jy row
+                iloc = i-Ngrid
+                z = int(iloc/NxNy)
+                y = int((iloc-z*NxNy)/Nx)
+                x = iloc - z*NxNy - y*Nx
+
                 jEy = i
-                jHx0 = (ig - NxNy)*Nc + 3
-                jHx1 = ig*Nc + 3
-                jHz0 = (ig - 1)*Nc + 5
-                jHz1 = ig*Nc + 5
+                jHx0 = 3*Ngrid + iloc - NxNy
+                jHx1 = 3*Ngrid + iloc
+                jHz0 = 5*Ngrid + iloc - 1
+                jHz1 = 5*Ngrid + iloc
 
                 # Ey
                 A[i, jEy] = 1j * eps.get_value(x,y,z)
@@ -2267,12 +2266,17 @@ class FDFD_3D(FDFD):
                 elif(x == Nx-1):
                     pass
 
-            elif(component == 2): # Jz row
+            elif(i < 3*Ngrid): # Jz row
+                iloc = i-2*Ngrid
+                z = int(iloc/NxNy)
+                y = int((iloc-z*NxNy)/Nx)
+                x = iloc - z*NxNy - y*Nx
+
                 jEz = i
-                jHy0 = (ig-1)*Nc + 4
-                jHy1 = ig*Nc + 4
-                jHx0 = (ig-Nx)*Nc + 3
-                jHx1 = ig*Nc + 3
+                jHy0 = 4*Ngrid + iloc - 1
+                jHy1 = 4*Ngrid + iloc
+                jHx0 = 3*Ngrid + iloc - Nx
+                jHx1 = 3*Ngrid + iloc
 
                 # Ez
                 A[i, jEz] = 1j * eps.get_value(x,y,z)
@@ -2307,12 +2311,17 @@ class FDFD_3D(FDFD):
                 elif(x == Nx-1):
                     pass
 
-            elif(component == 3): # Mx row
+            elif(i < 4*Ngrid): # Mx row
+                iloc = i-3*Ngrid
+                z = int(iloc/NxNy)
+                y = int((iloc-z*NxNy)/Nx)
+                x = iloc - z*NxNy - y*Nx
+
                 jHx = i
-                jEz0 = ig*Nc + 2
-                jEz1 = (ig+Nx)*Nc + 2
-                jEy0 = ig*Nc + 1
-                jEy1 = (ig+NxNy)*Nc + 1
+                jEz0 = 2*Ngrid + iloc
+                jEz1 = 2*Ngrid + iloc + Nx
+                jEy0 = 1*Ngrid + iloc
+                jEy1 = 1*Ngrid + iloc + NxNy
 
                 # Hx
                 A[i, jHx] = -1j * mu.get_value(x,y,z)
@@ -2347,12 +2356,17 @@ class FDFD_3D(FDFD):
                 elif(x == Nx-1):
                     pass
 
-            elif(component == 4): # My row
+            elif(i < 5*Ngrid): # My row
+                iloc = i-4*Ngrid
+                z = int(iloc/NxNy)
+                y = int((iloc-z*NxNy)/Nx)
+                x = iloc - z*NxNy - y*Nx
+
                 jHy = i
-                jEx0 = ig*Nc
-                jEx1 = (ig+NxNy)*Nc
-                jEz0 = ig*Nc + 2
-                jEz1 = (ig+1)*Nc + 2
+                jEx0 = iloc
+                jEx1 = iloc + NxNy
+                jEz0 = 2*Ngrid + iloc
+                jEz1 = 2*Ngrid + iloc + 1
 
                 # Hy
                 A[i, jHy] = -1j*mu.get_value(x,y,z)
@@ -2388,11 +2402,16 @@ class FDFD_3D(FDFD):
                     if(z < Nz-1): A[i, jEx1] = 0.0
 
             else: # Mz row
+                iloc = i-5*Ngrid
+                z = int(iloc/NxNy)
+                y = int((iloc-z*NxNy)/Nx)
+                x = iloc - z*NxNy - y*Nx
+
                 jHz = i
-                jEy0 = ig*Nc + 1
-                jEy1 = (ig+1)*Nc + 1
-                jEx0 = ig*Nc
-                jEx1 = (ig+Nx)*Nc
+                jEy0 = 1*Ngrid + iloc
+                jEy1 = 1*Ngrid + iloc + 1
+                jEx0 = iloc
+                jEx1 = iloc + Nx
 
                 # Hz
                 A[i, jHz] = -1j * mu.get_value(x,y,z)
@@ -2539,14 +2558,8 @@ class FDFD_3D(FDFD):
         My = src[4]
         Mz = src[5]
 
-        Nc = 6
-        src_arr = np.zeros(self.nunks, dtype=np.complex128)
-        src_arr[0::Nc] = Jx.ravel()
-        src_arr[1::Nc] = Jy.ravel()
-        src_arr[2::Nc] = Jz.ravel()
-        src_arr[3::Nc] = Mx.ravel()
-        src_arr[4::Nc] = My.ravel()
-        src_arr[5::Nc] = Mz.ravel()
+        src_arr = np.concatenate([Jx.ravel(), Jy.ravel(), Jz.ravel(),
+                                  Mx.ravel(), My.ravel(), Mz.ravel()])
 
         self.b.setArray(src_arr[self.ib:self.ie])
 

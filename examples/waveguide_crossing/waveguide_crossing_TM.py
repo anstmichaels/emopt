@@ -41,10 +41,11 @@ from emopt.fdfd import FDFD_TM
 from emopt.adjoint_method import AdjointMethodPNF
 from emopt.grid import StructuredMaterial, Rectangle, Polygon
 from emopt.misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, n_silicon, LineCoordinates, plot_iterations
+NOT_PARALLEL, run_on_master, n_silicon, DomainCoordinates
 from emopt.optimizer import Optimizer
 import emopt.fomutils as FOMUtils
 from emopt.modes import Mode_TM
+from emopt.io import plot_iteration
 
 import numpy as np
 from math import pi
@@ -239,6 +240,21 @@ class WGCrossAM_TM(AdjointMethodPNF):
         """
         return np.zeros(params.shape)
 
+def opt_plot(params, sim, am, fom_hist):
+    """Plot the current state of the optimization.
+
+    This function is called after each iteration of the optimization
+    """
+    current_fom = -1*am.calc_fom(sim, params)
+    fom_hist.append(current_fom)
+    foms = {'IL':fom_hist}
+
+    Hz, Ex, Ey = sim.saved_fields[1]
+    eps = sim.eps.get_values_on(sim.field_domains[1])
+
+    plot_iteration(np.real(Hz), np.real(eps), sim.Wreal, sim.Hreal, foms,
+                   fname='current_result.pdf')
+
 if __name__ == '__main__':
     ####################################################################################
     # Define the system size
@@ -370,10 +386,10 @@ if __name__ == '__main__':
     w_src = 5.0
 
     # To make accessing and initializing arrays easier, we create
-    # LineCoordinates. These manage the mapping between real-space coordinates
+    # DomainCoordinates. These manage the mapping between real-space coordinates
     # and array index coordinates.
-    src_line = LineCoordinates('y', pmls[0]+0.1, H/2-w_src/2, H/2+w_src/2,
-                               dx, dy)
+    src_line = DomainCoordinates(pmls[0]+0.1, pmls[0]+0.1, H/2-w_src/2,
+                                 H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     Mz = np.zeros([M,N], dtype=np.complex128)
     Jx = np.zeros([M,N], dtype=np.complex128)
@@ -407,6 +423,9 @@ if __name__ == '__main__':
     # Get the mode fields to use as a mode match
     mode_match = None
     if(NOT_PARALLEL):
+        # The mode fields are returns with size (N,) but the field slices used
+        # in the future mode match calculations will be of size (N,1). We will
+        # reshape the mode fields so that things are compatible
         Exm = mode.get_field_interp(mindex, 'Ex')
         Eym = mode.get_field_interp(mindex, 'Ey')
         Hzm = mode.get_field_interp(mindex, 'Hz')
@@ -416,13 +435,16 @@ if __name__ == '__main__':
 
     # the mode match will be computed along a line intersecting the output
     # waveguide of the structure
-    mm_line = LineCoordinates('y', W-pmls[1]-0.1, H/2-w_src/2, H/2+w_src/2,
-                              dx, dy)
+    mm_line = DomainCoordinates(W-pmls[1]-dx, W-pmls[1]-dx, H/2-w_src/2,
+                                H/2+w_src/2, 0, 0, dx, dy, 1.0)
+
+    full_field = DomainCoordinates(pmls[0], W-pmls[1], pmls[2], H-pmls[3], 0,
+                                   0, dx, dy, 1.0)
 
     # we also tell our FDFD object to record the fields on this line
     # immediately after running a forward simulation. This will simplify the
     # calculation of the figure of merit
-    sim.field_domains = [mm_line]
+    sim.field_domains = [mm_line, full_field]
 
     ####################################################################################
     # Finalize the simulation
@@ -453,7 +475,7 @@ if __name__ == '__main__':
     # function saves a plot of the structure the desired field component, and
     # the history of the figure of merit to a file called current_result.pdf
     fom_list = []
-    callback = lambda x : plot_iterations(x, fom_list, sim, am, 'Hz')
+    callback = lambda x : opt_plot(x, sim, am, fom_list)
 
     # setup and run the optimization!
     opt = Optimizer(am, design_params, tol=1e-5, callback_func=callback, Nmax=15)

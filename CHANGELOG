@@ -1,3 +1,63 @@
+Released on March 5, 2018
+-------------------------
+1. Implemented "general" DomainCoordinates when now replaces LineCoordinates and
+PlaneCoordinates. The DomainCoordinates takes the following parameters as input:
+xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz. All must be specified when creating a
+DomainCoordinates object. In order. When all values are unique, the DomainCoordinates
+corresponds to a rectangular volume. Planes can be specified by specifying the same
+value for two of the min/max parameters. For example, to create a plane normal to the
+z-direction located at z=0.5:
+
+    plane = DomainCoordinates(0, W, 0, H, 0.5, 0.5, dx, dy, dz)
+
+In 2D, the exact value for dz is unimportant as long as it is not zero. It is
+recommended that 1.0 be used. In order to specify a line, two of the min/max pairs
+must have the same values. For example, to create a line along the x direction at
+y=0.75, and z=0.5:
+
+    line = DomainCoordinates(0, W, 0.75, 0.75, 0.5, 0.5, dx, dy, dz)
+
+This way of handling slicing sub domains of the simulation allows for a simpler
+codebase and also makes slicing domains consistent in 1, 2, and 3 dimensions.
+
+2. Fixed license discrepancy in python documentation
+
+3. Crated new emopt.io module which now houses save_results, load_results, and
+plot_iteration
+
+4. Removed emopt.modedata module. Use emopt.modes instead (it is plenty fast).
+
+5. Replaced plot_iterations function with new plot_iteration function (notice that
+new function does not end in 's'). The old function was a bit hacky and the results
+were not very pleasant to look at. The new function should produce a more informative
+plot. Furthermore, it manages plot placement in a more sophisticated way, which
+should make it better for structures with different aspect ratios. Finally, plots can
+be generated with either a dark or light color scheme (dark is the current default).
+This was a personal choice as I generally write code using editors with darker color
+schemes, so the new dark scheme is gentler on my eyes :)
+
+6. Refactored code in preparation for 3D code in the future. The following classes
+have been renamed:
+
+    emopt.grid.Material -> emopt.grid.Material2D
+    emopt.grid.GridMaterial -> emopt.grid.GridMaterial2D
+    emopt.grid.StructuredMaterial -> emopt.grid.StructuredMaterial2D
+
+7. The ordering of index ranges in emopt.grid.Material2D.get_values() has been
+modified such that it is consistent with get_value. It now takes the form
+    
+    get_values(k1, k2, j1, j2)
+
+where k1 to k2 is the range of x coordinates (columns in array storage) and j1 to j2
+is the range of y coordinates (rows in array storage).
+
+8. A new Material2D structure called ConstantMaterial2D has been added which can
+(should) be used for totally uniform structures. This will be faster than using a
+StructuredMaterial2D for things like uniform permeability which is often the case in
+silicon photonics.
+
+9. All of the examples have been updated and tested.
+
 Released on January 23, 2017 
 ----------------------------
 Note: This is the first entry to the CHANGELOG

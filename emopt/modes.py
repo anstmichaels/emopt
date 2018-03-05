@@ -54,6 +54,12 @@ from slepc4py import SLEPc
 from mpi4py import MPI
 import numpy as np
 
+__author__ = "Andrew Michaels"
+__license__ = "GPL License, Version 3.0"
+__version__ = "0.2"
+__maintainer__ = "Andrew Michaels"
+__status__ = "development"
+
 class ModeSolver(object):
     """A generic interface for electromagnetic mode solvers.
 
@@ -267,11 +273,13 @@ class Mode_TE(ModeSolver):
                  backwards=False):
         super(Mode_TE, self).__init__(wavelength, n0, neigs)
 
-        N = len(eps)
-        self._N = N
+        # Generated fields/source will be reshaped to match input eps
+        self._fshape = eps.shape
+        self.eps = eps.flatten()
+        self.mu = mu.flatten()
 
-        self.eps = eps#np.concatenate((eps[0:1], eps, eps[-1:]))
-        self.mu = mu#np.concatenate((mu[0:1], mu, mu[-1:]))
+        N = len(self.eps)
+        self._N = N
 
         self.ds = ds
 
@@ -568,11 +576,11 @@ class Mode_TE(ModeSolver):
         # initialization, we need to be careful to return fields of the
         # expected size, hence the [1:]
         if(component == 'Ez'):
-            return self._Ez[i]
+            return np.reshape(self._Ez[i], self._fshape)
         elif(component == 'Hx'):
-            return self._Hx[i]
+            return np.reshape(self._Hx[i], self._fshape)
         elif(component == 'Hy'):
-            return self._Hy[i]
+            return np.reshape(self._Hy[i], self._fshape)
         else:
             raise ValueError('Unrecongnized field componenet "%s". The allowed'
                              'field components are Ez, Hx, Hy.' % (component))
@@ -618,13 +626,13 @@ class Mode_TE(ModeSolver):
         # initialization, we need to be careful to return fields of the
         # expected size, hence the [1:]
         if(component == 'Ez'):
-            return self._Ez[i]
+            return np.reshape(self._Ez[i], self._fshape)
         elif(component == 'Hy'):
-            return self._Hy[i]
+            return np.reshape(self._Hy[i], self._fshape)
         elif(component == 'Hx'):
             Hxi = np.pad(self._Hx[i], 1, 'constant', constant_values=0)
             Hxi[1:] += Hxi[0:-1]
-            return Hxi[1:-1] / 2.0
+            return np.reshape(Hxi[1:-1] / 2.0, self._fshape)
         else:
             raise ValueError('Unrecongnized field componenet "%s". The allowed'
                              'field components are Ez, Hx, Hy.' % (component))
@@ -661,9 +669,9 @@ class Mode_TE(ModeSolver):
             The number X of the specified TE_X mode.
         """
         Ez = self._Ez[i]
-        if(self._bc == 'E'):
+        if(self._bc == 'E' or self._bc == 'EM'):
             Ez = np.concatenate([Ez[::-1], Ez])
-        if( self._bc == 'H'):
+        if( self._bc == 'H' or self._bc == 'HM'):
             Ez = np.concatenate([-1*Ez[::-1], Ez])
         if(self._bc == 'P'):
             warning_message('get_mode_number may not work as expected for ' \
@@ -800,6 +808,10 @@ class Mode_TE(ModeSolver):
         Jz = comm.bcast(Jz, root=0)
         Mx = comm.bcast(Mx, root=0)
         My = comm.bcast(My, root=0)
+
+        Jz = np.reshape(Jz, self._fshape)
+        Mx = np.reshape(Mx, self._fshape)
+        My = np.reshape(My, self._fshape)
         return (Jz, Mx, My)
 
 class Mode_TM(Mode_TE):
@@ -878,7 +890,7 @@ class Mode_TM(Mode_TE):
         # permittivity and permeability smapped and the E and H and J and M
         # components swapped around.
         super(Mode_TM, self).__init__(wavelength, ds, mu, eps, n0, neigs, \
-                                      backwards, bc_type)
+                                      backwards)
 
         self.bc = 'M' # really PEC since we use TE mode solver
 
@@ -1128,8 +1140,8 @@ class Mode_FullVector(ModeSolver):
         self._M = M
         self._N = N
 
-        self.eps = np.pad(eps, 1, mode='edge')
-        self.mu = np.pad(mu, 1, mode='edge')
+        self.eps = eps
+        self.mu = mu
 
         self.dx = dx
         self.dy = dy

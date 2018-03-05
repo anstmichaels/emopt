@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 __author__ = "Andrew Michaels"
-__license__ = "Apache License, Version 2.0"
+__license__ = "GPL License, Version 3.0"
 __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
@@ -156,7 +156,7 @@ def calc_ROC_foms(x, y, Rmin, k):
          y1 = y[j1]; y2 = y[j2]; y3 = y[j3]
 
          Ri = radius_of_curvature(x1,x2,x3,y1,y2,y3)
-         fom_i = logistic(Ri-Rmin, k) - 1
+         fom_i = 1 - step(Ri-Rmin, k)
          foms[i] = fom_i
 
     return np.array(foms)
@@ -284,13 +284,13 @@ class ModeMatch:
 
         input_fields = [Exm, Eym, Ezm, Hxm, Hym, Hzm]
 
-        self.fshape = [0,0]
+        self.fshape = None
         for f in input_fields:
             if(f is not None):
-                self.fshape = f.shape
+                self.fshape = f.shape[:]
                 break
 
-        if(self.fshape == [0,0]):
+        if(self.fshape is None):
             raise ValueError('No fields were passed to ModeMatch.  Mode matching is impossible without fields!')
 
         self.Exm = Exm if Exm is not None else np.zeros(self.fshape, dtype=np.complex128)
@@ -300,15 +300,6 @@ class ModeMatch:
         self.Hxm = Hxm if Hxm is not None else np.zeros(self.fshape, dtype=np.complex128)
         self.Hym = Hym if Hym is not None else np.zeros(self.fshape, dtype=np.complex128)
         self.Hzm = Hzm if Hzm is not None else np.zeros(self.fshape, dtype=np.complex128)
-
-        # Note: In the case of fields along a line, we need to correct their
-        # matrix dimensions to make sure multiplications due not produce
-        # higher-dimensional arrays
-        if(len(self.fshape) == 2):
-            for f in [self.Exm, self.Eym, self.Ezm, self.Hxm, self.Hym,
-                      self.Hzm]:
-                f.resize(self.fshape[0])
-        self.fshape = (self.fshape[0],)
 
         self.normal = np.array(normal)
         self.ds1 = ds1
@@ -496,7 +487,6 @@ class ModeMatch:
         """
         ds = self.ds1*self.ds2
         return 1/4.0 * ds * np.real(self.Pm) * (np.conj(self.Eym)*self.x_dot_s - np.conj(self.Exm)*self.y_dot_s) * np.conj(self.am)/np.conj(self.Pm)
-
 class ModeOverlap:
 
     def __init__(self, normal, ds, Exm=None, Eym=None, Ezm=None, Hxm=None, Hym=None, Hzm=None):
@@ -607,7 +597,7 @@ class ModeOverlap:
         return 0.5 * np.conj(self.F1 / self.Pm) * (-np.conj(self.Exm)*self.y_dot_s + np.conj(self.Eym)*self.x_dot_s)
 
 
-def interpolated_dFdx_2D(dFdEz, dFdHx, dFdHy):
+def interpolated_dFdx_2D(sim, dFdEzi, dFdHxi, dFdHyi):
     """Account for interpolated fields in a 'naive' derivative of a figure of
     merit.
 
@@ -647,13 +637,49 @@ def interpolated_dFdx_2D(dFdEz, dFdHx, dFdHy):
     numpy.array, numpy.array, numpy.array
         The modified derivatives which account for interpolation
     """
-    #dFdHx[y_fom-1, x_fom] += dFdHx[y_fom, x_fom]
-    #dFdHy[y_fom, x_fom+1] += dFdHy[y_fom, x_fom]
+    #dFdHx[0:-2, 1:-1] += dFdHx[1:-1, 1:-1]
+    #dFdHy[1:-1, 2:] += dFdHy[1:-1, 1:-1]
+    fshape = (dFdEzi.shape[0]+2, dFdEzi.shape[1]+2)
 
-    dFdHx[0:-2, 1:-1] += dFdHx[1:-1, 1:-1]
-    dFdHy[1:-1, 2:] += dFdHy[1:-1, 1:-1]
+    dFdEz = np.zeros(fshape, dtype=np.complex128)
+    dFdHx = np.zeros(fshape, dtype=np.complex128)
+    dFdHy = np.zeros(fshape, dtype=np.complex128)
 
-    return dFdEz, dFdHx/2.0, dFdHy/2.0
+    dFdEz[1:-1, 1:-1] = dFdEzi
+    dFdHx[1:-1, 1:-1] += dFdHxi/2.0
+    dFdHx[0:-2, 1:-1] += dFdHxi/2.0
+    dFdHy[1:-1, 1:-1] += dFdHyi/2.0
+    dFdHy[1:-1, 2:] += dFdHyi/2.0
+
+    dFdEz = dFdEz[1:-1, 1:-1]
+    dFdHx = dFdHx[1:-1, 1:-1]
+    dFdHy = dFdHy[1:-1, 1:-1]
+
+    # Unfortunately, special boundary conditions complicate matters
+    # It is easiest to handle this separately
+    # Note only the first condition below has been tested..
+    if(type(sim) == fdfd.FDFD_TM):
+        if((sim.bc[1] == 'H' and type(sim) == fdfd.FDFD_TM) or \
+           (sim.bc[1] == 'E' and type(sim) == fdfd.FDFD_TE)):
+            dFdHx[0,:] = 0.0
+        elif((sim.bc[1] == 'E' and type(sim) == fdfd.FDFD_TM) or \
+             (sim.bc[1] == 'H' and type(sim) == fdfd.FDFD_TE)):
+            dFdHx[0,:] = dFdHx[0,:]*2.0
+        elif(sim.bc[1] == 'P'):
+            dFdHx[0,:] += dFdHx[-1,:]/2.0
+            dFdHx[-1,:] += dFdHx[0,:]/2.0
+
+        if((sim.bc[0] == 'H' and type(sim) == fdfd.FDFD_TM) or \
+           (sim.bc[0] == 'E' and type(sim) == fdfd.FDFD_TE)):
+            dFdHy[:,-1] = 0.0
+        elif((sim.bc[0] == 'E' and type(sim) == fdfd.FDFD_TM) or \
+             (sim.bc[0] == 'H' and type(sim) == fdfd.FDFD_TE)):
+            dFdHy[:,-1] = dFdHy[:,-1]*2.0
+        elif(sim.bc[0] == 'P'):
+            dFdHy[:,-1] += dFdHy[:,0]/2.0
+            dFdHy[:,0] += dFdHy[:,-1]/2.0
+
+    return dFdEz, dFdHx, dFdHy
 
 def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
     """Compute the derivative of a figure of merit which has power
@@ -713,8 +739,12 @@ def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
     M = sim.M
     N = sim.N
 
-    eps = sim.eps.get_values(0,M,0,N)
-    mu = sim.mu.get_values(0,M,0,N)
+    if(not sim.real_materials):
+        eps = sim.eps.get_values(0,N,0,M)
+        mu = sim.mu.get_values(0,N,0,M)
+    else:
+        eps = np.zeros(Ezc.shape, dtype=np.complex128)
+        mu = np.zeros(Ezc.shape, dtype=np.complex128)
 
     # get the planes through which power leaves the system
     w_pml_l = sim._w_pml_left
@@ -758,7 +788,7 @@ def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
     dFdHx = (Psrc * dfdHx - f * dPdHx) / Psrc**2
     dFdHy = (Psrc * dfdHy - f * dPdHy) / Psrc**2
 
-    dFdEz, dFdHx, dFdHy = interpolated_dFdx_2D(dFdEz, dFdHx, dFdHy)
+    dFdEz, dFdHx, dFdHy = interpolated_dFdx_2D(sim, dFdEz, dFdHx, dFdHy)
 
     return dFdEz, dFdHx, dFdHy
 
@@ -820,8 +850,12 @@ def power_norm_dFdx_TM(sim, f, dfdHz, dfdEx, dfdEy):
     M = sim.M
     N = sim.N
 
-    eps = sim.eps.get_values(0,M,0,N)
-    mu = sim.mu.get_values(0,M,0,N)
+    if(not sim.real_materials):
+        eps = sim.eps.get_values(0,N,0,M)
+        mu = sim.mu.get_values(0,N,0,M)
+    else:
+        eps = np.zeros(Hzc.shape, dtype=np.complex128)
+        mu = np.zeros(Hzc.shape, dtype=np.complex128)
 
     # get the planes through which power leaves the system
     w_pml_l = sim._w_pml_left
@@ -865,7 +899,7 @@ def power_norm_dFdx_TM(sim, f, dfdHz, dfdEx, dfdEy):
     dFdEx = (Psrc * dfdEx - f * dPdEx) / Psrc**2
     dFdEy = (Psrc * dfdEy - f * dPdEy) / Psrc**2
 
-    dFdHz, dFdEx, dFdEy = interpolated_dFdx_2D(dFdHz, dFdEx, dFdEy)
+    dFdHz, dFdEx, dFdEy = interpolated_dFdx_2D(sim, dFdHz, dFdEx, dFdEy)
 
     return dFdHz, dFdEx, dFdEy
 

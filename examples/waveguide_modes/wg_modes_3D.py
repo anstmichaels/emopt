@@ -8,16 +8,8 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
-import emopt.modes
-from emopt.modes import Mode_FullVector
-
-from emopt.misc import info_message, warning_message, RANK, \
-NOT_PARALLEL, run_on_master, n_silicon, PlaneCoordinates, save_results
-
-from emopt.modedata import gen_mode_data_TE, gen_mode_data_TM
-import emopt.fomutils as FOMUtils
-
-from emopt.grid import Rectangle, StructuredMaterial
+import emopt
+from emopt.misc import NOT_PARALLEL
 
 import numpy as np
 from math import pi
@@ -50,21 +42,18 @@ h_etched = 0.0
 # be computed. Ultimately, all we supply is two 2D arrays containing the
 # permittivity and permeability distributions. How you create these
 # distributions is up to you. Here we use emopt.grid objects to do it.
-rib = Rectangle(W/2, 1.5+h_SOI/2.0, w_wg, h_SOI)
-etched = Rectangle(W/2, 1.5+h_etched/2.0, 2*W, h_etched)
-eps_bg = Rectangle(W/2, H/2, 2*W, 2*H)
+rib = emopt.grid.Rectangle(W/2, 1.5+h_SOI/2.0, w_wg, h_SOI)
+etched = emopt.grid.Rectangle(W/2, 1.5+h_etched/2.0, 2*W, h_etched)
+eps_bg = emopt.grid.Rectangle(W/2, H/2, 2*W, 2*H)
 
 rib.layer = 1; rib.material_value = eps_Si
 etched.layer = 1; etched.material_value = eps_Si
 eps_bg.layer = 2; eps_bg.material_value = eps_SiO2
 
-eps = StructuredMaterial(W,H,dx,dy)
+eps = emopt.grid.StructuredMaterial2D(W,H,dx,dy)
 eps.add_primitive(rib); eps.add_primitive(etched); eps.add_primitive(eps_bg)
 
-mu_bg = Rectangle(W/2, H/2, 2*W, 2*H)
-mu_bg.layer = 1; mu_bg.material_value = 1.0
-mu = StructuredMaterial(W,H,dx,dy)
-mu.add_primitive(mu_bg)
+mu = emopt.grid.ConstantMaterial2D(1.0)
 
 eps_arr = eps.get_values(0,M,0,N)
 mu_arr = mu.get_values(0,M,0,N)
@@ -73,7 +62,7 @@ mu_arr = mu.get_values(0,M,0,N)
 # setup the mode solver
 ####################################################################################
 neigs = 16
-modes = Mode_FullVector(wavelength, dx, dy, eps_arr, mu_arr, n0=np.sqrt(eps_Si), neigs=neigs)
+modes = emopt.modes.Mode_FullVector(wavelength, dx, dy, eps_arr, mu_arr, n0=np.sqrt(eps_Si), neigs=neigs)
 modes.build() # build the eigenvalue problem internally
 modes.solve() # solve for the effective indices and mode profiles
 

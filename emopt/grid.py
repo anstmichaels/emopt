@@ -27,11 +27,11 @@ from numpy.ctypeslib import ndpointer
 import scipy
 import os
 
-from misc import DomainCoordinates, LineCoordinates, PlaneCoordinates
+from misc import DomainCoordinates
 from misc import warning_message
 
 __author__ = "Andrew Michaels"
-__license__ = "Apache License, Version 2.0"
+__license__ = "GPL License, Version 3.0"
 __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
@@ -49,37 +49,37 @@ c_double_p = ndpointer(np.double, ndim=1, flags='C')
 #####################################################################################
 # Material configuration 
 #####################################################################################
-libGrid.Material_get_value_real.argtypes = [c_void_p, c_double, c_double]
-libGrid.Material_get_value_real.restype = c_double
-libGrid.Material_get_value_imag.argtypes = [c_void_p, c_double, c_double]
-libGrid.Material_get_value_imag.restype = c_double
-libGrid.Material_get_values.argtypes = [c_void_p, c_int, c_int, c_int, c_int,
-                                        c_complex_2D_p]
-libGrid.Material_get_values.restype = None
+libGrid.Material2D_get_value_real.argtypes = [c_void_p, c_double, c_double]
+libGrid.Material2D_get_value_real.restype = c_double
+libGrid.Material2D_get_value_imag.argtypes = [c_void_p, c_double, c_double]
+libGrid.Material2D_get_value_imag.restype = c_double
+libGrid.Material2D_get_values.argtypes = [c_void_p, c_int, c_int, c_int, c_int,
+                                          c_complex_1D_p]
+libGrid.Material2D_get_values.restype = None
 
 ####################################################################################
 # GridMaterial configuration
 ####################################################################################
-libGrid.GridMaterial_new.argtypes = [c_int, c_int, c_complex_2D_p]
-libGrid.GridMaterial_new.restype = c_void_p
-libGrid.GridMaterial_delete.argtypes = [c_void_p]
-libGrid.GridMaterial_delete.restype = None
-libGrid.GridMaterial_set_grid.argtypes = [c_void_p, c_int, c_int, c_complex_2D_p]
-libGrid.GridMaterial_set_grid.restype = None
-libGrid.GridMaterial_get_M.argtypes = [c_void_p]
-libGrid.GridMaterial_get_M.restype = c_int
-libGrid.GridMaterial_get_N.argtypes = [c_void_p]
-libGrid.GridMaterial_get_N.restype = c_int
+libGrid.GridMaterial2D_new.argtypes = [c_int, c_int, c_complex_2D_p]
+libGrid.GridMaterial2D_new.restype = c_void_p
+libGrid.GridMaterial2D_delete.argtypes = [c_void_p]
+libGrid.GridMaterial2D_delete.restype = None
+libGrid.GridMaterial2D_set_grid.argtypes = [c_void_p, c_int, c_int, c_complex_2D_p]
+libGrid.GridMaterial2D_set_grid.restype = None
+libGrid.GridMaterial2D_get_M.argtypes = [c_void_p]
+libGrid.GridMaterial2D_get_M.restype = c_int
+libGrid.GridMaterial2D_get_N.argtypes = [c_void_p]
+libGrid.GridMaterial2D_get_N.restype = c_int
 
 ####################################################################################
 # StructuredMaterial configuration
 ####################################################################################
-libGrid.StructuredMaterial_new.argtypes = [c_double, c_double, c_double, c_double]
-libGrid.StructuredMaterial_new.restype = c_void_p
-libGrid.StructuredMaterial_delete.argtypes = [c_void_p]
-libGrid.StructuredMaterial_delete.restype = None
-libGrid.StructuredMaterial_add_primitive.argtypes = [c_void_p, c_void_p]
-libGrid.StructuredMaterial_add_primitive.restype = None
+libGrid.StructuredMaterial2D_new.argtypes = [c_double, c_double, c_double, c_double]
+libGrid.StructuredMaterial2D_new.restype = c_void_p
+libGrid.StructuredMaterial2D_delete.argtypes = [c_void_p]
+libGrid.StructuredMaterial2D_delete.restype = None
+libGrid.StructuredMaterial2D_add_primitive.argtypes = [c_void_p, c_void_p]
+libGrid.StructuredMaterial2D_add_primitive.restype = None
 
 ####################################################################################
 # MaterialPrimitives configuration
@@ -151,14 +151,26 @@ libGrid.Polygon_set_point.argtypes = [c_void_p, c_double, c_double, c_int]
 libGrid.Polygon_set_point.restype = None
 
 ####################################################################################
+# ConstantMaterial configuration
+####################################################################################
+libGrid.ConstantMaterial2D_new.argtypes = [c_double, c_double]
+libGrid.ConstantMaterial2D_new.restype = c_void_p
+libGrid.ConstantMaterial2D_set_material.argtypes = [c_void_p, c_double, c_double]
+libGrid.ConstantMaterial2D_set_material.restype = None
+libGrid.ConstantMaterial2D_get_material_real.argtypes = [c_void_p]
+libGrid.ConstantMaterial2D_get_material_real.restype = None
+libGrid.ConstantMaterial2D_get_material_imag.argtypes = [c_void_p]
+libGrid.ConstantMaterial2D_get_material_imag.restype = None
+
+####################################################################################
 # Misc
 ####################################################################################
 libGrid.row_wise_A_update.argtypes = [c_void_p, c_void_p, c_int, c_int, c_int, c_int, \
                                       c_int, c_int, c_int, c_int, c_complex_1D_p]
 libGrid.row_wise_A_update.restype = None
 
-class Material(object):
-    """Define a general interface for Material distributions.
+class Material2D(object):
+    """Define a general interface for 2D Material distributions.
 
     Notes
     -----
@@ -176,7 +188,7 @@ class Material(object):
     """
 
     def __init__(self):
-        self.object = None
+        self._object = None
 
     def get_value(self, x, y):
         """Get the value of the material distribution at (x,y).
@@ -193,25 +205,25 @@ class Material(object):
         complex128
             The complex material value at the desired location.
         """
-        a = libGrid.Material_get_value_real(self.object, x, y)
-        b = libGrid.Material_get_value_imag(self.object, x, y)
+        a = libGrid.Material2D_get_value_real(self._object, x, y)
+        b = libGrid.Material2D_get_value_imag(self._object, x, y)
 
         return a + 1j*b
 
-    def get_values(self, m1, m2, n1, n2, arr=None):
+    def get_values(self, k1, k2, j1, j2, arr=None):
         """Get the values of the material distribution within a set of array
         indicesa set of array indices.
 
         Parameters
         ----------
-        m1 : int
-            The lower row number of the desired region
-        m2 : int
-            The upper row number of the desired region
-        n1 : int
-            The lower column number of the desired region
-        n2 : int
-            The upper column number of the desired region.
+        k1 : int
+            The lower integer bound on x of the desired region
+        k2 : int
+            The upper integer bound on x of the desired region
+        j1 : int
+            The lower integer bound on y of the desired region
+        j2 : int
+            The upper integer bound on y of the desired region
         arr : numpy.ndarray (optional)
             The array with dimension (m2-m1)x(n2-n1) with type np.complex128
             which will store the retrieved material distribution. If None, a
@@ -222,10 +234,18 @@ class Material(object):
         numpy.ndarray
             The retrieved complex material distribution.
         """
-        if(type(arr) == type(None)):
-            arr = np.zeros([m2-m1, n2-n1], dtype=np.complex128)
+        Nx = k2-k1
+        Ny = j2-j1
 
-        libGrid.Material_get_values(self.object, m1, m2, n1, n2, arr)
+        if(type(arr) == type(None)):
+            arr = np.zeros(Nx*Ny, dtype=np.complex128)
+        else:
+            arr = np.ravel()
+
+        libGrid.Material2D_get_values(self._object, k1, k2, j1, j2, arr)
+
+        # This might result in an expensive copy operation, unfortunately
+        arr = np.reshape(arr, [Ny, Nx])
 
         return arr
 
@@ -242,22 +262,42 @@ class Material(object):
         numpy.ndarray
             The retrieved material distribution which lies in the domain.
         """
-        if(isinstance(domain, LineCoordinates)):
-            m1 = domain.j[0]
-            m2 = domain.j[-1]+1
-            n1 = domain.k[0]
-            n2 = domain.k[-1]+1
+        j1 = domain.j.start
+        j2 = domain.j.stop
+        k1 = domain.k.start
+        k2 = domain.k.stop
 
-            return self.get_values(m1, m2, n1, n2)[:, 0]
-        elif(isinstance(domain, PlaneCoordinates)):
-            m1 = domain.j[0,0]
-            m2 = domain.j[-1,0]
-            n1 = domain.k[0,0]
-            n2 = domain.k[0,-1]
+        return self.get_values(k1, k2, j1, j2)
 
-            return self.get_values(m1, m2, n1, n2)
+class ConstantMaterial2D(Material2D):
+    """A uniform constant material.
 
-class GridMaterial(Material):
+    Parameters
+    ----------
+    value : complex
+        The constant material value.
+
+    Attributes
+    ----------
+    material_value : complex
+        The constant material value
+    """
+    def __init__(self, value):
+        self._material_value = value
+        self._object = libGrid.ConstantMaterial2D_new(value.real, value.imag)
+
+    @property
+    def material_value(self):
+        return self._material_value
+
+    @material_value.setter
+    def material_value(self, new_value):
+        libGrid.ConstantMaterial2D_set_material(self._object,
+                                              new_value.real,
+                                              new_value.imag)
+        self._material_value = new_value
+
+class GridMaterial2D(Material2D):
     """Define a simple rectangular-grid-based Material distribution.
 
     This is the simplest form of :class:`.Material` object which defines a
@@ -286,14 +326,14 @@ class GridMaterial(Material):
 
     def __init__(self, M, N, grid):
         grid = grid.astype(np.complex128, copy=False)
-        self.object = libGrid.GridMaterial_new(M, N, grid)
+        self._object = libGrid.GridMaterial2D_new(M, N, grid)
 
         self._M = M
         self._N = N
         self._grid = grid
 
     def __del__(self):
-        libGrid.GridMaterial_delete(self.object)
+        libGrid.GridMaterial2D_delete(self._object)
 
     @property
     def M(self):
@@ -301,8 +341,8 @@ class GridMaterial(Material):
 
     @M.setter
     def M(self, newM):
-        libGrid.GridMaterial_delete(self.object)
-        self.object = libGrid.GridMaterial_new(newM, self._N, grid)
+        libGrid.GridMaterial2D_delete(self._object)
+        self._object = libGrid.GridMaterial2D_new(newM, self._N, grid)
         self._M = newM
 
     @property
@@ -311,8 +351,8 @@ class GridMaterial(Material):
 
     @N.setter
     def N(self, newN):
-        libGrid.GridMaterial_delete(self.object)
-        self.object = libGrid.GridMaterial_new(self._M, newN, grid)
+        libGrid.GridMaterial_delete(self._object)
+        self._object = libGrid.GridMaterial_new(self._M, newN, grid)
         self._N = newN
 
     @property
@@ -322,7 +362,22 @@ class GridMaterial(Material):
     @grid.setter
     def grid(self, new_grid):
         self._grid = new_grid
-        self.object = libGrid.GridMaterial_new(self._M, self._N, new_grid)
+        self._object = libGrid.GridMaterial2D_new(self._M, self._N, new_grid)
+
+class GridMaterial3D(object):
+
+    def __init__(self, X, Y, Z, Nx, Ny, Nz, grid):
+        self.X = X
+        self.Y = Y
+        self.Z = Z
+        self.Nx = Nx
+        self.Ny = Ny
+        self.Nz = Nz
+        self.grid = grid
+
+    def get_value(self, k, j ,i):
+        return self.grid[i,j,k]
+
 
 class MaterialPrimitive(object):
     """Define a MaterialPrimitive.
@@ -347,7 +402,7 @@ class MaterialPrimitive(object):
     """
 
     def __init__(self):
-        self.object = None
+        self._object = None
         self._layer = 1
 
     @property
@@ -357,7 +412,7 @@ class MaterialPrimitive(object):
     @layer.setter
     def layer(self, newlayer):
         self._layer = newlayer
-        libGrid.MaterialPrimitive_set_layer(self.object, c_int(newlayer))
+        libGrid.MaterialPrimitive_set_layer(self._object, c_int(newlayer))
 
     def get_layer(self):
         """Get the layer of the primitive.
@@ -369,7 +424,7 @@ class MaterialPrimitive(object):
         """
         warning_message('get_layer() is deprecated. Use property ' \
             'myprim.layer instead.', 'emopt.grid')
-        return libGrid.MaterialPrimitive_get_layer(self.object)
+        return libGrid.MaterialPrimitive_get_layer(self._object)
 
     def set_layer(self, layer):
         """Set the layer of the primitive.
@@ -381,7 +436,7 @@ class MaterialPrimitive(object):
         """
         warning_message('set_layer(...) is deprecated. Use property ' \
             'myprim.layer=... instead.', 'emopt.grid')
-        libGrid.MaterialPrimitive_set_layer(self.object, c_int(layer))
+        libGrid.MaterialPrimitive_set_layer(self._object, c_int(layer))
 
     def contains_point(self, x, y):
         """Check if a material primitive contains the supplied (x,y) coordinate
@@ -399,7 +454,7 @@ class MaterialPrimitive(object):
             True if the (x,y) point is contained within the primitive, false
             otherwise.
         """
-        return libGrid.MaterialPrimitive_contains_point(self.object, x, y)
+        return libGrid.MaterialPrimitive_contains_point(self._object, x, y)
 
 class Circle(MaterialPrimitive):
     """Define a circle primitive.
@@ -413,30 +468,30 @@ class Circle(MaterialPrimitive):
     Actually fully implement this.
     """
     def __init__(self, x0, y0, r):
-        self.object = libGrid.Circle_new(c_double(x0),
+        self._object = libGrid.Circle_new(c_double(x0),
                                          c_double(y0),
                                          c_double(r))
 
     def __del__(self):
-        libGrid.Circle_delete(self.object)
+        libGrid.Circle_delete(self._object)
 
     def set_material(self, mat):
-        libGrid.Circle_set_material(self.object, mat.real, mat.imag)
+        libGrid.Circle_set_material(self._object, mat.real, mat.imag)
 
     def set_position(self, x0, y0):
-        libGrid.Circle_set_position(self.object, x0, y0)
+        libGrid.Circle_set_position(self._object, x0, y0)
 
     def set_radius(self, r):
-        libGrid.Circle_set_radius(self.object, r)
+        libGrid.Circle_set_radius(self._object, r)
 
     def get_x0(self):
-        return libGrid.Circle_get_x0(self.object)
+        return libGrid.Circle_get_x0(self._object)
 
     def get_y0(self):
-        return libGrid.Circle_get_y0(self.object)
+        return libGrid.Circle_get_y0(self._object)
 
     def get_r(self):
-        return libGrid.Circle_get_r(self.object)
+        return libGrid.Circle_get_r(self._object)
 
 class Rectangle(MaterialPrimitive):
     """Define a rectangular material primitive.
@@ -480,7 +535,7 @@ class Rectangle(MaterialPrimitive):
     """
 
     def __init__(self, x0, y0, xspan, yspan):
-        self.object = libGrid.Rectangle_new(x0, y0, xspan, yspan)
+        self._object = libGrid.Rectangle_new(x0, y0, xspan, yspan)
         self._x0 = x0
         self._y0 = y0
         self._xspan = xspan
@@ -489,7 +544,7 @@ class Rectangle(MaterialPrimitive):
         self._mat = 1.0
 
     def __del__(self):
-        libGrid.Rectangle_delete(self.object)
+        libGrid.Rectangle_delete(self._object)
 
     @property
     def x0(self):
@@ -514,34 +569,34 @@ class Rectangle(MaterialPrimitive):
     @x0.setter
     def x0(self, x):
         self._x0 = x
-        libGrid.Rectangle_set_position(self.object, self._x0, self._y0)
+        libGrid.Rectangle_set_position(self._object, self._x0, self._y0)
 
     @y0.setter
     def y0(self, y):
         self._y0 = y
-        libGrid.Rectangle_set_position(self.object, self._x0, self._y0)
+        libGrid.Rectangle_set_position(self._object, self._x0, self._y0)
 
     @width.setter
     def width(self, w):
         self._xspan = w
-        libGrid.Rectangle_set_width(self.object, w)
+        libGrid.Rectangle_set_width(self._object, w)
 
     @height.setter
     def height(self, h):
         self._yspan = h
-        libGrid.Rectangle_set_height(self.object, h)
+        libGrid.Rectangle_set_height(self._object, h)
 
     @material_value.setter
     def material_value(self, mat):
         self._mat = mat
-        libGrid.Rectangle_set_material(self.object, mat.real, mat.imag)
+        libGrid.Rectangle_set_material(self._object, mat.real, mat.imag)
 
     def set_material(self, mat):
         """(Deprecated) Set the material value of the Rectangle's interior.
         """
         warning_message('set_mateiral(...) is deprecated. Use property ' \
                         'myrect.material_value=... instead.', 'emopt.grid')
-        libGrid.Rectangle_set_material(self.object, mat.real, mat.imag)
+        libGrid.Rectangle_set_material(self._object, mat.real, mat.imag)
 
     def set_position(self, x0, y0):
         """Set the (x,y) position of the center of the Rectangle.
@@ -553,7 +608,7 @@ class Rectangle(MaterialPrimitive):
         y0 : float
             The y coordinate of the center of the Rectangle.
         """
-        libGrid.Rectangle_set_position(self.object, x0, y0)
+        libGrid.Rectangle_set_position(self._object, x0, y0)
         self._x0 = x0
         self._y0 = y0
 
@@ -563,7 +618,7 @@ class Rectangle(MaterialPrimitive):
         warning_message('set_width(...) is deprecated. Use property ' \
                         'myrect.width=... instead.', 'emopt.grid')
 
-        libGrid.Rectangle_set_width(self.object, width)
+        libGrid.Rectangle_set_width(self._object, width)
         self._xspan = width
 
     def set_height(self, height):
@@ -571,13 +626,13 @@ class Rectangle(MaterialPrimitive):
         warning_message('set_width(...) is deprecated. Use property ' \
                         'myrect.width=... instead.', 'emopt.grid')
 
-        libGrid.Rectangle_set_height(self.object, height)
+        libGrid.Rectangle_set_height(self._object, height)
         self._yspan = height
 
 class Polygon(MaterialPrimitive):
 
     def __init__(self):
-        self.object = libGrid.Polygon_new()
+        self._object = libGrid.Polygon_new()
 
         self._xs = []
         self._ys = []
@@ -617,14 +672,14 @@ class Polygon(MaterialPrimitive):
 
     @material_value.setter
     def material_value(self, value):
-        libGrid.Polygon_set_material(self.object, value.real, value.imag)
+        libGrid.Polygon_set_material(self._object, value.real, value.imag)
         self._value = value
 
     def __del__(self):
-        libGrid.Polygon_delete(self.object)
+        libGrid.Polygon_delete(self._object)
 
     def add_point(self, x, y):
-        libGrid.Polygon_add_point(self.object, x, y)
+        libGrid.Polygon_add_point(self._object, x, y)
 
         self._Np += 1
         self._xs = np.concatenate(self._xs, [x])
@@ -633,7 +688,7 @@ class Polygon(MaterialPrimitive):
     def add_points(self, x, y):
         x = np.array(x, dtype=np.float64)
         y = np.array(y, dtype=np.float64)
-        libGrid.Polygon_add_points(self.object, x, y, len(x))
+        libGrid.Polygon_add_points(self._object, x, y, len(x))
 
         self._Np += len(x)
         self._xs = np.concatenate(self._xs, x)
@@ -642,14 +697,14 @@ class Polygon(MaterialPrimitive):
     def set_points(self, x, y):
         x = np.array(x, dtype=np.float64)
         y = np.array(y, dtype=np.float64)
-        libGrid.Polygon_set_points(self.object, x, y, len(x))
+        libGrid.Polygon_set_points(self._object, x, y, len(x))
 
         self._Np = len(x)
         self._xs = np.copy(x)
         self._ys = np.copy(y)
 
     def set_point(self, index, x, y):
-        libGrid.Polygon_set_point(self.object, x, y, index)
+        libGrid.Polygon_set_point(self._object, x, y, index)
 
         self._xs[index] = x
         self._ys[index] = y
@@ -657,20 +712,20 @@ class Polygon(MaterialPrimitive):
     def set_material(self, mat):
         warning_message('set_material(...) is deprecated. Use property ' \
                         'mypoly.material_value=... instead.', 'emopt.grid')
-        libGrid.Polygon_set_material(self.object, mat.real, mat.imag)
+        libGrid.Polygon_set_material(self._object, mat.real, mat.imag)
         self._value = mat
 
-class StructuredMaterial(Material):
+class StructuredMaterial2D(Material2D):
 
     def __init__(self, w, h, dx, dy):
-        self.object = libGrid.StructuredMaterial_new(w, h, dx, dy)
+        self._object = libGrid.StructuredMaterial2D_new(w, h, dx, dy)
 
     def __del__(self):
-        libGrid.StructuredMaterial_delete(self.object)
+        libGrid.StructuredMaterial2D_delete(self._object)
 
     def add_primitive(self, prim):
-        libGrid.StructuredMaterial_add_primitive(self.object, prim.object)
+        libGrid.StructuredMaterial2D_add_primitive(self._object, prim._object)
 
 def row_wise_A_update(eps, mu, ib, ie, M, N, x1, x2, y1, y2, vdiag):
-    libGrid.row_wise_A_update(eps.object, mu.object, ib, ie, M, N, x1, x2, y1, y2, vdiag)
+    libGrid.row_wise_A_update(eps._object, mu._object, ib, ie, M, N, x1, x2, y1, y2, vdiag)
     return vdiag

@@ -34,7 +34,7 @@ namespace Grid {
  * material value is returned.  This is accomplished by extending the Material class and
  * implementing the <get_value> function.
  */
-class Material {
+class Material2D {
 	
 		public:
 			/* Query the material value at a point in real space.
@@ -52,8 +52,8 @@ class Material {
 
             /* Get a block of values.
              */
-            virtual void get_values(ArrayXXcd& grid, int m1, int m2, int n1, int n2) = 0;
-			virtual ~Material() {};
+            virtual void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2) = 0;
+			virtual ~Material2D() {};
 };
 
 /* Simple array-based implementation of a <Material>
@@ -61,7 +61,7 @@ class Material {
  * A GridMaterial is a material which is explicitly defined on a grid (2D array).  The complex
  * material is explicitly defined at each point in a NxM grid.
  */
-class GridMaterial : public Material {
+class GridMaterial2D : public Material2D {
 	
 		private:
 
@@ -69,16 +69,16 @@ class GridMaterial : public Material {
 			ArrayXXcd _grid;
 
 		public:
-			/* Create a new GridMaterial.
+			/* Create a new GridMaterial2D.
 			 * @M the number of columns in the array (system width)
 			 * @N the number of rows in the array (system height)
 			 * @grid an array containing complex material values defined at each point in space
 			 */
-			GridMaterial(int M, int N, ArrayXXcd grid);
+			GridMaterial2D(int M, int N, ArrayXXcd grid);
 			
-			/* GridMaterial destructor
+			/* GridMaterial2D destructor
 			 */
-			~GridMaterial(){};
+			~GridMaterial2D(){};
 
 			/* Get the material value at index (x,y).
 			 * @x the x index (column) of the material value
@@ -87,7 +87,7 @@ class GridMaterial : public Material {
 			 * @return the complex material value at (x,y)
 			 */
 			std::complex<double> get_value(int x, int y);
-            void get_values(ArrayXXcd& grid, int m1, int m2, int n1, int n2);
+            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
 
 			/* Assign a new grid as the <Material>
 			 * @M the number of columns in the array (width)
@@ -425,7 +425,7 @@ class Polygon : public MaterialPrimitive {
  * A StructuredMaterial consists of one or more MaterialPrimitives defined by the user 
  * which are arranged within the simulation region.  
  */
-class StructuredMaterial : public Material {
+class StructuredMaterial2D : public Material2D {
 	private:
 		std::list<MaterialPrimitive*> _primitives;
 
@@ -445,10 +445,10 @@ class StructuredMaterial : public Material {
 		 * the corresponding FDFD object.  This is essential to mapping from real space to 
 		 * array indexing when constructing the system matrix.
 		 */
-		StructuredMaterial(double w, double h, double dx, double dy);
+		StructuredMaterial2D(double w, double h, double dx, double dy);
 
 		//- Destructor
-		~StructuredMaterial();
+		~StructuredMaterial2D();
 		
 		/* Add a primitive object to the Material.
 		 * @prim the primitive to add.
@@ -460,6 +460,7 @@ class StructuredMaterial : public Material {
 		 * still in use.
 		 */
 		void add_primitive(MaterialPrimitive* prim);
+        void add_primitives(std::list<MaterialPrimitive*> primitives);
 
 		/* Get the complex material value at an indexed position.
 		 * @x the x index (column) of the material value
@@ -469,7 +470,147 @@ class StructuredMaterial : public Material {
 		std::complex<double> get_value(int x, int y);
 		std::complex<double> get_value(double x, double y);
 
-        void get_values(ArrayXXcd& grid, int m1, int m2, int n1, int n2);
+        void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
+
+        /* Get the list of primitives belonging to this StructuredMaterial
+         * @return The std::list<MaterialPrimitive*> containing the constituent
+         * MaterialPrimitives
+         */
+        std::list<MaterialPrimitive*> get_primitives();
+
+};
+
+/* A material distribution defined by a single constant value.
+ *
+ * Use this for uniform materials.
+ */
+class ConstantMaterial2D : public Material2D {
+        private:
+            std::complex<double> _value;
+	
+		public:
+            ConstantMaterial2D(std::complex<double> value);
+
+			/* Query the material value at a point in real space.
+             *
+             * This will always return the same value
+             *
+			 * @x The x index of the query
+			 * @y The y index of the query
+			 * @return the complex material
+			 */
+			std::complex<double> get_value(int x, int y);
+
+            /* Get a block of values.
+             *
+             * This just fills the provided array with a single value
+             */
+            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
+
+            /* Set the complex material value.
+             * @val the complex material value
+             */
+            void set_material(std::complex<double> val);
+
+            /* Get the complex material value.
+             *
+             * This function is redundant.
+             *
+             * @return the complex material value.
+             */
+            std::complex<double> get_material();
+}; // ConstantMaterial
+
+/* Material class which provides the foundation for defining the system materials/structure.
+ *
+ * A Material must satisfy perform one function: given a spatial index, a complex 
+ * material value is returned.  This is accomplished by extending the Material class and
+ * implementing the <get_value> function.
+ */
+class Material3D {
+	
+		public:
+			/* Query the material value at a point in real space.
+			 * @x The x index of the query
+			 * @y The y index of the query
+			 *
+			 * The structure of the electromagnetic system being solved is ultimately defined
+			 * in terms of spatially-dependent materials. The material is defined on a 
+			 * spatial grid which is directly compatible with finite differences.
+			 * See <GridMaterial> and <StructuredMaterial> for specific implementations.
+			 *
+			 * @return the complex material at position (x,y).
+			 */
+			virtual std::complex<double> get_value(int x, int y, int z) = 0;
+
+            /* Get a block of values.
+             */
+            virtual void get_values(ArrayXcd& grid, int i1, int i2, int j1, int j2, int k1, int k2) = 0;
+			virtual ~Material3D() {};
+};
+
+/* Define a 3D planar stack structure.
+ *
+ * This class is essentially an extension of the structured3DMaterial to three
+ * dimensions. It is built up of StructuredMaterials which have a defined position
+ * and thickness in the z-direction. This allows the used to define 3D grid-smoothed
+ * structures that have a slab-like construction (which is most common in the micro-
+ * and nanoscale worlds).
+ */
+class Structured3DMaterial : public Material3D {
+	private:
+		std::list<MaterialPrimitive*> _primitives;
+        std::list<StructuredMaterial2D*> _layers;
+        std::list<double> _zs;
+
+		double _X,
+			   _Y,
+			   _Z,
+			   _dx,
+			   _dy,
+               _dz;
+
+	public:
+
+		/* Constructor
+		 * @X the width of the simulation region in x
+		 * @Y the width of the simulation region in y
+		 * @Z the width of the simulation region in z
+		 * @dx the x grid spacing of the simulation region
+		 * @dy the y grid spacing of the simulation region
+		 * @dz the z grid spacing of the simulation region
+		 *
+		 * The width, height, and grid spacing must be the same as those supplied when creating
+		 * the corresponding FDFD object.  This is essential to mapping from real space to 
+		 * array indexing when constructing the system matrix.
+		 */
+		Structured3DMaterial(double X, double Y, double Z, double dx, double dy, double dz);
+
+		//- Destructor
+		~Structured3DMaterial();
+		
+		/* Add a primitive object to the Material.
+		 * @prim the primitive to add.
+		 * @z1 the lower z bound of the primitive
+		 * @z2 the upper z bound of the primitive
+		 *
+		 * References to primitives are stored in an internal vector.  Working with references
+		 * are advantageous as it allows the user to modify the geometry with minimal fuss
+		 * between simulations.  This, however, necessitates that the corresponding 
+		 * <MaterialPrimitive> objects not go out of scope while the StructuredMaterial is
+		 * still in use.
+		 */
+		void add_primitive(MaterialPrimitive* prim, double z1, double z2);
+
+		/* Get the complex material value at an indexed position.
+		 * @x the x index (column) of the material value
+		 * @y the y index (row) of the material value
+		 * @return the complex material value at (x,y).  If no MaterialPrimitive exists at (x,y), 1.0 is returned.
+		 */
+		std::complex<double> get_value(int k, int j, int i);
+		std::complex<double> get_value(double k, double j, double i);
+
+        void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, int i1, int i2);
 
 };
 
