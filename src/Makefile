@@ -7,7 +7,7 @@ ifeq ($(UNAME), Linux)
 else
 	ifeq ($(UNAME), Darwin)
 # OS X
-		CC = g++-5
+		CC = g++
 		SHARED_FLAG = -dynamiclib
 	else
 		CC = g++
