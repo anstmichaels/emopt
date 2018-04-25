@@ -284,7 +284,14 @@ Assuming this completes without error, you should be all set and ready to go!
 
 ### Running Examples
 
-Example projects can be found in the *examples/* folder. Each example is documented and should give you an idea how to use the libraries.  It is recommended that you start with the *simple_waveguide* project first to get a quick introduction into how the core components are used.  More detailed documentation will be added in the near future.
+Example projects can be found in the *examples/* folder. Each example is documented
+and should give you an idea how to use the libraries.  It is recommended that you 
+start with the *simple_waveguide* project first to get a quick introduction into how
+the core components are used.  More detailed documentation will be added in the near
+future.
+
+When looking through the example files, use the built-in help(...) function to see
+the documentation about different classes and functions in emopt. 
 
 ## Authors
 Andrew Michaels 

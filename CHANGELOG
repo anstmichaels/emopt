@@ -1,4 +1,4 @@
-Released on 2018
+Released on April 24, 2018
 -------------------------
 1. (in previous commit) Change compile command for OS X in src/Makefile from g++-5 to
 g++. This prevented compilation on OS X with up-to-date gcc/g++ installations.
