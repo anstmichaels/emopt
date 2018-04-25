@@ -6,10 +6,10 @@ corresponding to the source-free Maxwell's equations assuming a solution to
 k_z z}`, i.e.
 
 .. math::
-    \\nabla \\times e^{i k_z z} \mathbf{E} + i \\mu_r \\nabla \\times
+    \\nabla \\times e^{i k_z z} \mathbf{E} - i \\mu_r \\omega
     e^{i k_z z}\\mathbf{H} = 0
 
-    \\nabla \\times e^{i k_z z} \mathbf{H} - i \\epsilon_r \\nabla \\times
+    \\nabla \\times e^{i k_z z} \mathbf{H} + i \\epsilon_r \\omega
     e^{i k_z z}\\mathbf{E} = 0
 
 where we have used the non-dimensionalized Maxwell's equations. These equations
@@ -42,12 +42,12 @@ Modesolver for Anisotropic Dielectric Waveguides", J. Lightwave Technol. 26(11),
 import sys, slepc4py
 slepc4py.init(sys.argv)
 
-from misc import info_message, warning_message, error_message, RANK, \
+from fdfd import FieldComponent
+from misc import info_message, warning_message, error_message, \
 NOT_PARALLEL, run_on_master, MathDummy
 
-from grid import row_wise_A_update
+import grid
 
-from math import pi
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
 from slepc4py import SLEPc
@@ -189,7 +189,7 @@ class ModeSolver(object):
         """
         pass
 
-class Mode_TE(ModeSolver):
+class ModeTE(ModeSolver):
     """Solve for the TE polarized modes of a 1D slice of a 2D structure.
 
     The TE polarization consists of a non-zeros :math:`E_z`, :math:`H_x`,
@@ -269,19 +269,30 @@ class Mode_TE(ModeSolver):
         Get the source current distribution for the i'th mode.
     """
 
-    def __init__(self, wavelength, ds, eps, mu, n0=1.0, neigs=1, \
+    def __init__(self, wavelength, eps, mu, domain, n0=1.0, neigs=1, \
                  backwards=False):
-        super(Mode_TE, self).__init__(wavelength, n0, neigs)
+        super(ModeTE, self).__init__(wavelength, n0, neigs)
 
         # Generated fields/source will be reshaped to match input eps
-        self._fshape = eps.shape
-        self.eps = eps.flatten()
-        self.mu = mu.flatten()
+        self.domain = domain
 
-        N = len(self.eps)
-        self._N = N
-
-        self.ds = ds
+        # figure out how 2D domain is oriented
+        n = None
+        if(domain.Nx == 1):
+            n = 'x'
+            self._N = domain.Ny
+            self.ds = domain.dy
+        elif(domain.Ny == 1):
+            n = 'y'
+            self._N = domain.Nx
+            self.ds = domain.dx
+        else:
+            raise AttributeError('2D domains are not supported for 1D mode ' \
+                                 'calculations!')
+        self.ndir = n
+        self._fshape = [domain.Ny, domain.Nx]
+        self.eps = eps.get_values_in(domain, squeeze=True)
+        self.mu = mu.get_values_in(domain, squeeze=True)
 
         if(backwards):
             self._dir = -1.0
@@ -365,7 +376,7 @@ class Mode_TE(ModeSolver):
     def bc(self, bc):
         if(bc not in ['0', 'M', 'E', 'H', 'P', 'EM', 'HM']):
             error_message("Boundary condition type '%s' not found. Use "
-                          "0, M, E, H, P, EM, HM.", "emopt.modes")
+                          "0, M, E, H, P, EM, HM." % (bc), "emopt.modes")
 
         self._bc = bc
 
@@ -540,12 +551,12 @@ class Mode_TE(ModeSolver):
 
         Use this function with care: Ez/Hy and Hx are specified at different
         points in space (separated by half of a grid cell).  In general
-        :func:`.Mode_TE.get_field_interp` should be prefered.
+        :func:`.ModeTE.get_field_interp` should be prefered.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.Mode_TE.find_mode_index` may be used to determine the index of
+        :func:`.ModeTE.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -555,9 +566,9 @@ class Mode_TE(ModeSolver):
 
         See Also
         --------
-        :func:`.Mode_TE.get_field_interp`
+        :func:`.ModeTE.get_field_interp`
 
-        :func:`.Mode_TE.find_mode_index`
+        :func:`.ModeTE.find_mode_index`
 
         Parameters
         ----------
@@ -590,12 +601,12 @@ class Mode_TE(ModeSolver):
         """Get the desired interpolated field component of the i'th mode.
 
         In general, this function should be preferred over
-        :func:`.Mode_TE.get_field`.
+        :func:`.ModeTE.get_field`.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.Mode_TE.find_mode_index` may be used to determine the index of
+        :func:`.ModeTE.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -605,9 +616,9 @@ class Mode_TE(ModeSolver):
 
         See Also
         --------
-        :func:`.Mode_TE.get_field`
+        :func:`.ModeTE.get_field`
 
-        :func:`.Mode_TE.find_mode_index`
+        :func:`.ModeTE.find_mode_index`
 
         Parameters
         ----------
@@ -747,7 +758,7 @@ class Mode_TE(ModeSolver):
         dy : float
             The grid spacing in the y direction.
         dz : float
-            Unused in :class:`.Mode_TE`
+            Unused in :class:`.ModeTE`
 
         Returns
         -------
@@ -791,9 +802,9 @@ class Mode_TE(ModeSolver):
 
             dHxdy = np.diff(Hx) / dy
             dHxdy = dHxdy[:-1]
-            dHydx = Hy[1:-1]*np.exp(self._dir*1j*neff*dx/2.0) / dy
+            dHydx = Hy[1:-1]*np.exp(self._dir*1j*neff*dx/2.0) / dx
             dEzdy = np.diff(Ez)[1:] / dy
-            dEzdx = Ez[1:-1] / dy
+            dEzdx = Ez[1:-1] / dx
 
             Jz = 1j*(self.eps*Ez[1:-1]) + dHydx - dHxdy
             Mx = dEzdy - 1j*(self.mu*Hx[1:-1])
@@ -814,7 +825,7 @@ class Mode_TE(ModeSolver):
         My = np.reshape(My, self._fshape)
         return (Jz, Mx, My)
 
-class Mode_TM(Mode_TE):
+class ModeTM(ModeTE):
     """Solve for the TM polarized modes of a 1D slice of a 2D structure.
 
     The TM polarization consists of a non-zeros :math:`H_z`, :math:`E_x`,
@@ -883,13 +894,13 @@ class Mode_TM(Mode_TE):
         Get the source current distribution for the i'th mode.
     """
 
-    def __init__(self, wavelength, ds, eps, mu, n0=1.0, neigs=1, \
+    def __init__(self, wavelength, eps, mu, domain, n0=1.0, neigs=1, \
                  backwards=False):
 
         # A TM mode source is the same as a TE mode source except with the
         # permittivity and permeability smapped and the E and H and J and M
         # components swapped around.
-        super(Mode_TM, self).__init__(wavelength, ds, mu, eps, n0, neigs, \
+        super(ModeTM, self).__init__(wavelength, mu, eps, domain, n0, neigs, \
                                       backwards)
 
         self.bc = 'M' # really PEC since we use TE mode solver
@@ -913,7 +924,7 @@ class Mode_TM(Mode_TE):
     def bc(self, bc):
         if(bc not in ['0', 'M', 'E', 'H', 'P', 'EM', 'HM']):
             error_message("Boundary condition type '%s' not found. Use "
-                          "0, M, E, H, P, EM, HM.", "emopt.modes")
+                          "0, M, E, H, P, EM, HM." % (bc), "emopt.modes")
 
         # we need to swap Es and Hs and 0s and Ms since we use the TE solver to
         # find the TM fields
@@ -933,12 +944,12 @@ class Mode_TM(Mode_TE):
 
         Use this function with care: Hz/Ey and Ex are specified at different
         points in space (separated by half of a grid cell).  In general
-        :func:`.Mode_TM.get_field_interp` should be prefered.
+        :func:`.ModeTM.get_field_interp` should be prefered.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.Mode_TM.find_mode_index` may be used to determine the index of
+        :func:`.ModeTM.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -948,9 +959,9 @@ class Mode_TM(Mode_TE):
 
         See Also
         --------
-        :func:`.Mode_TM.get_field_interp`
+        :func:`.ModeTM.get_field_interp`
 
-        :func:`.Mode_TM.find_mode_index`
+        :func:`.ModeTM.find_mode_index`
 
         Parameters
         ----------
@@ -971,7 +982,7 @@ class Mode_TM(Mode_TE):
         elif(component == 'Ey'): te_comp = 'Hy'
         else: te_comp = 'invalid'
 
-        field = super(Mode_TM, self).get_field(i, te_comp)
+        field = super(ModeTM, self).get_field(i, te_comp)
 
         if(component == 'Hz'):
             return field*-1
@@ -983,12 +994,12 @@ class Mode_TM(Mode_TE):
         """Get the desired interpolated field component of the i'th mode.
 
         In general, this function should be preferred over
-        :func:`.Mode_TM.get_field`.
+        :func:`.ModeTM.get_field`.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.Mode_TM.find_mode_index` may be used to determine the index of
+        :func:`.ModeTM.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -998,9 +1009,9 @@ class Mode_TM(Mode_TE):
 
         See Also
         --------
-        :func:`.Mode_TM.get_field`
+        :func:`.ModeTM.get_field`
 
-        :func:`.Mode_TM.find_mode_index`
+        :func:`.ModeTM.find_mode_index`
 
         Parameters
         ----------
@@ -1021,7 +1032,7 @@ class Mode_TM(Mode_TE):
         elif(component == 'Ey'): te_comp = 'Hy'
         else: te_comp = 'invalid'
 
-        field = super(Mode_TM, self).get_field_interp(i, te_comp)
+        field = super(ModeTM, self).get_field_interp(i, te_comp)
 
         if(component == 'Hz'):
             return field*-1
@@ -1058,7 +1069,7 @@ class Mode_TM(Mode_TE):
         dy : float
             The grid spacing in the y direction.
         dz : float
-            Unused in :class:`.Mode_TE`
+            Unused in :class:`.ModeTE`
 
         Returns
         -------
@@ -1067,13 +1078,13 @@ class Mode_TM(Mode_TE):
             source distributions.  In 2D, these source distributions are N x 1
             arrays.
         """
-        src = super(Mode_TM, self).get_source(dx, dy, dz)
+        src = super(ModeTM, self).get_source(dx, dy, dz)
 
         # In order to make use of the TE subclass, we need to flip the sign of
         # the Jx and Jy sources
         return (src[0], -1*src[1], -1*src[2])
 
-class Mode_FullVector(ModeSolver):
+class ModeFullVector(ModeSolver):
     """Solve for the modes for a 2D slice of a 3D structure.
 
     Parameters
@@ -1128,26 +1139,43 @@ class Mode_FullVector(ModeSolver):
         Get the source current distribution for the i'th mode.
     """
 
-    def __init__(self, wavelength, dx, dy, eps, mu, n0=1.0, neigs=1, \
-                 backwards=False, verbose=True, bc='0000'):
-        super(Mode_FullVector, self).__init__(wavelength, n0, neigs)
-
-        # We extend the size of the inputs by one element on both sides in order to
-        # accomodate taking derivatives which will be necessary for finding
-        # sources.  Any returned quantities will be the same length as the
-        # input eps/mu
-        M, N = eps.shape
-        self._M = M
-        self._N = N
+    def __init__(self, wavelength, eps, mu, domain, n0=1.0, neigs=1, \
+                 backwards=False, verbose=True):
+        super(ModeFullVector, self).__init__(wavelength, n0, neigs)
 
         self.eps = eps
         self.mu = mu
+        self.domain = domain
 
-        self.dx = dx
-        self.dy = dy
+        # figure out how 2D domain is oriented
+        n = None
+        if(domain.Nx == 1):
+            n = 'x'
+            self._M = domain.Nz
+            self._N = domain.Ny
+            self.dx = domain.dy
+            self.dy = domain.dz
+        elif(domain.Ny == 1):
+            n = 'y'
+            self._M = domain.Nz
+            self._N = domain.Nx
+            self.dx = domain.dx
+            self.dy = domain.dz
+        elif(domain.Nz == 1):
+            n = 'z'
+            self._M = domain.Ny
+            self._N = domain.Nx
+            self.dx = domain.dx
+            self.dy = domain.dy
+        else:
+            raise AttributeError('3D domains are not supported for 2D mode ' \
+                                 'calculations!')
+        self.ndir = n
 
         self.verbose = verbose
 
+        # this minus sign needs attention... It doesnt really make sense,
+        # currently
         if(backwards):
             self._dir = -1.0
         else:
@@ -1156,7 +1184,7 @@ class Mode_FullVector(ModeSolver):
         # non-dimensionalization for spatial variables
         self.R = self.wavelength/(2*np.pi)
 
-        # Solve problem of the form Ax = lBx
+        # Solve problem of the form Ax = nBx
         # define A and B matrices here
         # 6 fields
         Nfields = 6
@@ -1210,20 +1238,23 @@ class Mode_FullVector(ModeSolver):
         #self._ISHy = indset[0].createBlock(self._M*self._N, [4])
         #self._ISHz = indset[0].createBlock(self._M*self._N, [5])
 
-        # handle boundary conditions
-        # TODO: Lots of checking for the supplied format should be done here
+        # Boundary conditions default to PEC
+        self._bc = ['0', '0']
+
+    @property
+    def bc(self):
+        return self._bc
+
+    @bc.setter
+    def bc(self, bc):
+        if(bc[0] not in ['0', 'M', 'E', 'H', 'P', 'EM', 'HM']):
+            error_message("Boundary condition type '%s' not found. Use "
+                          "0, M, E, H, P, EM, HM." % (bc[0]), "emopt.modes")
+        if(bc[1] not in ['0', 'M', 'E', 'H', 'P', 'EM', 'HM']):
+            error_message("Boundary condition type '%s' not found. Use "
+                          "0, M, E, H, P, EM, HM." % (bc[1]), "emopt.modes")
+
         self._bc = bc
-
-        if(bc[0] == 'P' and bc[1] == 'P'):
-            self._periodic_x = True
-        else:
-            self._periodic_x = False
-
-        if(bc[2] == 'P' and bc[3] == 'P'):
-            self._periodic_y = True
-        else:
-            self._periodic_y = False
-
 
     def build(self):
         """Build the system of equations and prepare the mode solver for the solution
@@ -1249,10 +1280,44 @@ class Mode_FullVector(ModeSolver):
 
         A = self._A
         B = self._B
-        mu = self.mu
         eps = self.eps
+        mu = self.mu
         M = self._M
         N = self._N
+
+        bc = self._bc
+
+        # handle coordinate permutations for 3D slices. This is necessary since
+        # the solver assumes the mode propagates in the z direction. 
+        get_eps = None
+        get_mu = None
+        if(isinstance(eps, grid.Material2D)):
+            get_eps = eps.get_value
+            get_mu = mu.get_value
+        elif(isinstance(eps, grid.Material3D)):
+            i0 = self.domain.i.start
+            j0 = self.domain.j.start
+            k0 = self.domain.k.start
+            if(self.ndir == 'x'):
+                get_eps = lambda x,y : eps.get_value(k0,j0+x,i0+y)
+                get_mu = lambda x,y : mu.get_value(k0,j0+x,i0+y)
+            elif(self.ndir == 'y'):
+                get_eps = lambda x,y : eps.get_value(k0+x,j0,i0+y)
+                get_mu = lambda x,y : mu.get_value(k0+x,j0,i0+y)
+            elif(self.ndir == 'z'):
+                get_eps = lambda x,y : eps.get_value(k0+x,j0+y,i0)
+                get_mu = lambda x,y : mu.get_value(k0+x,j0+y,i0)
+
+        #if(NOT_PARALLEL):
+        #    earr = np.zeros([M,N], dtype=np.complex128)
+
+        #    for y in range(M):
+        #        for x in range(N):
+        #            earr[y,x] = get_eps(x,y)
+
+        #    import matplotlib.pyplot as plt
+        #    plt.imshow(earr.real, extent=[0, N, 0, M])
+        #    plt.show()
 
         for I in xrange(self.ib, self.ie):
             A[I,I] = 0.0
@@ -1265,20 +1330,37 @@ class Mode_FullVector(ModeSolver):
 
                 JHz1 = 5*M*N + y*N + x
                 JHz0 = 5*M*N + (y-1)*N + x
-                JHz2 = 6*M*N-N+x
                 JEx = y*N + x
                 JHy = 4*M*N + y*N + x
 
-                # derivative of Ez
+                # derivative of Hz
                 if(y > 0): A[I, JHz0] = -ody
-                elif(self._periodic_y): A[I, JHz2] = -ody
                 A[I, JHz1] = ody
 
                 # Ex
-                A[I, JEx] = 1j*eps[y,x]
+                A[I, JEx] = 1j*get_eps(x+0.5,y)
 
                 # Setup the LHS B matrix
                 B[I,JHy] = 1j*self._dir
+
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(x == 0):
+                    pass
+                elif(x == N-1):
+                    pass
+
+                if(y == 0):
+                    if(bc[1] == '0'): A[I, JEx] = 0
+                    elif(bc[1] == 'E'): A[I, JHz1] = 2*ody
+                    elif(bc[1] == 'H'):
+                        A[I, JHz1] = 0
+                        A[I, JEx] = 0
+                elif(y == M-1):
+                    pass
+
+
             # (stuff) = n_z B H_x
             elif(I < 2*N*M):
                 y = int((I-1*M*N)/N)
@@ -1286,48 +1368,74 @@ class Mode_FullVector(ModeSolver):
 
                 JHz1 = 5*N*M + y*N + x
                 JHz0 = 5*N*M + y*N + x - 1
-                JHz2 = 5*M*N + y*N + N-1
+
                 JEy = M*N + y*N + x
                 JHx = 3*M*N + y*N + x
 
                 # derivative of Hz
                 if(x > 0): A[I, JHz0] = odx
-                elif(self._periodic_x): A[I, JHz2] = odx
                 A[I, JHz1] = -odx
 
                 # Ey
-                A[I, JEy] = 1j*eps[y,x]
+                A[I, JEy] = 1j*get_eps(x,y+0.5)
 
                 # Setup the LHS B matrix
                 B[I,JHx] = -1j*self._dir
 
-            # (stuff) = Hz (zero)
-            elif(I < 3*M*N):
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(x == 0):
+                    if(bc[0] == '0'): A[I, JEy] = 0
+                    elif(bc[0] == 'E'): A[I, JHz1] = -2*odx
+                    elif(bc[0] == 'H'): A[I, JHz1] = 0
+                elif(x == N-1):
+                    pass
+
+                if(y == 0):
+                    pass
+                elif(y == M-1):
+                    pass
+
+            # (stuff) = n_z B E_z
+            elif(I < 3*N*M):
                 y = int((I-2*M*N)/N)
                 x = (I-2*M*N) - y * N
 
-                JHy0 = 4*M*N + y*N + x - 1
-                JHy1 = 4*M*N + y*N + x
-                JHy2 = 4*M*N + y*N + N-1
+                JEy0 = M*N + y*N + x
+                JEy1 = M*N + y*N + x + 1
 
-                JHx0 = 3*M*N + (y-1)*N + x
-                JHx1 = 3*M*N + y*N + x
-                JHx2 = 4*M*N - N + x
+                JEx0 = y*N + x
+                JEx1 = (y+1)*N + x
 
+                JHz = 5*M*N + y*N + x
                 JEz = 2*M*N + y*N + x
 
-                # derivative of Hy
-                if(x > 0): A[I, JHy0] = -odx
-                elif(self._periodic_x): A[I, JHy2] = -odx
-                A[I,JHy1] = odx
+                # derivative of Ey
+                A[I, JEy0] = -odx
+                if(x < N-1): A[I,JEy1] = odx
 
-                # derivative of Hx
-                if(y > 0): A[I, JHx0] = ody
-                elif(self._periodic_y): A[I, JHx2] = ody
-                A[I, JHx1] = -ody
+                # derivative of Ex
+                A[I, JEx0] = ody
+                if(y < M-1): A[I, JEx1] = -ody
 
-                # Ez
-                A[I, JEz] = 1j*eps[y,x]
+                # Hz at x,y
+                A[I, JHz] = -1j*get_mu(x+0.5,y+0.5)
+
+
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(x == 0):
+                    if(bc[0] == '0'): A[I, JEy0] = 0
+                elif(x == N-1):
+                    pass
+
+                if(y == 0):
+                    if(bc[1] == '0'): A[I, JEx0] = 0
+                    if(bc[1] == 'H'): A[I, JEx0] = 0
+                elif(y == M-1):
+                    pass
 
             # (stuff) = n_z B E_y
             elif(I < 4*N*M):
@@ -1336,22 +1444,33 @@ class Mode_FullVector(ModeSolver):
 
                 JEz0 = 2*M*N + y*N + x
                 JEz1 = 2*M*N + (y+1)*N + x
-                JEz2 = 2*M*N + x
+
                 JHx = 3*M*N + y*N + x
                 JEy = M*N + y*N+x
 
                 # derivative of Ez
-                if(y > 0 or self._periodic_y):
-                    A[I,JEz0] = -ody
+                A[I,JEz0] = -ody
                 if(y < M-1): A[I,JEz1] = ody
-                elif(self._periodic_y): A[I,JEz2] = ody
 
                 # Hx at x,y
-                if(x > 0 or self._periodic_x):
-                    A[I,JHx] = -1j*mu[y,x]
+                A[I,JHx] = -1j*get_mu(x,y+0.5)
 
                 # Setup the LHS B matrix
                 B[I,JEy] = 1j*self._dir
+
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(x == 0):
+                    if(bc[0] == '0'): A[I, JHx] = 0
+                elif(x == N-1):
+                    pass
+
+                if(y == 0):
+                    if(bc[1] == '0'): A[I, JEz0] = 0
+                    if(bc[1] == 'H'): A[I, JEz0] = 0
+                elif(y == M-1):
+                    pass
 
             # (stuff) = n_z B E_x
             elif(I < 5*N*M):
@@ -1360,57 +1479,84 @@ class Mode_FullVector(ModeSolver):
 
                 JEz0 = 2*M*N + y*N + x
                 JEz1 = 2*M*N + y*N + x + 1
-                JEz2 = y*N + 2*M*N
+
                 JHy = 4*M*N + y*N + x
                 JEx = y*N + x
 
                 # derivative of Ez
-                if(x > 0 or self._periodic_x):
-                    A[I,JEz0] = odx
+                A[I,JEz0] = odx
                 if(x < N-1): A[I,JEz1] = -odx
-                elif(self._periodic_x): A[I,JEz2] = -odx
 
                 # Hy at x,y
-                if(y > 0 or self._periodic_y):
-                    A[I,JHy] = -1j*mu[y,x]
+                A[I,JHy] = -1j*get_mu(x+0.5,y)
 
                 # Setup the LHS B matrix
                 B[I,JEx] = -1j*self._dir
 
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(x == 0):
+                    if(bc[0] == '0'): A[I, JEz0] = 0
+                elif(x == N-1):
+                    pass
 
-            # (stuff) = n_z B E_z
-            elif(I < 6*N*M):
+                if(y == 0):
+                    if(bc[1] == '0'): A[I, JHy] = 0
+                    if(bc[1] == 'H'): A[I, JHy] = 0
+                elif(y == M-1):
+                    pass
+
+            # (stuff) = Hz (zero)
+            elif(I < 6*M*N):
                 y = int((I-5*M*N)/N)
                 x = (I-5*M*N) - y * N
 
-                JEy0 = M*N + y*N + x
-                JEy1 = M*N + y*N + x + 1
-                JEy2 = M*N + y*N
+                JHy0 = 4*M*N + y*N + x - 1
+                JHy1 = 4*M*N + y*N + x
 
-                JEx0 = y*N + x
-                JEx1 = (y+1)*N + x
-                JEx2 = x
+                JHx0 = 3*M*N + (y-1)*N + x
+                JHx1 = 3*M*N + y*N + x
 
-                JHz = 5*M*N + y*N + x
                 JEz = 2*M*N + y*N + x
+                JEz1 = 2*M*N + y*N + x + 1
+                JEz2 = 2*M*N + (y+1)*N + x
+                JEz3 = 2*M*N + (y+1)*N + x + 1
 
-                # derivative of Ey
-                if(x > 0 or self._periodic_x):
-                    A[I, JEy0] = -odx
-                if(x < N-1): A[I,JEy1] = odx
-                elif(self._periodic_x): A[I, JEy2] = odx
+                # derivative of Hy
+                if(x > 0): A[I, JHy0] = -odx
+                A[I,JHy1] = odx
 
-                # derivative of Ex
-                if(y > 0 or self._periodic_y):
-                    A[I, JEx0] = ody
-                if(y < M-1): A[I, JEx1] = -ody
-                elif(self._periodic_y): A[I, JEx2] = -ody
+                # derivative of Hx
+                if(y > 0): A[I, JHx0] = ody
+                A[I, JHx1] = -ody
 
-                # Hz at x,y
-                A[I, JHz] = -1j*mu[y,x]
+                # Ez
+                A[I, JEz] = 1j*get_eps(x,y)
 
-                # Setup the LHS B matrix
-                B[I,JEz] = 0.0
+                #############################
+                # enforce boundary conditions
+                #############################
+                if(x == 0):
+                    if(bc[0] == '0'):
+                        A[I, JHx1] = 0
+                        if(y > 0): A[I, JHx0] = 0
+                    elif(bc[0] == 'E'): A[I,JHy1] = 2*odx
+                    elif(bc[0] == 'H'): A[I,JHy1] = 0
+                elif(x == N-1):
+                    pass
+
+                if(y == 0):
+                    if(bc[1] == '0'):
+                        A[I, JHy1] = 0
+                        if(x > 0): A[I, JHy0] = 0
+                    elif(bc[1] == 'E'): A[I, JHx1] = -2*ody
+                    elif(bc[1] == 'H'):
+                        A[I, JHx1] = 0
+                        A[I, JHy1] = 0
+                        if(x > 0): A[I, JHy0] = 0
+                elif(y == M-1):
+                    pass
 
         self._A.assemble()
         self._B.assemble()
@@ -1425,12 +1571,17 @@ class Mode_FullVector(ModeSolver):
         if(self.verbose and NOT_PARALLEL):
             info_message('Solving...')
 
+        # Setup the solve options. We are solving a generalized non-hermitian
+        # eigenvalue problem (GNHEP)
         self._solver.setOperators(self._A, self._B)
         self._solver.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
         self._solver.setDimensions(self.neigs, PETSc.DECIDE)
-        self._solver.setTarget(self.n0)
+        self._solver.setTarget(self.n0) # "guess" for effective index
         self._solver.setFromOptions()
 
+        # Solve Ax=nBx using SLEPc.
+        # Internally, we use a direct solve (MUMPS) to handle the heavy
+        # lifting.
         self._solver.solve()
         nconv = self._solver.getConverged()
 
@@ -1449,7 +1600,29 @@ class Mode_FullVector(ModeSolver):
             self.neff[i] = self._solver.getEigenvalue(i)
             self._solver.getEigenvector(i, self._x[i])
 
-    def get_field(self, i, component):
+    def __permute_field_component(self, component):
+        ## Permute the field components to account for planes with non-z normal
+        # directions.
+        if(self.ndir == 'x'):
+            if(component == FieldComponent.Ex): component = FieldComponent.Ez
+            elif(component == FieldComponent.Ey): component = FieldComponent.Ex
+            elif(component == FieldComponent.Ez): component = FieldComponent.Ey
+            elif(component == FieldComponent.Hx): component = FieldComponent.Hz
+            elif(component == FieldComponent.Hy): component = FieldComponent.Hx
+            elif(component == FieldComponent.Hz): component = FieldComponent.Hy
+        elif(self.ndir == 'y'):
+            if(component == FieldComponent.Ex): component = FieldComponent.Ey
+            elif(component == FieldComponent.Ey): component = FieldComponent.Ez
+            elif(component == FieldComponent.Ez): component = FieldComponent.Ex
+            elif(component == FieldComponent.Hx): component = FieldComponent.Hy
+            elif(component == FieldComponent.Hy): component = FieldComponent.Hz
+            elif(component == FieldComponent.Hz): component = FieldComponent.Hx
+        elif(self.ndir == 'z'):
+            pass # No need to permute!
+
+        return component
+
+    def get_field(self, i, component, permute=True):
         """Get the desired raw field component of the i'th mode.
 
         Notes
@@ -1469,6 +1642,12 @@ class Mode_FullVector(ModeSolver):
             The index of the desired mode
         component : str
             The desired field component (Ex, Ey, Ez, Hx, Hy, Hz)
+        permute : bool
+            Permute the field components according to the normal direction of
+            the supplied domain. Because all computation is internally
+            performed assuming the mode propagates in the z direction, the
+            field components need to be permuted in order to produce the
+            desired result. (default = True)
 
         Returns
         -------
@@ -1479,7 +1658,15 @@ class Mode_FullVector(ModeSolver):
         M = self._M
         N = self._N
 
-        if(component == 'Ex'):
+        # Permute components
+        if(permute):
+            component = self.__permute_field_component(component)
+
+        # fields are split up among processes --> we only request data from
+        # processors which store the desired field component. We do this by
+        # finding out the initial and final indices of the field vector in each
+        # process which stores the desired field component.
+        if(component == FieldComponent.Ex):
             if(self.ib >= M*N):
                 I0 = 0
                 I1 = 0
@@ -1489,7 +1676,7 @@ class Mode_FullVector(ModeSolver):
                     I1 = M*N-self.ib
                 else:
                     I1 = self.ie-self.ib
-        elif(component == 'Ey'):
+        elif(component == FieldComponent.Ey):
             if(self.ib >= 2*M*N or self.ie < M*N):
                 I0 = 0
                 I1 = 0
@@ -1502,7 +1689,7 @@ class Mode_FullVector(ModeSolver):
                     I1 = 2*M*N-self.ib
                 else:
                     I1 = self.ie-self.ib
-        elif(component == 'Ez'):
+        elif(component == FieldComponent.Ez):
             if(self.ib >= 3*M*N or self.ie < 2*M*N):
                 I0 = 0
                 I1 = 0
@@ -1515,7 +1702,7 @@ class Mode_FullVector(ModeSolver):
                     I1 = 3*M*N-self.ib
                 else:
                     I1 = self.ie-self.ib
-        elif(component == 'Hx'):
+        elif(component == FieldComponent.Hx):
             if(self.ib >= 4*M*N or self.ie < 3*M*N):
                 I0 = 0
                 I1 = 0
@@ -1528,7 +1715,7 @@ class Mode_FullVector(ModeSolver):
                     I1 = 4*M*N-self.ib
                 else:
                     I1 = self.ie-self.ib
-        elif(component == 'Hy'):
+        elif(component == FieldComponent.Hy):
             if(self.ib >= 5*M*N or self.ie < 4*M*N):
                 I0 = 0
                 I1 = 0
@@ -1541,7 +1728,7 @@ class Mode_FullVector(ModeSolver):
                     I1 = 5*M*N-self.ib
                 else:
                     I1 = self.ie-self.ib
-        elif(component == 'Hz'):
+        elif(component == FieldComponent.Hz):
             if(self.ie < 4*M*N):
                 I0 = 0
                 I1 = 0
@@ -1611,36 +1798,66 @@ class Mode_FullVector(ModeSolver):
             interpolated mode field.
         """
         f_raw = self.get_field(i, component)
+
         # zero padding is equivalent to including boundary values outside of
         # the metal boundaries. This is needed to compute the interpolated
         # values.
         f_raw = np.pad(f_raw, 1, 'constant', constant_values=0)
 
+        # Permute components
+        component = self.__permute_field_component(component)
+
+        bc = self._bc
+
+        # interpolate and return the fields on the rank 0 nodes. Consult the
+        # All field components are interpolated onto the Ez grid.
         if(NOT_PARALLEL):
-            if(component == 'Ex'):
+            if(component == FieldComponent.Ex): # Ex --> average along x
                 Ex = np.copy(f_raw)
-                Ex[0:-1,:] += f_raw[1:,:]
+                if(bc[0] == 'E'): f_raw[:,0] = -1*f_raw[:,1]
+                elif(bc[0] == 'H'): f_raw[:,0] = f_raw[:,1]
+
+                Ex[:,1:] += f_raw[:,0:-1]
                 return Ex[1:-1, 1:-1]/2.0
-            elif(component == 'Ey'):
+
+            elif(component == FieldComponent.Ey): # Ey --> average along y
                 Ey = np.copy(f_raw)
-                Ey[:,0:-1] += f_raw[:,1:]
+                if(bc[1] == 'E'): f_raw[0,:] = -1*f_raw[1,:]
+                elif(bc[1] == 'H'): f_raw[0,:] = f_raw[1,:]
+
+                Ey[1:,:] += f_raw[0:-1,:]
                 return Ey[1:-1, 1:-1]/2.0
-            elif(component == 'Ez'):
-                Ez = np.copy(f_raw)
-                Ez[:,0:-1] += f_raw[:,1:]
-                Ez[0:-1,:] += f_raw[1:,:]
-                Ez[0:-1, 0:-1] += f_raw[1:,1:]
-                return Ez[1:-1, 1:-1]/4.0
-            elif(component == 'Hx'):
-                Hx = np.copy(f_raw)
-                Hx[:,0:-1] += f_raw[:,1:]
-                return Hx[1:-1, 1:-1]/2.0
-            elif(component == 'Hy'):
-                Hy = np.copy(f_raw)
-                Hy[0:-1,:] += f_raw[1:,:]
-                return Hy[1:-1, 1:-1]
-            elif(component == 'Hz'):
+
+            elif(component == FieldComponent.Ez): # Ez --> dont average
                 return f_raw[1:-1, 1:-1]
+
+            elif(component == FieldComponent.Hx): # Hx --> average along y
+                Hx = np.copy(f_raw)
+                if(bc[1] == 'E'): f_raw[0,:] = -1*f_raw[1,:]
+                elif(bc[1] == 'H'): f_raw[0,:] = f_raw[1,:]
+
+                Hx[1:,:] += f_raw[0:-1,:]
+                return Hx[1:-1, 1:-1]/2.0
+
+            elif(component == FieldComponent.Hy): # Hy --> average along x
+                Hy = np.copy(f_raw)
+                if(bc[0] == 'E'): f_raw[:,0] = -1*f_raw[:,1]
+                elif(bc[0] == 'H'): f_raw[:,0] = f_raw[:,1]
+
+                Hy[:,1:] += f_raw[:,0:-1]
+                return Hy[1:-1, 1:-1]/2.0
+
+            elif(component == FieldComponent.Hz): # Hz --> average along x & y
+                Hz = np.copy(f_raw)
+                if(bc[1] == 'E'): f_raw[0,:] = -1*f_raw[1,:]
+                elif(bc[1] == 'H'): f_raw[0,:] = f_raw[1,:]
+                if(bc[0] == 'E'): f_raw[:,0] = -1*f_raw[:,1]
+                elif(bc[0] == 'H'): f_raw[:,0] = f_raw[:,1]
+
+                Hz[:,1:] += f_raw[:,0:-1]
+                Hz[1:,:] += f_raw[0:-1,:]
+                Hz[1:, 1:] += f_raw[0:-1,0:-1]
+                return Hz[1:-1, 1:-1]/4.0
         else:
             return MathDummy()
 
@@ -1658,30 +1875,30 @@ class Mode_FullVector(ModeSolver):
             The list of energy fractions corresponding to Ex, Ey, Ez, Hx, Hy,
             Hz
         """
-        eps = self.eps
-        mu = self.mu
+        eps = self.eps.get_values_in(self.domain)
+        mu = self.mu.get_values_in(self.domain)
 
-        Ex = self.get_field(i, 'Ex')
+        Ex = self.get_field(i, FieldComponent.Ex)
         WEx = np.sum(eps.real*np.abs(Ex)**2)
         del Ex
 
-        Ey = self.get_field(i, 'Ey')
+        Ey = self.get_field(i, FieldComponent.Ey)
         WEy = np.sum(eps.real*np.abs(Ey)**2)
         del Ey
 
-        Ez = self.get_field(i, 'Ez')
+        Ez = self.get_field(i, FieldComponent.Ez)
         WEz = np.sum(eps.real*np.abs(Ez)**2)
         del Ez
 
-        Hx = self.get_field(i, 'Hx')
+        Hx = self.get_field(i, FieldComponent.Hx)
         WHx = np.sum(mu.real*np.abs(Hx)**2)
         del Hx
 
-        Hy = self.get_field(i, 'Hy')
+        Hy = self.get_field(i, FieldComponent.Hy)
         WHy = np.sum(mu.real*np.abs(Hy)**2)
         del Hy
 
-        Hz = self.get_field(i, 'Hz')
+        Hz = self.get_field(i, FieldComponent.Hz)
         WHz = np.sum(mu.real*np.abs(Hz)**2)
         del Hz
 
@@ -1690,7 +1907,14 @@ class Mode_FullVector(ModeSolver):
                 WHx/Wtot, WHy/Wtot, WHz/Wtot]
 
     def get_mode_number(self, i):
-        """
+        """Determine the mode number.
+
+        This is based on the number of phase crossings.
+
+        Todo
+        ----
+        Implement this function...
+
         Parameters
         ----------
         i : int
@@ -1703,12 +1927,16 @@ class Mode_FullVector(ModeSolver):
         """
         pass
 
-    def find_mode_index(self, X):
-        """
+    def find_mode_index(self, P, Q):
+        """Find the index of the index of the mode with X horizontal phase
+        transitions and Y vertical phase transitions.
+
         Parameters
         ----------
-        X : int
-            The number of the desired mode.
+        P : int
+            The number of horizontal phase transitions
+        Q : int
+            The number of vertical phase transitions
 
         Returns
         -------
@@ -1716,7 +1944,8 @@ class Mode_FullVector(ModeSolver):
             The index of the mode with the desired number.
         """
         for i in range(self.neigs):
-            if(self.get_mode_number(i) == X):
+            p, q = self.get_mode_number(i)
+            if(p == P and q == Q):
                 return i
 
         warning_message('Desired mode number was not found.', 'emopt.modes')
@@ -1727,9 +1956,12 @@ class Mode_FullVector(ModeSolver):
 
         Notes
         -----
-        This class assumes all modes propagate in the z direction. In order to
-        propagate a mode in the x or y direction, the spatial coordinates may
-        be permuted.
+        1) Source calculations are only supported for Material3D structures.
+        2) The sources are computed assuming the mode is propagating in the z
+        direction. In order to support modes propagating in different
+        directions, the spatial coordinates are permuted. Fortunately, the
+        underlying dislocated grids are invariant under this transformation.
+        This is only necessary for calculating the material cross-sections.
 
         TODO
         ----
@@ -1741,16 +1973,109 @@ class Mode_FullVector(ModeSolver):
             Index of the mode for which the corresponding current sources are
             desired.
         dx : float
-            The grid spacing in the x direction.
+            Grid spacing along x direction.
         dy : float
-            The grid spacing in the y direction.
+            Grid spacing along y direction
         dz : float
-            Unused in :class:`.Mode_TE`
+            Grid spacing along z direction
 
         Returns
         -------
         tuple of numpy.ndarray
-            (On ALL nodes) The tuple (Jx, Jy, Jz, Mx, My, Mz) containing arrays of the
+            (On master node) The tuple (Jx, Jy, Jz, Mx, My, Mz) containing arrays of the
             source distributions.
         """
-        pass
+        if(not isinstance(self.eps, grid.Material3D)):
+            raise Exception("Source calculation only possible for slices of " \
+                            "Material3D's..")
+
+        neff = self.neff[i]
+        bc = self._bc
+        dx = self.dx/self.R; dy = self.dy/self.R
+        dz = dz/self.R
+
+        ekz = np.exp(1j*self._dir*neff*dz/2)
+
+        # setup arrays for storing the calculated current sources
+        # These are only computed and stored on the rank 0 process 
+        if(NOT_PARALLEL):
+            Jx = np.zeros([self._M, self._N], dtype=np.complex128)
+            Jy = np.zeros([self._M, self._N], dtype=np.complex128)
+            Jz = np.zeros([self._M, self._N], dtype=np.complex128)
+            Mx = np.zeros([self._M, self._N], dtype=np.complex128)
+            My = np.zeros([self._M, self._N], dtype=np.complex128)
+            Mz = np.zeros([self._M, self._N], dtype=np.complex128)
+
+            eps = np.zeros([self._M, self._N], dtype=np.complex128)
+            mu = np.zeros([self._M, self._N], dtype=np.complex128)
+        else:
+            Jx = None; Jy = None; Jz = None
+            Mx = None; My = None; Mz = None
+
+        # Handle coordinate permutations. This allows us to support launching
+        # modes in any cartesian direction. At the end, we will once again
+        # permute the calculated current density components to match the users
+        # supplied coordinate system
+        get_mu = None
+        if(self.ndir == 'x'): # PROBLEM MIGHT BEHERE!!!!!!!!!!!!!!!!!!!
+            get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sy=sx, sz=sy, squeeze=True)
+        elif(self.ndir == 'y'):
+            get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sx=sx, sz=sy, squeeze=True)
+        elif(self.ndir == 'z'):
+            get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sx=sx, sy=sy, squeeze=True)
+
+        # Get field data
+        Ex = self.get_field(i, FieldComponent.Ex, permute=False)
+        Ey = self.get_field(i, FieldComponent.Ey, permute=False)
+        Ez = self.get_field(i, FieldComponent.Ez, permute=False)
+        Hx = self.get_field(i, FieldComponent.Hx, permute=False)
+        Hy = self.get_field(i, FieldComponent.Hy, permute=False)
+        Hz = self.get_field(i, FieldComponent.Hz, permute=False)
+
+        if(NOT_PARALLEL):
+            ## Calculate contribution of Ex
+            Ex = np.pad(Ex, 1, 'constant', constant_values=0)
+
+            # handle boundary conditions
+            if(bc[0] == 'E'): Ex[:,0] = -1*Ex[:, 1]
+            elif(bc[0] == 'H'): Ex[:,0] = Ex[:, 1]
+            if(bc[1] == 'E'): Ex[0,:] = Ex[1, :]
+            elif(bc[1] == 'H'): Ex[0,:] = -1*Ex[1, :]
+
+            My += Ex[1:-1, 1:-1]*ekz/dz
+
+            ## Calculate contribution of Ey
+            Ey = np.pad(Ey, 1, 'constant', constant_values=0)
+            Mx += -Ey[1:-1, 1:-1]*ekz/dz
+
+            ## Calculate contribution of Ez
+            Ez = np.pad(Ez, 1, 'constant', constant_values=0)
+            eps = self.eps.get_values_in(self.domain, squeeze=True)
+            Jz += 1j*eps*Ez[1:-1, 1:-1]
+            Mx += (Ez[2:, 1:-1] - Ez[1:-1, 1:-1])/dy
+            My += -1*(Ez[1:-1, 2:] - Ez[1:-1, 1:-1])/dx
+
+            ## Calculate contribution of Hx
+            Hx = np.pad(Hx, 1, 'constant', constant_values=0)
+            mu = get_mu(0.0, 0.5)
+            Jy += Hx[1:-1, 1:-1]/dz
+            Jz += -1*(Hx[1:-1, 1:-1] - Hx[0:-2, 1:-1])/dy
+            Mx += -1j*mu*Hx[1:-1, 1:-1]
+
+            ## Calculate contribution of Hy
+            Hy = np.pad(Hy, 1, 'constant', constant_values=0)
+            mu = get_mu(0.5, 0.0)
+            Jx += -Hy[1:-1, 1:-1]/dz
+            Jz += (Hy[1:-1, 1:-1] - Hy[1:-1, 0:-2])/dx
+            My += -1j*mu*Hy[1:-1, 1:-1]
+
+            ## Calculate contribution of Hz
+            # There isn't one
+
+        # permute (if necessary) and return the results
+        if(self.ndir == 'x'):
+            return Jz, Jx, Jy, Mz, Mx, My
+        elif(self.ndir == 'y'):
+            return Jy, Jz, Jx, My, Mz, Mx
+        elif(self.ndir == 'z'):
+            return Jx, Jy, Jz, Mx, My, Mz

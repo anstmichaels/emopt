@@ -293,7 +293,7 @@ def plot_update(params, fom_list, fom_unconstrained, sim, am):
     fom_unconstrained.append(fom_nopenalty)
 
     Ez, Hx, Hy = sim.saved_fields[1]
-    eps = sim.eps.get_values_on(sim.field_domains[1])
+    eps = sim.eps.get_values_in(sim.field_domains[1])
 
     foms = {'FOM' : fom_list,
             'Insertion Loss' : fom_unconstrained}
@@ -436,13 +436,8 @@ if __name__ == '__main__':
     src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, H/2-w_src/2,
                                  H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
-    # Setup the mode solver. This simply involves getting a slice of the
-    # permittivity and permeability along our source line and passing them
-    # along with some basic parameters to the Mode_TE class
-    eps_slice = eps.get_values_on(src_line)
-    mu_slice = mu.get_values_on(src_line)
-
-    mode = emopt.modes.Mode_TE(wavelength, dy, eps_slice, mu_slice, n0=2.5, neigs=4)
+    # Setup the mode solver. 
+    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
     mode.build()
     mode.solve()
 

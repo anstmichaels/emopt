@@ -35,17 +35,9 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
-import emopt.fdfd
-from emopt.fdfd import FDFD_TM
-
+import emopt
+from emopt.misc import NOT_PARALLEL, RANK, run_on_master
 from emopt.adjoint_method import AdjointMethodPNF
-from emopt.grid import StructuredMaterial, Rectangle, Polygon
-from emopt.misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, n_silicon, DomainCoordinates
-from emopt.optimizer import Optimizer
-import emopt.fomutils as FOMUtils
-from emopt.modes import Mode_TM
-from emopt.io import plot_iteration
 
 import numpy as np
 from math import pi
@@ -245,14 +237,15 @@ def opt_plot(params, sim, am, fom_hist):
 
     This function is called after each iteration of the optimization
     """
+    print('Finished iteration %d.' % (len(fom_hist)+1))
     current_fom = -1*am.calc_fom(sim, params)
     fom_hist.append(current_fom)
     foms = {'IL':fom_hist}
 
     Hz, Ex, Ey = sim.saved_fields[1]
-    eps = sim.eps.get_values_on(sim.field_domains[1])
+    eps = sim.eps.get_values_in(sim.field_domains[1])
 
-    plot_iteration(np.real(Hz), np.real(eps), sim.Wreal, sim.Hreal, foms,
+    emopt.io.plot_iteration(np.real(Hz), np.real(eps), sim.Wreal, sim.Hreal, foms,
                    fname='current_result.pdf')
 
 if __name__ == '__main__':
@@ -277,7 +270,7 @@ if __name__ == '__main__':
     H = 8.0
     dx = 0.02
     dy = 0.02
-    sim = FDFD_TM(W, H, dx, dy, wlen)
+    sim = emopt.fdfd.FDFD_TM(W, H, dx, dy, wlen)
     pmls = [0.5,0.5,0.5,0.5]
     sim.w_pml = pmls
 
@@ -295,7 +288,7 @@ if __name__ == '__main__':
     ####################################################################################
     # Choose the desired materials of the system. We use silicon for the
     # crossing structure and SiO2 as the cladding
-    n_si = n_silicon(wlen)
+    n_si = emopt.misc.n_silicon(wlen)
     n_sio2 = 1.444
     eps_clad = n_sio2**2
 
@@ -305,7 +298,7 @@ if __name__ == '__main__':
     n_eff = 2.85 # Precomputed. We could use the mode solver to do this too
 
     # set a background permittivity containing the cladding material (SiO2)
-    eps_background = Rectangle(W/2, H/2, 2*W, H)
+    eps_background = emopt.grid.Rectangle(W/2, H/2, 2*W, H)
     eps_background.layer = 2
     eps_background.material_value = eps_clad
 
@@ -323,7 +316,7 @@ if __name__ == '__main__':
     # "closed" meaning the first point must be added again at the very end. Not
     # following this convention can result in very unexpected consequences,
     # especially when running an optimization.
-    crossing_x = Polygon()
+    crossing_x = emopt.grid.Polygon()
 
     # define the x coordinates
     xs = np.array([-w_in, w_in, w_in + L_taper])
@@ -355,7 +348,7 @@ if __name__ == '__main__':
     xs += H/2.0
     ys += W/2.0
 
-    crossing_y = Polygon()
+    crossing_y = emopt.grid.Polygon()
 
     crossing_y.set_points(ys, xs)
     crossing_y.layer = 1
@@ -364,18 +357,13 @@ if __name__ == '__main__':
     # All primitive components (polygons, rectangles, etc) must be added to a
     # StructuredMaterial. This layers the components in such a way that more
     # complicated material distributions can be formed
-    eps = StructuredMaterial(W, H, dx, dy)
+    eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
     eps.add_primitive(crossing_x)
     eps.add_primitive(crossing_y)
     eps.add_primitive(eps_background)
 
     # Set the permeability --> it's uniformly 1
-    mu_background = Rectangle(W/2, H/2, 2*W, H)
-    mu_background.layer = 2
-    mu_background.material_value = 1.0
-
-    mu = StructuredMaterial(W, H, dx, dy)
-    mu.add_primitive(mu_background)
+    mu = emopt.grid.ConstantMaterial2D(1.0)
 
     # set the materials used for simulation
     sim.set_materials(eps, mu)
@@ -388,18 +376,15 @@ if __name__ == '__main__':
     # To make accessing and initializing arrays easier, we create
     # DomainCoordinates. These manage the mapping between real-space coordinates
     # and array index coordinates.
-    src_line = DomainCoordinates(pmls[0]+0.1, pmls[0]+0.1, H/2-w_src/2,
-                                 H/2+w_src/2, 0, 0, dx, dy, 1.0)
+    src_line = emopt.misc.DomainCoordinates(pmls[0]+0.1, pmls[0]+0.1, H/2-w_src/2,
+                                            H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     Mz = np.zeros([M,N], dtype=np.complex128)
     Jx = np.zeros([M,N], dtype=np.complex128)
     Jy = np.zeros([M,N], dtype=np.complex128)
 
-    eps_slice = eps.get_values_on(src_line)
-    mu_slice = mu.get_values_on(src_line)
-
     # setup, build the system, and solve for the modes of the input waveguide
-    mode = Mode_TM(wlen, dy, eps_slice, mu_slice, n0=3.5, neigs=8)
+    mode = emopt.modes.ModeTM(wlen, eps, mu, src_line, n0=3.5, neigs=8)
     mode.build()
     mode.solve()
 
@@ -430,16 +415,16 @@ if __name__ == '__main__':
         Eym = mode.get_field_interp(mindex, 'Ey')
         Hzm = mode.get_field_interp(mindex, 'Hz')
 
-        mode_match = FOMUtils.ModeMatch([1,0,0], sim.dy,
-                                        Exm=Exm, Eym=Eym, Hzm=Hzm)
+        mode_match = emopt.fomutils.ModeMatch([1,0,0], sim.dy,
+                                              Exm=Exm, Eym=Eym, Hzm=Hzm)
 
     # the mode match will be computed along a line intersecting the output
     # waveguide of the structure
-    mm_line = DomainCoordinates(W-pmls[1]-dx, W-pmls[1]-dx, H/2-w_src/2,
-                                H/2+w_src/2, 0, 0, dx, dy, 1.0)
+    mm_line = emopt.misc.DomainCoordinates(W-pmls[1]-dx, W-pmls[1]-dx, H/2-w_src/2,
+                                           H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
-    full_field = DomainCoordinates(pmls[0], W-pmls[1], pmls[2], H-pmls[3], 0,
-                                   0, dx, dy, 1.0)
+    full_field = emopt.misc.DomainCoordinates(pmls[0], W-pmls[1], pmls[2], H-pmls[3], 0,
+                                              0, dx, dy, 1.0)
 
     # we also tell our FDFD object to record the fields on this line
     # immediately after running a forward simulation. This will simplify the
@@ -478,5 +463,6 @@ if __name__ == '__main__':
     callback = lambda x : opt_plot(x, sim, am, fom_list)
 
     # setup and run the optimization!
-    opt = Optimizer(am, design_params, tol=1e-5, callback_func=callback, Nmax=15)
+    opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
+                                    callback_func=callback, Nmax=15)
     results = opt.run()

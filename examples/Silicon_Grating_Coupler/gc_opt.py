@@ -244,11 +244,12 @@ def plot_update(params, fom_list, sim, am):
     iteration of the optimization. It plots the current refractive index
     distribution, the electric field, and the full figure of merit history.
     """
+    print('Finished iteration %d' % (len(fom_list)+1))
     current_fom = -1*am.calc_fom(sim, params)
     fom_list.append(current_fom)
 
     Ez, Hx, Hy = sim.saved_fields[1]
-    eps = sim.eps.get_values_on(sim.field_domains[1])
+    eps = sim.eps.get_values_in(sim.field_domains[1])
 
     foms = {'Insertion Loss' : fom_list}
     emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Wreal,
@@ -386,13 +387,8 @@ if __name__ == '__main__':
     src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, H/2-w_src/2,
                                  H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
-    # Setup the mode solver. This simply involves getting a slice of the
-    # permittivity and permeability along our source line and passing them
-    # along with some basic parameters to the Mode_TE class
-    eps_slice = eps.get_values_on(src_line)
-    mu_slice = mu.get_values_on(src_line)
-
-    mode = emopt.modes.Mode_TE(wavelength, dy, eps_slice, mu_slice, n0=2.5, neigs=4)
+    # Setup the mode solver.    
+    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
     mode.build()
     mode.solve()
 

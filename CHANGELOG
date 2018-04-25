@@ -1,3 +1,55 @@
+Released on 2018
+-------------------------
+1. (in previous commit) Change compile command for OS X in src/Makefile from g++-5 to
+g++. This prevented compilation on OS X with up-to-date gcc/g++ installations.
+
+2. Added FieldComponent and SourceComponent "enums" to ensure internal consistency
+when retrieving field and source quantities.
+
+3. Changed grid.Material2D.get_values_on to grid.Material2D.get_values_in. Identical
+change for grid.Material3D. Furthermore, an optional parameter "squeeze" hass been
+added to both Material2D and Material3D which, when set to True, will squeeze out any
+length-1 axes from the array. For example, if you want to extract a line from a 2D
+Material, then setting squeeze=True will cause the vector which is returned to have
+shape (N,). This can be useful for things like plotting.
+
+4. Overhaul of full vector mode solver (now call ModeFullVector). Solver interface has 
+been changed a bit and now accepts Material2D/Material3D objects and a DomainCoordinates
+to extract the material slice for which the mode is calculated (this change is needed 
+for the solver to work properly and it should also make the usage of the mode solve 
+less verbose for users). The modes and eigenvalues of the new mode solver have been 
+compared against commercial packages and it appears to produce accurate results. At this 
+point, the ModeFullVector class should be ready for prime time. 
+
+Furthermore, the ModeFullVector class can now be used to calculate current sources
+for exciting waveguide modes in 3D simulations. These waveguide modes can be injected
+along any cartesian axis.
+
+5. Renamed Mode_TE to ModeTE and Mode_TM to ModeTM for the sake of internal
+consistency.
+
+6. Changed the ModeTE and ModeTM init function to match ModeFullVector. These objects
+how accept eps, mu, and a DomainCoordinates and the material distribution is
+extracted from those. This, once again, reduces code verbosity a bit and will also
+allow us to handle certain internal calculations more effectively (i.e. take
+adavantage of grid smoothing better, calculate sources which can inject along either
+x or y axis, etc).
+
+7. Fixed some errors in the documentation at the top of modes.py
+
+8. Updated examples according to library changes.
+
+9. Implemented rough 3D solver. Note: This is NOT ready for use, however the
+foundation is set. Due to the structure of the 3D equations, a preconditioned
+iterative solver is used. The preconditioner combines multigrid with an A^H matrix
+preconditioner (which produces makes the system positive semi-definite) and uses
+GMRES as a smoother. GCR with restart is used for the outer iteration and MUMPS/LU
+factorization is used for the coarse solve. Currently, this works "well enough,"
+however it is still very slow compared to FDTD (for example). The 3D solver interface
+will be improved in the near future and hopefully be made useable.
+
+
+
 Released on March 5, 2018
 -------------------------
 1. Implemented "general" DomainCoordinates when now replaces LineCoordinates and

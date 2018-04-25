@@ -112,7 +112,7 @@ if(NOT_PARALLEL):
 
     extent = sim_area.get_bounding_box()[0:4]
     Ez = np.flipud(Ez)
-    eps_grid = eps.get_values_on(sim_area)
+    eps_grid = eps.get_values_in(sim_area)
 
     f = plt.figure()
     ax = f.add_subplot(111)

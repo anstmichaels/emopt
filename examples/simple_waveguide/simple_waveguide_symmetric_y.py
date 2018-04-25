@@ -22,8 +22,8 @@ from math import pi
 W = 10.0
 H = 3.5
 wlen = 1.55
-dx = wlen/30
-dy = wlen/30
+dx = wlen/60
+dy = wlen/60
 sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
 sim.w_pml = [0.75, 0.75, 0.75, 0]
 sim.bc = '0E'

@@ -80,13 +80,8 @@ My = np.zeros([M,N], dtype=np.complex128)
 src_line = emopt.misc.DomainCoordinates(2.0, 2.0, H/2.0-2.5, H/2.0+2.5, 0.0, 0.0,
                              dx, dy, 1.0)
 
-# We need a slice of the material distribution in order to calculate the
-# desired mode that we will launch
-eps_slice = eps.get_values_on(src_line)
-mu_slice = mu.get_values_on(src_line)
-
 # setup, build the system, and solve
-mode = emopt.modes.Mode_TE(wlen, dy, eps_slice, mu_slice, n0=n1, neigs=4)
+mode = emopt.modes.ModeTE(wlen, eps, mu, src_line, n0=n1, neigs=4)
 mode.build()
 mode.solve()
 

@@ -35,12 +35,12 @@ def Hx_Gauss(x, x0, w0, theta, wavelength, n):
     mu0 = 4*pi*1e-7
     c = 3e8
 
-    Hxm = Ez_Gauss(x, x0, w0, theta, wavelength, n) * np.cos(theta) / (mu0 * c / n)
-    return Hxm * 377
+    Hxm = Ez_Gauss(x, x0, w0, theta, wavelength, n) * np.cos(theta) * n
+    return Hxm 
 
 def Hy_Gauss(x, x0, w0, theta, wavelength, n):
     mu0 = 4*pi*1e-7
     c = 3e8
 
-    Hym = -1*Ez_Gauss(x, x0, w0, theta, wavelength, n) * np.sin(theta) / (mu0 * c / n)
-    return Hym * 377
+    Hym = -1*Ez_Gauss(x, x0, w0, theta, wavelength, n) * np.sin(theta) * n
+    return Hym

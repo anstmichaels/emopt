@@ -47,18 +47,16 @@ c_complex_1D_p = ndpointer(np.complex128, ndim=1, flags='C')
 c_double_p = ndpointer(np.double, ndim=1, flags='C')
 
 #####################################################################################
-# Material configuration 
+# Material2D configuration 
 #####################################################################################
-libGrid.Material2D_get_value_real.argtypes = [c_void_p, c_double, c_double]
-libGrid.Material2D_get_value_real.restype = c_double
-libGrid.Material2D_get_value_imag.argtypes = [c_void_p, c_double, c_double]
-libGrid.Material2D_get_value_imag.restype = c_double
+libGrid.Material2D_get_value.argtypes = [c_void_p, c_complex_1D_p, c_double, c_double]
+libGrid.Material2D_get_value.restype = None
 libGrid.Material2D_get_values.argtypes = [c_void_p, c_int, c_int, c_int, c_int,
                                           c_complex_1D_p]
 libGrid.Material2D_get_values.restype = None
 
 ####################################################################################
-# GridMaterial configuration
+# GridMaterial2D configuration
 ####################################################################################
 libGrid.GridMaterial2D_new.argtypes = [c_int, c_int, c_complex_2D_p]
 libGrid.GridMaterial2D_new.restype = c_void_p
@@ -72,7 +70,7 @@ libGrid.GridMaterial2D_get_N.argtypes = [c_void_p]
 libGrid.GridMaterial2D_get_N.restype = c_int
 
 ####################################################################################
-# StructuredMaterial configuration
+# StructuredMaterial2D configuration
 ####################################################################################
 libGrid.StructuredMaterial2D_new.argtypes = [c_double, c_double, c_double, c_double]
 libGrid.StructuredMaterial2D_new.restype = c_void_p
@@ -151,7 +149,7 @@ libGrid.Polygon_set_point.argtypes = [c_void_p, c_double, c_double, c_int]
 libGrid.Polygon_set_point.restype = None
 
 ####################################################################################
-# ConstantMaterial configuration
+# ConstantMaterial2D configuration
 ####################################################################################
 libGrid.ConstantMaterial2D_new.argtypes = [c_double, c_double]
 libGrid.ConstantMaterial2D_new.restype = c_void_p
@@ -161,6 +159,41 @@ libGrid.ConstantMaterial2D_get_material_real.argtypes = [c_void_p]
 libGrid.ConstantMaterial2D_get_material_real.restype = None
 libGrid.ConstantMaterial2D_get_material_imag.argtypes = [c_void_p]
 libGrid.ConstantMaterial2D_get_material_imag.restype = None
+
+#####################################################################################
+# Material3D configuration 
+#####################################################################################
+libGrid.Material3D_get_value.argtypes = [c_void_p, c_complex_1D_p, c_double,
+                                         c_double, c_double]
+libGrid.Material3D_get_value.restype = None
+libGrid.Material3D_get_values.argtypes = [c_void_p, c_complex_1D_p, c_int, c_int, c_int, c_int,
+                                          c_int, c_int, c_double, c_double,
+                                          c_double]
+libGrid.Material3D_get_values.restype = None
+
+####################################################################################
+# ConstantMaterial3D configuration
+####################################################################################
+libGrid.ConstantMaterial3D_new.argtypes = [c_double, c_double]
+libGrid.ConstantMaterial3D_new.restype = c_void_p
+libGrid.ConstantMaterial3D_set_material.argtypes = [c_void_p, c_double, c_double]
+libGrid.ConstantMaterial3D_set_material.restype = None
+libGrid.ConstantMaterial3D_get_material_real.argtypes = [c_void_p]
+libGrid.ConstantMaterial3D_get_material_real.restype = None
+libGrid.ConstantMaterial3D_get_material_imag.argtypes = [c_void_p]
+libGrid.ConstantMaterial3D_get_material_imag.restype = None
+
+####################################################################################
+# StructuredMaterial3D configuration
+####################################################################################
+libGrid.StructuredMaterial3D_new.argtypes = [c_double, c_double, c_double,
+                                             c_double, c_double, c_double]
+libGrid.StructuredMaterial3D_new.restype = c_void_p
+libGrid.StructuredMaterial3D_delete.argtypes = [c_void_p]
+libGrid.StructuredMaterial3D_delete.restype = None
+libGrid.StructuredMaterial3D_add_primitive.argtypes = [c_void_p, c_void_p,
+                                                       c_double, c_double]
+libGrid.StructuredMaterial3D_add_primitive.restype = None
 
 ####################################################################################
 # Misc
@@ -205,10 +238,10 @@ class Material2D(object):
         complex128
             The complex material value at the desired location.
         """
-        a = libGrid.Material2D_get_value_real(self._object, x, y)
-        b = libGrid.Material2D_get_value_imag(self._object, x, y)
+        value = np.array([0], dtype=np.complex128)
+        libGrid.Material2D_get_value(self._object, value, x, y)
 
-        return a + 1j*b
+        return value
 
     def get_values(self, k1, k2, j1, j2, arr=None):
         """Get the values of the material distribution within a set of array
@@ -249,7 +282,7 @@ class Material2D(object):
 
         return arr
 
-    def get_values_on(self, domain):
+    def get_values_in(self, domain, squeeze=False, arr=None):
         """Get the values of the material distribution within a domain.
 
         Parameters
@@ -267,7 +300,9 @@ class Material2D(object):
         k1 = domain.k.start
         k2 = domain.k.stop
 
-        return self.get_values(k1, k2, j1, j2)
+        arr = self.get_values(k1, k2, j1, j2, arr)
+        if(squeeze): return np.squeeze(arr)
+        else: return arr
 
 class ConstantMaterial2D(Material2D):
     """A uniform constant material.
@@ -716,16 +751,297 @@ class Polygon(MaterialPrimitive):
         self._value = mat
 
 class StructuredMaterial2D(Material2D):
+    """Create a 2D material consisting of one or more primitive shapes
+    (rectangles, polyongs, etc)
 
+    Notes
+    -----
+    When used for defining the material distribution for a simulation, the
+    dimensions supplied will typically match the dimensions of the simulation.
+
+    Parameters
+    ----------
+    w : float
+        The width of the underlying grid.
+    h : float
+        The height of the underlying grid.
+    dx : float
+        The grid spacing of the underlying grid in the x direction.
+    dy : float
+        The grid spacing of the underlying grid in the y direction.
+
+    Attributes
+    ----------
+    primitives : list
+        The list of primitives used to define the material distribution.
+    """
     def __init__(self, w, h, dx, dy):
         self._object = libGrid.StructuredMaterial2D_new(w, h, dx, dy)
+        self._primitives = []
+
+    @property
+    def primitives(self):
+        return self._primitives
+
+    @primitives.setter
+    def primitive(self):
+        warning_message('The primitive list cannot be modified in this way.',
+                        'emopt.grid')
 
     def __del__(self):
         libGrid.StructuredMaterial2D_delete(self._object)
 
     def add_primitive(self, prim):
+        """Add a primitive to the StructuredMaterial.
+
+        This could be an emopt.grid.Rectangle, emopt.grid.Polygon,
+        etc--anything that extends emopt.grid.MaterialPrimitive.
+
+        Parameters
+        ----------
+        prim : MaterialPrimitive
+            The MaterialPrimitive to add.
+        """
         libGrid.StructuredMaterial2D_add_primitive(self._object, prim._object)
+        self._primitives.append(prim)
 
 def row_wise_A_update(eps, mu, ib, ie, M, N, x1, x2, y1, y2, vdiag):
     libGrid.row_wise_A_update(eps._object, mu._object, ib, ie, M, N, x1, x2, y1, y2, vdiag)
     return vdiag
+
+class Material3D(object):
+    """Define a general interface for 3D Material distributions.
+
+    Methods
+    -------
+    get_value(self, x, y, z)
+        Get the value of the material distribution at (x,y,z)
+    get_values(self, k1, k2, j1, j2, i1, i2, arr=None)
+        Get the values of the material distribution within a set of array
+        indicesa set of array indices.
+    get_values_on(self, domain)
+        Get the values of the material distribution within a domain.
+    """
+
+    def __init__(self):
+        self._object = None
+
+    def get_value(self, x, y, z):
+        """Get the value of the material distribution at (x,y,z).
+
+        Parameters
+        ----------
+        x : int or float
+            The (fractional) x index.
+        y : int or float
+            The (fractional) y index.
+        z : int or float
+            The (fractional) z index
+
+        Returns
+        -------
+        complex128
+            The complex material value at the desired location.
+        """
+        value = np.array([0], dtype=np.complex128)
+        libGrid.Material3D_get_value(self._object, value, x, y, z)
+
+        return value
+
+    def get_values(self, k1, k2, j1, j2, i1, i2, sx=0, sy=0, sz=0, arr=None):
+        """Get the values of the material distribution within a set of array
+        indicesa set of array indices.
+
+        Parameters
+        ----------
+        k1 : int
+            The lower integer bound on x of the desired region
+        k2 : int
+            The upper integer bound on x of the desired region
+        j1 : int
+            The lower integer bound on y of the desired region
+        j2 : int
+            The upper integer bound on y of the desired region
+        i1 : int
+            The lower integer bound on y of the desired region
+        i2 : int
+            The upper integer bound on y of the desired region
+        arr : numpy.ndarray (optional)
+            The array with dimension (m2-m1)x(n2-n1) with type np.complex128
+            which will store the retrieved material distribution. If None, a
+            new array will be created. (optional = None)
+
+        Returns
+        -------
+        numpy.ndarray
+            The retrieved complex material distribution.
+        """
+        Nx = k2-k1
+        Ny = j2-j1
+        Nz = i2-i1
+
+        if(type(arr) == type(None)):
+            arr = np.zeros(Nx*Ny*Nz, dtype=np.complex128)
+        else:
+            arr = np.ravel()
+
+        libGrid.Material3D_get_values(self._object, arr, k1, k2, j1, j2, i1,
+                                      i2, sx, sy, sz)
+
+        # This might result in an expensive copy operation, unfortunately
+        arr = np.reshape(arr, [Nz, Ny, Nx])
+
+        return arr
+
+    def get_values_in(self, domain, sx=0, sy=0, sz=0, arr=None, squeeze=False):
+        """Get the values of the material distribution within a domain.
+
+        Parameters
+        ----------
+        domain : emopt.misc.DomainCoordinates
+            The domain in which the material distribution is retrieved.
+        sx : float (optional)
+            The partial index shift in the x direction
+        sy : float (optional)
+            The partial index shift in the y direction
+        sz : float (optional)
+            The partial index shift in the z direction
+        arr : np.ndarray (optional)
+            The array in which the retrieved material distribution is stored.
+            If None, a new array is instantiated (default = None)
+        squeeze : bool (optional)
+            If True, eliminate length-1 dimensions from the resulting array.
+            This only affects 1D and 2D domains. (default = False)
+
+        Returns
+        -------
+        numpy.ndarray
+            The retrieved material distribution which lies in the domain.
+        """
+        i1 = domain.i.start
+        i2 = domain.i.stop
+        j1 = domain.j.start
+        j2 = domain.j.stop
+        k1 = domain.k.start
+        k2 = domain.k.stop
+
+        vals = self.get_values(k1, k2, j1, j2, i1, i2, sx, sy, sz, arr)
+
+        if(squeeze): return np.squeeze(vals)
+        else: return vals
+
+class ConstantMaterial3D(Material3D):
+    """A uniform constant 3D material.
+
+    Parameters
+    ----------
+    value : complex
+        The constant material value.
+
+    Attributes
+    ----------
+    material_value : complex
+        The constant material value
+    """
+    def __init__(self, value):
+        self._material_value = value
+        self._object = libGrid.ConstantMaterial3D_new(value.real, value.imag)
+
+    @property
+    def material_value(self):
+        return self._material_value
+
+    @material_value.setter
+    def material_value(self, new_value):
+        libGrid.ConstantMaterial3D_set_material(self._object,
+                                              new_value.real,
+                                              new_value.imag)
+        self._material_value = new_value
+
+class StructuredMaterial3D(Material3D):
+    """Create a 3D material consisting of one or more primitive shapes
+    (rectangles, polygons, etc) which thickness along z.
+
+    Currently StructuredMaterial3D only supports layered slab structures.
+
+    Notes
+    -----
+    When used for defining the material distribution for a simulation, the
+    dimensions supplied will typically match the dimensions of the simulation.
+
+    Parameters
+    ----------
+    X : float
+        The x width of the underlying grid.
+    Y : float
+        The y width of the underlying grid.
+    Z : float
+        The z width of the underlying grid.
+    dx : float
+        The grid spacing of the underlying grid in the x direction.
+    dy : float
+        The grid spacing of the underlying grid in the y direction.
+    dz : float
+        The grid spacing of the underlying grid in the z direction.
+
+    Attributes
+    ----------
+    primitives : list
+        The list of primitives used to define the material distribution.
+    """
+    def __init__(self, X, Y, Z, dx, dy, dz):
+        self._object = libGrid.StructuredMaterial3D_new(X, Y, Z, dx, dy, dz)
+        self._primitives = []
+        self._zmins = []
+        self._zmaxs = []
+
+    @property
+    def primitives(self):
+        return self._primitives
+
+    @primitives.setter
+    def primitive(self):
+        warning_message('The primitive list cannot be modified in this way.',
+                        'emopt.grid')
+
+    @property
+    def zmins(self):
+        return self._zmins
+
+    @zmins.setter
+    def zmins(self):
+        warning_message('The list of minimum z coordinates cannot be changed in this way.',
+                        'emopt.grid')
+
+    @property
+    def zmaxs(self):
+        return self._zmaxs
+
+    @zmaxs.setter
+    def zmaxs(self):
+        warning_message('The list of maximum z coordinates cannot be changed in this way.',
+                        'emopt.grid')
+
+    def __del__(self):
+        libGrid.StructuredMaterial3D_delete(self._object)
+
+    def add_primitive(self, prim, z1, z2):
+        """Add a primitive to the StructuredMaterial.
+
+        This could be an emopt.grid.Rectangle, emopt.grid.Polygon,
+        etc--anything that extends emopt.grid.MaterialPrimitive.
+
+        Parameters
+        ----------
+        prim : MaterialPrimitive
+            The MaterialPrimitive to add.
+        z1 : float
+            The minimum z-coordinate of the primitive to add.
+        z2 : float
+            The maximum z-coordinate of the primitive to add.
+        """
+        self._primitives.append(prim)
+        self._zmins.append(z1)
+        self._zmaxs.append(z2)
+        libGrid.StructuredMaterial3D_add_primitive(self._object, prim._object,
+                                                  z1, z2)

@@ -27,16 +27,29 @@ wavelength = 1.55
 ####################################################################################
 # Define the material distributions
 ####################################################################################
-eps = np.ones(N, dtype=np.complex128)*1.444**2
-mu = np.ones(N, dtype=np.complex128)
+w_wg_out = 2.0
+w_wg_in = 0.4
 
-# Setup a waveguide by inserting values into eps
-# Geometry is represented simply as an array of values. The physical distance
-# between values in the array is given by dy.
-w_wg = 2.0
-x = np.arange(N)*dy
-eps[(x <= w_wg/2)] = 2.0**2
-eps[(x <= w_wg/6)] = 2.8**2
+# Define rectangles for the waveguide structure and cladding
+wg_out = emopt.grid.Rectangle(0, 0, 1.0, w_wg_out)
+wg_out.layer = 2; wg_out.material_value = 2.5**2
+
+wg_in = emopt.grid.Rectangle(0, 0, 1.0, w_wg_in)
+wg_in.layer = 1; wg_in.material_value = 3.45**2
+
+bg = emopt.grid.Rectangle(0, 0, 1.0, 2*H)
+bg.layer = 3; bg.material_value = 1.444**2
+
+# Create a structured material which is just the ensemble of rectangles created above
+# A slice from this StructuredMaterial will be used in the mode calculation
+eps = emopt.grid.StructuredMaterial2D(1.0, H, dy, dy) # W and dx do not matter much
+eps.add_primitive(wg_out); eps.add_primitive(wg_in); eps.add_primitive(bg)
+
+mu = emopt.grid.ConstantMaterial2D(1.0)
+
+# define a line along which a slice of the material distribution will be taken
+# The modes will be solved for the slice.
+mode_line = emopt.misc.DomainCoordinates(0.0, 0.0, 0, H, 0.0, 0.0, 1.0, dy, 1.0)
 
 ####################################################################################
 # setup the mode solver
@@ -48,7 +61,7 @@ eps[(x <= w_wg/6)] = 2.8**2
 # eigenvectors that we find.  We thus solve for more vectors than we really
 # need to be sure that we can pick out the desired modes.
 neigs = 8
-modes = emopt.modes.Mode_TE(wavelength, dy, eps, mu, n0=3.0, neigs=neigs)
+modes = emopt.modes.ModeTE(wavelength,eps, mu, mode_line, n0=3.0, neigs=neigs)
 
 # set the boundary condition type. 'E' refers to electric field symmetry on the
 # bottom y=0 boundary (i.e. the electric field is mirrored across the
@@ -78,6 +91,8 @@ if(NOT_PARALLEL):
     for j in range(3):
         i = modes.find_mode_index(j*2)
         Ez = modes.get_field_interp(i, 'Ez')
+        x = np.linspace(0, H, N)
+        eps_arr = eps.get_values_in(mode_line, squeeze=True)
 
         ax = axes[j]
         #ax = f.add_subplot(3,1,j+1)
@@ -86,7 +101,7 @@ if(NOT_PARALLEL):
         ax.set_xlim([x[0], x[-1]])
 
         ax2 = ax.twinx()
-        ax2.plot(x, np.sqrt(eps.real), 'r--', linewidth=1, alpha=0.5)
+        ax2.plot(x, np.sqrt(eps_arr.real), 'r--', linewidth=1, alpha=0.5)
         ax2.set_ylabel('Refractive Index')
 
     axes[2].set_xlabel('x [um]', fontsize=12)

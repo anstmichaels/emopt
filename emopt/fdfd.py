@@ -79,6 +79,22 @@ __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
+class FieldComponent:
+    Ex = 'Ex'
+    Ey = 'Ey'
+    Ez = 'Ez'
+    Hx = 'Hx'
+    Hy = 'Hy'
+    Hz = 'Hz'
+
+class SourceComponent:
+    Jx = 'Jx'
+    Jy = 'Jy'
+    Jz = 'Jz'
+    Mx = 'Mx'
+    My = 'My'
+    Mz = 'Mz'
+
 class FDFD(object):
     """Finite difference frequency domain solver.
 
@@ -1860,17 +1876,14 @@ class FDFD_3D(FDFD):
         Grid spacing in the y direction.
     wavelength : float
         Vacuum wavelength of EM fields.
-    solver : str
-        The type of solver to use. The possible options are 'direct' (direct LU
-        solver), 'iterative' (unpreconditioned iterative solver), 'iterative_lu'
-        (iterative solver with LU preconditioner, or 'auto'. (default = 'auto')
-    ksp_solver : str
-        The type of Krylov subspace solver to use. See the petsc4py documentation for
-        the possible types. Note: this flag is ignored if 'direct' or 'auto' is
-        chosen for the solver parameter. (default = 'gmres')
-    verbose : boolean (Optional)
-        Indicates whether or not progress info should be printed on the master
-        node. (default=True)
+    mglevels : int
+        The number of levels to use in the multigrid prevonditioner. If running
+        very coarse resolutions, this value should be decreased (to 2). If
+        running a very high resolution simulation, this value should be
+        increased (to 4 or more depending on resolution).
+    rtol : float
+        The relative tolerance used to terminate the internal iterative solver.
+        Smaller number = higher accuracy solution.
 
     Attributes
     ----------
@@ -1910,8 +1923,7 @@ class FDFD_3D(FDFD):
 
     """
 
-    def __init__(self, X, Y, Z, dx, dy, dz, wavelength, solver='iterative',
-                 rtol=1e-8):
+    def __init__(self, X, Y, Z, dx, dy, dz, wavelength, mglevels=3, rtol=1e-8):
         super(FDFD_3D, self).__init__()
 
         self._dx = dx
@@ -1940,14 +1952,16 @@ class FDFD_3D(FDFD):
         self._bc = ['0', '0', '0']
 
         # PML parameters -- these can be changed
-        self.pml_sigma = 1.0 * wavelength
+        self.pml_sigma = 1.0*wavelength
         self.pml_power = 2.0
 
         # dx and dy are the only dimension rigorously enforced
-        self._Nx = int(np.ceil(X/dx) + 1)
-        self._Ny = int(np.ceil(Y/dy) + 1)
-        self._Nz = int(np.ceil(Z/dz) + 1)
-        self._nunks = 6*self._Nx*self._Ny*self._Nz
+        Nx = int(np.ceil(X/dx) + 1); self._Nx = Nx
+        Ny = int(np.ceil(Y/dy) + 1); self._Ny = Ny
+        Nz = int(np.ceil(Z/dz) + 1); self._Nz = Nz
+        self._bsize = 6
+        self._nunks = self._bsize*Nx*Ny*Nz
+        self._nunks2h = self._bsize*int(Nz/2)*int(Ny/2)*int(Nx/2)
 
         # The dimensions of the simulation region snap to the nearest grid cell
         self._X = (self._Nx - 1) * dx
@@ -1957,11 +1971,68 @@ class FDFD_3D(FDFD):
         self._eps = None
         self._mu = None
 
+        # Get PETSc options database
+        optDB = PETSc.Options()
+
         # The size of the system matrix A is given by the number of unknowns (6
         # field components * Nx*Ny*Nz)
         self._A.setSizes([self._nunks, self._nunks])
         self._A.setType('aij')
         self._A.setUp()
+
+        # We now prepare system matrices for coarser levels
+        self._As = []
+        self._Rst = []
+        self._mglevels = mglevels
+
+        for l in range(0,mglevels-1):
+            divl = 2*(mglevels-l-1)
+            divlm1 = 2*(mglevels-l)
+            if(divl == 0): divl = 1
+
+            nunksl = self._bsize * int(Nx/divl) * int(Ny/divl) * int(Nz/divl)
+            nunkslm1 = self._bsize * int(Nx/divlm1) * int(Ny/divlm1) * int(Nz/divlm1)
+
+            Al = PETSc.Mat()
+            Al.create(PETSc.COMM_WORLD)
+            Al.setSizes([nunksl, nunksl])
+            Al.setType('aij')
+            Al.setUp()
+
+            self._As.append(Al)
+
+        for l in range(1, mglevels):
+            divl = 2*(mglevels-l-1)
+            divlm1 = 2*(mglevels-l)
+            if(divl == 0): divl = 1
+
+            nunksl = self._bsize * int(Nx/divl) * int(Ny/divl) * int(Nz/divl)
+            nunkslm1 = self._bsize * int(Nx/divlm1) * int(Ny/divlm1) * int(Nz/divlm1)
+
+            Rst = PETSc.Mat()
+            Rst.create(PETSc.COMM_WORLD)
+            Rst.setSizes([nunkslm1, nunksl])
+            Rst.setType('aij')
+            Rst.setPreallocationNNZ([8,8])
+            Rst.setUp()
+
+            self._Rst.append(Rst)
+
+
+        self._As.append(self._A)
+        self._AsT = [None for i in range(len(self._As))]
+
+        #self._Interp = PETSc.Mat()
+        #self._Interp.create(PETSc.COMM_WORLD)
+        #self._Interp.setSizes([self._nunks, self._nunks2h])
+        #self._Interp.setType('aij')
+        #self._Interp.setPreallocationNNZ([8,8])
+        #self._Interp.setUp()
+
+        # Build the resitriction and interpolation matrices
+        for l in range(1,mglevels):
+            self.buildRst(l)
+        #self.buildInt()
 
         #obtain solution and RHS vectors
         x, b = self._A.getVecs()
@@ -1987,9 +2058,46 @@ class FDFD_3D(FDFD):
         #self.ksp_iter.setGMRESRestart(10)
         self.ksp_iter.setTolerances(rtol=rtol)
 
-        #self._A.setBlockSize(6)
-        #pc = self.ksp_iter.getPC()
-        #pc.setType('bjacobi')
+        # Setup multigrid preconditioner
+        ## Basic setup
+        pc = self.ksp_iter.getPC()
+        pc.setType('mg')
+        optDB['-pc_mg_levels'] = mglevels
+        pc.setFromOptions()
+
+        pc.setMGType(PETSc.PC.MGType.MULTIPLICATIVE) # Multiplicative
+        pc.setMGCycleType(PETSc.PC.MGCycleType.W) # V cycle
+
+        ## Setup coarse solver
+        ksp_crs = pc.getMGCoarseSolve()
+        ksp_crs.setType('preonly')
+        pc_crs = ksp_crs.getPC()
+        pc_crs.setType('lu')
+        pc_crs.setFactorSolverPackage('mumps')
+        self._ksp_crs = ksp_crs
+
+        ## Setup Down smoothers
+        for l in range(1,mglevels):
+            ksp_smooth = pc.getMGSmootherDown(l)
+            ksp_smooth.setType('gmres')
+            ksp_smooth.setTolerances(max_it=8)
+            pc_smooth = ksp_smooth.getPC()
+            pc_smooth.setType('mat')
+            #pc_smooth.setFromOptions()
+
+        ## Setup Up Smoothers
+        for l in range(1,mglevels):
+            ksp_smooth = pc.getMGSmootherUp(l)
+            ksp_smooth.setType('gmres')
+            ksp_smooth.setTolerances(max_it=4)
+            pc_smooth = ksp_smooth.getPC()
+            pc_smooth.setType('mat')
+            #pc_smooth.setFromOptions()
+
+        ## Set restriction and interpolation
+        for l in range(1,mglevels):
+            pc.setMGRestriction(l, self._Rst[l-1])
+            pc.setMGInterpolation(l, self._Rst[l-1])
 
         # create a direct linear solver
         self.ksp_dir = PETSc.KSP()
@@ -2134,29 +2242,25 @@ class FDFD_3D(FDFD):
         ax3.plot(ys, np.imag(pml_z), 'r')
         plt.show()
 
-    def build(self):
-        """(Re)Build the system matrix.
+    def buildA(self, l):
+        A = self._As[l]
 
-        Maxwell's equations are solved by compiling them into a linear system
-        of the form :math:`Ax=b`. Here, we build up the structure of A which contains
-        the curl operators, mateiral parameters, and boundary conditions.
+        ib, ie = A.getOwnershipRange()
 
-        This function must be called at least once after the material
-        distributions of the system have been defined (through a call to
-        :func:`set_materials`).
-
-        Raises
-        ------
-        Exception
-            If the material distributions of the simulation have not been set
-            prior to calling this function.
-        """
-        # store local versions of class variables for a bit of speedup
-        A = self._A
-
+        # for l > 0, we will generate A for a coarser version of the problem
+        # Coarsening occurs in factors of 2. We must modify Nx, Ny, Nz
+        # accordingly
         Nx = self._Nx
         Ny = self._Ny
         Nz = self._Nz
+
+        divl = 2*(self._mglevels-l-1)
+        if(divl == 0): divl = 1
+
+        Nx = int(Nx/divl)
+        Ny = int(Ny/divl)
+        Nz = int(Nz/divl)
+
         NxNy = Nx*Ny
         Ngrid = Nx*Ny*Nz
 
@@ -2164,28 +2268,34 @@ class FDFD_3D(FDFD):
         mu = self._mu
         bc = self._bc
 
-        odx = self._R / self._dx
-        ody = self._R / self._dy
-        odz = self._R / self._dz
+        # similarly, dx, dy, dz must be modified
+        dx = self._X / (Nx-1)
+        dy = self._Y / (Ny-1)
+        dz = self._Z / (Nz-1)
+
+        odx = self._R / dx
+        ody = self._R / dy
+        odz = self._R / dz
 
         if(self._eps == None or self._mu == None):
             raise Exception('The material distributions of the system must be \
                             initialized prior to building the system matrix.')
 
-        if(self.verbose and NOT_PARALLEL):
-            info_message('Building system matrix...')
-
         ig = 0
         component = 0
         x = 0; y = 0; z = 0
         Nc = 6 # 6 field components
-        for i in xrange(self.ib, self.ie):
+        for i in xrange(ib, ie):
 
             ig = int(i/Nc)
             component = int(i - 6*ig)
             z = int(ig/NxNy)
             y = int((ig-z*NxNy)/Nx)
             x = ig - z*NxNy - y*Nx
+
+            xh = x*divl + divl/2
+            yh = y*divl + divl/2
+            zh = z*divl + divl/2
 
             if(component == 0): # Jx row
                 jEx = i
@@ -2195,15 +2305,15 @@ class FDFD_3D(FDFD):
                 jHy1 = ig*Nc + 4
 
                 # Ex
-                A[i, jEx] = 1j*eps.get_value(x,y,z) # todo: partial grid steps
+                A[i, jEx] = 1j*eps.get_value(xh+0.5*divl,yh,zh-0.5*divl) # todo: partial grid steps
 
                 # Hz
-                pml_y = self.__pml_y(y)
+                pml_y = self.__pml_y(yh)
                 A[i, jHz1] = ody * pml_y
                 if(y > 0): A[i, jHz0] = -1*ody * pml_y
 
                 # Hy
-                pml_z = self.__pml_z(z)
+                pml_z = self.__pml_z(zh)
                 A[i, jHy1] = -1 * odz * pml_z
                 if(z > 0): A[i, jHy0] = odz * pml_z
 
@@ -2235,15 +2345,15 @@ class FDFD_3D(FDFD):
                 jHz1 = ig*Nc + 5
 
                 # Ey
-                A[i, jEy] = 1j * eps.get_value(x,y,z)
+                A[i, jEy] = 1j * eps.get_value(xh,yh+0.5*divl,zh-0.5*divl)
 
                 # Hx
-                pml_z = self.__pml_z(z)
+                pml_z = self.__pml_z(zh)
                 A[i, jHx1] = odz * pml_z
                 if(z > 0): A[i,jHx0] = -1*odz * pml_z
 
                 # Hz
-                pml_x = self.__pml_x(x)
+                pml_x = self.__pml_x(xh)
                 A[i, jHz1] = -1*odx * pml_x
                 if(x > 0): A[i, jHz0] = odx * pml_x
 
@@ -2275,15 +2385,15 @@ class FDFD_3D(FDFD):
                 jHx1 = ig*Nc + 3
 
                 # Ez
-                A[i, jEz] = 1j * eps.get_value(x,y,z)
+                A[i, jEz] = 1j * eps.get_value(xh,yh,zh)
 
                 # Hy
-                pml_x = self.__pml_x(x)
+                pml_x = self.__pml_x(xh)
                 A[i, jHy1] = odx * pml_x
                 if(x > 0): A[i, jHy0] = -1*odx * pml_x
 
                 # Hx
-                pml_y = self.__pml_y(y)
+                pml_y = self.__pml_y(yh)
                 A[i, jHx1] = -1*ody * pml_y
                 if(y > 0): A[i, jHx0] = ody * pml_y
 
@@ -2315,15 +2425,15 @@ class FDFD_3D(FDFD):
                 jEy1 = (ig+NxNy)*Nc + 1
 
                 # Hx
-                A[i, jHx] = -1j * mu.get_value(x,y,z)
+                A[i, jHx] = -1j * mu.get_value(xh,yh+0.5*divl,zh)
 
                 # Ez
-                pml_y = self.__pml_y(y)
+                pml_y = self.__pml_y(yh)
                 if(y < Ny-1): A[i, jEz1] = ody * pml_y
                 A[i, jEz0] = -1*ody * pml_y
 
                 # Ey
-                pml_z = self.__pml_z(z)
+                pml_z = self.__pml_z(zh)
                 if(z < Nz-1): A[i, jEy1] = -1*odz * pml_z
                 A[i, jEy0] = odz * pml_z
 
@@ -2355,15 +2465,15 @@ class FDFD_3D(FDFD):
                 jEz1 = (ig+1)*Nc + 2
 
                 # Hy
-                A[i, jHy] = -1j*mu.get_value(x,y,z)
+                A[i, jHy] = -1j*mu.get_value(xh+0.5*divl,yh,zh)
 
                 # Ex
-                pml_z = self.__pml_z(z)
+                pml_z = self.__pml_z(zh)
                 if(z < Nz-1): A[i, jEx1] = odz * pml_z
                 A[i, jEx0] = -1*odz * pml_z
 
                 # Ez
-                pml_x = self.__pml_x(x)
+                pml_x = self.__pml_x(xh)
                 if(x < Nx-1): A[i, jEz1] = -1*odx * pml_x
                 A[i, jEz0] = odx * pml_x
 
@@ -2395,15 +2505,15 @@ class FDFD_3D(FDFD):
                 jEx1 = (ig+Nx)*Nc
 
                 # Hz
-                A[i, jHz] = -1j * mu.get_value(x,y,z)
+                A[i, jHz] = -1j * mu.get_value(xh+0.5*divl,yh+0.5*divl,zh-0.5*divl)
 
                 # Ey
-                pml_x = self.__pml_x(x)
+                pml_x = self.__pml_x(xh)
                 if(x < Nx-1): A[i, jEy1] = odx * pml_x
                 A[i, jEy0] = -1*odx * pml_x
 
                 # Ex
-                pml_y = self.__pml_y(y)
+                pml_y = self.__pml_y(yh)
                 if(y < Ny-1): A[i, jEx1] = -1*ody * pml_y
                 A[i, jEx0] = ody * pml_y
 
@@ -2432,7 +2542,89 @@ class FDFD_3D(FDFD):
         A.assemblyBegin()
         A.assemblyEnd()
 
+
+
         self._built = True
+
+    def build(self):
+        """(Re)Build the system matrix.
+
+        Maxwell's equations are solved by compiling them into a linear system
+        of the form :math:`Ax=b`. Here, we build up the structure of A which contains
+        the curl operators, mateiral parameters, and boundary conditions.
+
+        This function must be called at least once after the material
+        distributions of the system have been defined (through a call to
+        :func:`set_materials`).
+
+        Raises
+        ------
+        Exception
+            If the material distributions of the simulation have not been set
+            prior to calling this function.
+        """
+        if(self.verbose and NOT_PARALLEL):
+            info_message('Building system matrices...')
+
+        for l in range(0,self._mglevels):
+            self.buildA(l)
+
+            self._AsT[l] = self._As[l].duplicate(copy=True)
+            self._As[l].transpose(self._AsT[l])
+            self._AsT[l].conjugate()
+
+    def buildRst(self, l):
+        R = self._Rst[l-1]
+        bsize = self._bsize
+
+        ib, ie = R.getOwnershipRange()
+
+        divl = 2*(self._mglevels-l-1)
+        divlm1 = 2*(self._mglevels-l)
+        if(divl == 0): divl = 1
+
+        Nx = int(self._Nx/divl)
+        Ny = int(self._Ny/divl)
+        Nz = int(self._Nz/divl)
+        NxNy = Nx*Ny
+
+        Nxl = int(self._Nx/divlm1)
+        Nyl = int(self._Ny/divlm1)
+        Nzl = int(self._Nz/divlm1)
+        NxlNyl = Nxl*Nyl
+
+        alpha = 1.0/7.0
+
+        for i in xrange(ib,ie):
+            ig = int(i/bsize)
+            comp = int(i - bsize*ig)
+
+            z = int(ig/NxlNyl)
+            y = int((ig-z*NxlNyl)/Nxl)
+            x = ig - z*NxlNyl - y*Nxl
+
+            j = 2*(z*NxNy+y*Nx+x)*bsize
+
+            R[i, j+comp] = alpha
+
+            if(2*x<Nx-1):
+                R[i, j+comp+bsize] = 0.125
+            if(2*y<Ny-1):
+                R[i, j+comp+Nx*bsize] = 0.125
+            if(2*x<Nx-1 and 2*y<Ny-1):
+                R[i, j+comp+bsize+Nx*bsize] = 0.125
+            if(2*z<Nz-1):
+                R[i, j+comp+NxNy*bsize] = 0.125
+            if(2*z<Nz-1 and 2*x<Nx-1):
+                R[i, j+comp+NxNy*bsize+bsize] = 0.125
+            if(2*z<Nz-1 and 2*y<Ny-1):
+                R[i, j+comp+NxNy*bsize+Nx*bsize] = 0.125
+            if(2*z<Nz-1 and 2*y<Ny-1 and 2*x<Nx-1):
+                R[i, j+comp+NxNy*bsize+Nx*bsize+bsize] = 0.125
+
+        R.assemblyBegin()
+        R.assemblyEnd()
+
 
     def update(self):
         pass
@@ -2463,9 +2655,26 @@ class FDFD_3D(FDFD):
             ksp.setOperators(self._A, self._A)
             ksp.setFromOptions()
 
+            ksp_crs = self._ksp_crs
+            ksp_crs.setInitialGuessNonzero(True)
+            ksp_crs.setOperators(self._As[0], self._As[0])
+            ksp_crs.setFromOptions()
+
+            for l in range(1,self._mglevels):
+                ksp_smooth = ksp.getPC().getMGSmootherDown(l)
+                ksp_smooth.setInitialGuessNonzero(True)
+                ksp_smooth.setOperators(self._As[l], self._AsT[l])
+                ksp_smooth.setFromOptions()
+
+            for l in range(1,self._mglevels):
+                ksp_smooth = ksp.getPC().getMGSmootherUp(l)
+                ksp_smooth.setInitialGuessNonzero(True)
+                ksp_smooth.setOperators(self._As[l], self._AsT[l])
+                ksp_smooth.setFromOptions()
+
         elif(self._solver_type == 'direct'):
             ksp = self.ksp_dir
-            ksp.setOperators(self._A, self._A)
+            ksp.setOperators(self._M, self._M)
             ksp.setFromOptions()
 
         ksp.solve(self.b, self.x)

@@ -48,7 +48,7 @@ class Material2D {
 			 *
 			 * @return the complex material at position (x,y).
 			 */
-			virtual std::complex<double> get_value(int x, int y) = 0;
+			virtual std::complex<double> get_value(double x, double y) = 0;
 
             /* Get a block of values.
              */
@@ -86,7 +86,7 @@ class GridMaterial2D : public Material2D {
 			 *
 			 * @return the complex material value at (x,y)
 			 */
-			std::complex<double> get_value(int x, int y);
+			std::complex<double> get_value(double x, double y);
             void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
 
 			/* Assign a new grid as the <Material>
@@ -429,6 +429,8 @@ class StructuredMaterial2D : public Material2D {
 	private:
 		std::list<MaterialPrimitive*> _primitives;
 
+        std::complex<double> _value;
+
 		double _w,
 			   _h,
 			   _dx,
@@ -467,7 +469,6 @@ class StructuredMaterial2D : public Material2D {
 		 * @y the y index (row) of the material value
 		 * @return the complex material value at (x,y).  If no MaterialPrimitive exists at (x,y), 1.0 is returned.
 		 */
-		std::complex<double> get_value(int x, int y);
 		std::complex<double> get_value(double x, double y);
 
         void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
@@ -480,7 +481,7 @@ class StructuredMaterial2D : public Material2D {
 
 };
 
-/* A material distribution defined by a single constant value.
+/* A 2D material distribution defined by a single constant value.
  *
  * Use this for uniform materials.
  */
@@ -499,7 +500,7 @@ class ConstantMaterial2D : public Material2D {
 			 * @y The y index of the query
 			 * @return the complex material
 			 */
-			std::complex<double> get_value(int x, int y);
+			std::complex<double> get_value(double x, double y);
 
             /* Get a block of values.
              *
@@ -519,7 +520,7 @@ class ConstantMaterial2D : public Material2D {
              * @return the complex material value.
              */
             std::complex<double> get_material();
-}; // ConstantMaterial
+}; // ConstantMaterial2D
 
 /* Material class which provides the foundation for defining the system materials/structure.
  *
@@ -541,13 +542,56 @@ class Material3D {
 			 *
 			 * @return the complex material at position (x,y).
 			 */
-			virtual std::complex<double> get_value(int x, int y, int z) = 0;
+			virtual std::complex<double> get_value(double k, double j, double i) = 0;
 
             /* Get a block of values.
              */
-            virtual void get_values(ArrayXcd& grid, int i1, int i2, int j1, int j2, int k1, int k2) = 0;
+            virtual void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, 
+                                    int i1, int i2, double sx, double sy, double sz) = 0;
 			virtual ~Material3D() {};
 };
+
+/* A 3D material distribution defined by a single constant value.
+ *
+ * Use this for uniform materials.
+ */
+class ConstantMaterial3D : public Material3D {
+        private:
+            std::complex<double> _value;
+	
+		public:
+            ConstantMaterial3D(std::complex<double> value);
+
+			/* Query the material value at a point in real space.
+             *
+             * This will always return the same value
+             *
+			 * @x The x index of the query
+			 * @y The y index of the query
+			 * @return the complex material
+			 */
+			std::complex<double> get_value(double k, double j, double i);
+
+            /* Get a block of values.
+             *
+             * This just fills the provided array with a single value
+             */
+            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2,
+                            int i1, int i2, double sx, double sy, double sz);
+
+            /* Set the complex material value.
+             * @val the complex material value
+             */
+            void set_material(std::complex<double> val);
+
+            /* Get the complex material value.
+             *
+             * This function is redundant.
+             *
+             * @return the complex material value.
+             */
+            std::complex<double> get_material();
+}; // ConstantMaterial3D
 
 /* Define a 3D planar stack structure.
  *
@@ -557,7 +601,7 @@ class Material3D {
  * structures that have a slab-like construction (which is most common in the micro-
  * and nanoscale worlds).
  */
-class Structured3DMaterial : public Material3D {
+class StructuredMaterial3D : public Material3D {
 	private:
 		std::list<MaterialPrimitive*> _primitives;
         std::list<StructuredMaterial2D*> _layers;
@@ -568,7 +612,8 @@ class Structured3DMaterial : public Material3D {
 			   _Z,
 			   _dx,
 			   _dy,
-               _dz;
+               _dz,
+               _background;
 
 	public:
 
@@ -584,10 +629,10 @@ class Structured3DMaterial : public Material3D {
 		 * the corresponding FDFD object.  This is essential to mapping from real space to 
 		 * array indexing when constructing the system matrix.
 		 */
-		Structured3DMaterial(double X, double Y, double Z, double dx, double dy, double dz);
+		StructuredMaterial3D(double X, double Y, double Z, double dx, double dy, double dz);
 
 		//- Destructor
-		~Structured3DMaterial();
+		~StructuredMaterial3D();
 		
 		/* Add a primitive object to the Material.
 		 * @prim the primitive to add.
@@ -607,10 +652,12 @@ class Structured3DMaterial : public Material3D {
 		 * @y the y index (row) of the material value
 		 * @return the complex material value at (x,y).  If no MaterialPrimitive exists at (x,y), 1.0 is returned.
 		 */
-		std::complex<double> get_value(int k, int j, int i);
 		std::complex<double> get_value(double k, double j, double i);
 
-        void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, int i1, int i2);
+        void get_values(ArrayXcd& grid, int k1, int k2, 
+                                        int j1, int j2, 
+                                        int i1, int i2, 
+                                        double sx=0, double sy=0, double sz=0);
 
 };
 

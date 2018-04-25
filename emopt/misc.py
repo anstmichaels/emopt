@@ -16,6 +16,7 @@ __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
 # functions and variables useful for MPI stuff
+COMM = PETSc.COMM_WORLD.tompi4py()
 RANK = PETSc.COMM_WORLD.getRank()
 NOT_PARALLEL = (RANK == 0)
 
@@ -124,6 +125,24 @@ class DomainCoordinates(object):
         The slice along the y direction
     k : numpy.ndarray
         The slice along the x direction
+    Nx : int
+        The number of x indices in the domain
+    Ny : int
+        The number of y indices in the domain
+    Nz : int
+        The number of z indices in the domain
+    xspan : float
+        The physical size of the domain in the x direction
+    yspan : float
+        The physical size of the domain in the y direction
+    zspan : float
+        The physical size of the domain in the z direction
+    dx : float
+        The grid spacing in x direction
+    dy : float
+        The grid spacing in y direction
+    dz : float
+        The grid spacing in z direction
     """
 
     def __init__(self, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz):
@@ -144,6 +163,18 @@ class DomainCoordinates(object):
         klist = np.arange(k1, k2, 1, dtype=np.int)
         self._x = dx * klist.astype(np.double)
         self._k = slice(k1, k2)
+
+        self._Nx = k2 - k1
+        self._Ny = j2 - j1
+        self._Nz = i2 - i1
+
+        self._xspan = dx * (self._Nx-1)
+        self._yspan = dy * (self._Ny-1)
+        self._zspan = dz * (self._Nz-1)
+
+        self._dx = dx
+        self._dy = dy
+        self._dz = dz
 
 
     @property
@@ -193,6 +224,78 @@ class DomainCoordinates(object):
     @k.setter
     def k(self, value):
         warning_message('k cannot be reassigned in this way.', 'emopt.misc')
+
+    @property
+    def Nx(self):
+        return self._Nx
+
+    @property
+    def Ny(self):
+        return self._Ny
+
+    @property
+    def Nz(self):
+        return self._Nz
+
+    @Nx.setter
+    def Nx(self, value):
+        warning_message('Nx cannot be reassigned in this way.', 'emopt.misc')
+
+    @Ny.setter
+    def Ny(self, value):
+        warning_message('Ny cannot be reassigned in this way.', 'emopt.misc')
+
+    @Nz.setter
+    def Nz(self, value):
+        warning_message('Nz cannot be reassigned in this way.', 'emopt.misc')
+
+    @property
+    def xspan(self):
+        return self._xspan
+
+    @property
+    def yspan(self):
+        return self._xspan
+
+    @property
+    def zspan(self):
+        return self._zspan
+
+    @xspan.setter
+    def xspan(self, value):
+        warning_message('xspan cannot be reassigned in this way.', 'emopt.misc')
+
+    @yspan.setter
+    def yspan(self, value):
+        warning_message('yspan cannot be reassigned in this way.', 'emopt.misc')
+
+    @zspan.setter
+    def zspan(self, value):
+        warning_message('zspan cannot be reassigned in this way.', 'emopt.misc')
+
+    @property
+    def dx(self):
+        return self._dx
+
+    @property
+    def dy(self):
+        return self._dy
+
+    @property
+    def dz(self):
+        return self._dz
+
+    @dx.setter
+    def dx(self, value):
+        warning_message('dx cannot be reassigned in this way.', 'emopt.misc')
+
+    @dy.setter
+    def dy(self, value):
+        warning_message('dy cannot be reassigned in this way.', 'emopt.misc')
+
+    @dz.setter
+    def dz(self, value):
+        warning_message('dz cannot be reassigned in this way.', 'emopt.misc')
 
     def get_bounding_box(self):
         return [np.min(self._x), np.max(self._x), np.min(self._y),
@@ -273,3 +376,21 @@ class MathDummy(np.ndarray):
     def __index__(self): return 0
     def __getitem__(self, key): return self
     def __setitem__(self, key, value): return self
+
+def get_dark_cmaps():
+    """Generate dark-themed colormaps for eye-friendly visualization.
+
+    Returns
+    -------
+    tuple
+        Two matplotlib colormaps. The first color map is for +/- image data
+        while the second is intended for strictly positive valued images.
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+    field_cols=['#3d9aff', '#111111', '#ff3d63']
+    field_cmap=LinearSegmentedColormap.from_list('field_cmap', field_cols)
+
+    struct_cols=['#212730', '#bcccdb']
+    struct_cmap=LinearSegmentedColormap.from_list('struct_cmap', struct_cols)
+
+    return field_cmap, struct_cmap

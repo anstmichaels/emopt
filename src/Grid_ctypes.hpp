@@ -14,10 +14,9 @@ typedef struct struct_complex64 {
 extern "C" {
 
     ////////////////////////////////////////////////////////////////////////////////
-	// Material
+	// Material2D
 	////////////////////////////////////////////////////////////////////////////////
-	double Material2D_get_value_real(Material2D* mat, double x, double y);
-	double Material2D_get_value_imag(Material2D* mat, double x, double y);
+	void Material2D_get_value(Material2D* mat, complex64* val, double x, double y);
 
     void Material2D_get_values(Material2D* mat, int k1, int k2, int j1, int j2, complex64* arr);
 
@@ -31,7 +30,7 @@ extern "C" {
 	int GridMaterial2D_get_N(GridMaterial2D* mat);
 
 	////////////////////////////////////////////////////////////////////////////////
-	// StructuredMaterial
+	// StructuredMaterial2D
 	////////////////////////////////////////////////////////////////////////////////
 	StructuredMaterial2D* StructuredMaterial2D_new(double w, double h, double dx, double dy);
 	void StructuredMaterial2D_delete(StructuredMaterial2D* sm);
@@ -81,19 +80,37 @@ extern "C" {
 	void Polygon_set_material(Polygon* poly, double real, double imag);
 
 	////////////////////////////////////////////////////////////////////////////////
-	// ConstantMaterial
+	// ConstantMaterial2D
 	////////////////////////////////////////////////////////////////////////////////
     ConstantMaterial2D* ConstantMaterial2D_new(double real, double imag);
     void ConstantMaterial2D_set_material(ConstantMaterial2D* cm, double real, double imag);
 	double ConstantMaterial2D_get_material_real(ConstantMaterial2D* cm);
 	double ConstantMaterial2D_get_material_imag(ConstantMaterial2D* cm);
 
+    ////////////////////////////////////////////////////////////////////////////////
+	// Material3D
+	////////////////////////////////////////////////////////////////////////////////
+	void Material3D_get_value(Material3D* mat, complex64* val, double x, double y, double z);
+
+    void Material3D_get_values(Material3D* mat, complex64* arr, int k1, int k2,
+                                                                int j1, int j2, 
+                                                                int i1, int i2, 
+                                                                double sx, double sy, double sz);
+
+	////////////////////////////////////////////////////////////////////////////////
+	// ConstantMaterial3D
+	////////////////////////////////////////////////////////////////////////////////
+    ConstantMaterial3D* ConstantMaterial3D_new(double real, double imag);
+    void ConstantMaterial3D_set_material(ConstantMaterial3D* cm, double real, double imag);
+	double ConstantMaterial3D_get_material_real(ConstantMaterial3D* cm);
+	double ConstantMaterial3D_get_material_imag(ConstantMaterial3D* cm);
+
 	////////////////////////////////////////////////////////////////////////////////
 	// Structured3DMaterial
 	////////////////////////////////////////////////////////////////////////////////
-    Structured3DMaterial* Structured3DMaterial_new(double X, double Y, double Z, double dx, double dy, double dz);
-	void Structured3DMaterial_delete(Structured3DMaterial* sm);
-	void Structured3DMaterial_add_primitive(Structured3DMaterial* sm, MaterialPrimitive* prim, double z1, double z2);
+    StructuredMaterial3D* StructuredMaterial3D_new(double X, double Y, double Z, double dx, double dy, double dz);
+	void StructuredMaterial3D_delete(StructuredMaterial3D* sm);
+	void StructuredMaterial3D_add_primitive(StructuredMaterial3D* sm, MaterialPrimitive* prim, double z1, double z2);
 
     ////////////////////////////////////////////////////////////////////////////////
     // Misc

@@ -614,7 +614,8 @@ class AdjointMethod(object):
         else:
             return None
 
-    def check_gradient(self, params, indices=[], plot=True):
+    def check_gradient(self, params, indices=[], plot=True, verbose=True,
+                       return_gradients=False):
         """Verify that the gradient is accurate.
 
         It is highly recommended that the accuracy of the gradients be checked
@@ -643,6 +644,12 @@ class AdjointMethod(object):
             list of gradient indices to check. An empty list indicates that the
             whole gradient should be verified. A subset of indices may be
             desirable for large problems.  (default = [])
+        plot : bool (optional)
+            Plot the gradients and errors (default = True)
+        verbose : bool (optional)
+            If True, print progress (default = True)
+        return_gradients : bool
+            If True, return the gradient arrays (default = False)
 
         Returns
         -------
@@ -663,11 +670,11 @@ class AdjointMethod(object):
         fom0 = self.fom(params)
 
         # calculate the "true" derivatives using finite differences
-        if(NOT_PARALLEL):
+        if(NOT_PARALLEL and verbose):
             info_message('Checking gradient...')
 
         for i in range(len(indices)):
-            if(NOT_PARALLEL):
+            if(NOT_PARALLEL and verbose):
                 print('\tDerivative %d of %d' % (i+1, len(indices)))
 
             j = indices[i]
@@ -683,7 +690,7 @@ class AdjointMethod(object):
             errors = np.abs(grad_fd - grad_am[indices]) / np.abs(grad_fd)
             error_tot = np.linalg.norm(grad_fd - grad_am[indices]) / np.linalg.norm(grad_fd)
 
-            if(error_tot < 0.01):
+            if(error_tot < 0.01 and verbose):
                 info_message('The total error in the gradient is %0.4E' % \
                              (error_tot))
             else:
@@ -710,8 +717,13 @@ class AdjointMethod(object):
 
                 plt.show()
 
-            return error_tot
+            if(return_gradients):
+                return error_tot, grad_fd, grad_am
+            else:
+                return error_tot
         else:
+            if(return_gradients):
+                return None, None, None
             return None
 
 class AdjointMethodMO(AdjointMethod):
