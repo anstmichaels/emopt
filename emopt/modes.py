@@ -2079,3 +2079,5 @@ class ModeFullVector(ModeSolver):
             return Jy, Jz, Jx, My, Mz, Mx
         elif(self.ndir == 'z'):
             return Jx, Jy, Jz, Mx, My, Mz
+
+# Done modes.py!

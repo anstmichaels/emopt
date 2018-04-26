@@ -1,5 +1,21 @@
+Released on April 25, 2018
+--------------------------
+
+1. Cleaned up 2D FDFD solver build function. Reordered the equations in order to
+(potentially) reduce fill-in during LU factorization and also better distribute the
+load between processes when updating the matrix. This should improve performance by a
+small amount.
+
+2. Added a note about OpenMP threads to readme. Essentially, on many systems, the
+default number of threads used for OpenMP will equal the number of cores available.
+This is bad when running on a single machine. When running on a single machine, the
+number of OpenMP threads should be set such the (# MPI procs)*(# OpenMP threads) <=
+(# of cores). Based on experimentation, it looks like OMP_NUM_THREADS=1 with more MPI
+proces leads to higher performance on a single machine. On a cluster, however, go
+nuts with OMP_NUM_THREADS.
+
 Released on April 24, 2018
--------------------------
+--------------------------
 1. (in previous commit) Change compile command for OS X in src/Makefile from g++-5 to
 g++. This prevented compilation on OS X with up-to-date gcc/g++ installations.
 

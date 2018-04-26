@@ -1075,12 +1075,13 @@ class AdjointMethodFM(AdjointMethod):
                 # slightly differently in the TE and TM cases since the signs
                 # along the diagonal are swapped and eps and mu are positioned
                 # in different parts
+                # NOTE: magic number 3 is number of field components
                 if(isinstance(sim, fdfd.FDFD_TM)):
-                    dmudp = dAdp_full[0:M*N].reshape([M,N]) * 1j
-                    depsdp = dAdp_full[M*N:2*M*N].reshape([M,N]) / 1j
+                    dmudp = dAdp_full[0::3].reshape([M,N]) * 1j
+                    depsdp = dAdp_full[1::3].reshape([M,N]) / 1j
                 elif(isinstance(sim, fdfd.FDFD_TE)):
-                    depsdp = dAdp_full[0:M*N].reshape([M,N]) / 1j
-                    dmudp = dAdp_full[M*N:2*M*N].reshape([M,N]) * 1j
+                    depsdp = dAdp_full[0::3].reshape([M,N]) / 1j
+                    dmudp = dAdp_full[1::3].reshape([M,N]) * 1j
 
                 gradient[i] += np.real(
                                np.sum(dFdeps[imin:imax, jmin:jmax] * \

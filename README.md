@@ -293,6 +293,31 @@ future.
 When looking through the example files, use the built-in help(...) function to see
 the documentation about different classes and functions in emopt. 
 
+### A note on MPI + OpenMP
+
+By default, emopt (and its dependencies) will use OpenMP to further parallelize some
+tasks. Unfortunately, on many systems the number of threads used for OpenMP will
+default to the number of cores available. This is problematic when using more than
+one process for MPI as emopt will try to use more threads than cores in the machine,
+leading to slow performance. 
+
+In order to avoid this, when running emopt on a single machine, it is advisable to
+set the number of OpenMP threads to 1 using
+
+```
+$ export OMP_NUM_THREADS=1
+$ mpirun -n 12 python code_to_run.py
+```
+
+or
+
+```
+$ OMP_NUM_THREADS=1 mpirun -n 12 python code_to_run.py
+```
+
+If running on a network/cluster, increasing the number of threads used by OpenMP
+should be fine.
+
 ## Authors
 Andrew Michaels 
 

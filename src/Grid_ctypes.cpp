@@ -353,27 +353,30 @@ void row_wise_A_update(Material2D* eps, Material2D* mu, int ib, int ie, int M, i
 {
     int x = 0,
         y = 0,
-        j = 0;
+        j = 0,
+        ig = 0,
+        Nc = 3,
+        component = 0;
 
     std::complex<double> value;
     std::complex<double> I(0.0, 1.0);
 
+    #pragma omp parallel for private(ig, component, y, x, j)
     for(int i=ib; i < ie; i++) {
-        j = i-ib;
-        if(i < M*N) {
-            y = i/N;
-            x = i - y*N;
+        ig = i/Nc;
+        component = i-ig*Nc;
+        y = ig/N;
+        x = ig - y*N;
 
+        j = i-ib;
+        if(component == 0) {
             if(x >= x1 && x < x2 && y >= y1 && y < y2) {
                 value = I*eps->get_value(x,y);
                 vdiag[j].real = std::real(value);
                 vdiag[j].imag = std::imag(value);
             }
         }
-        else if(i < 2*M*N) {
-            y = (i-M*N)/N;
-            x = (i-M*N) - y*N;
-
+        else if(component == 1) {
             if(x >= x1 && x < x2 && y >= y1 && y < y2) {
                 value = -I*mu->get_value(double(x),double(y)+0.5);
                 vdiag[j].real = std::real(value);
@@ -381,9 +384,6 @@ void row_wise_A_update(Material2D* eps, Material2D* mu, int ib, int ie, int M, i
             }
         }
         else {
-            y = (i-2*M*N)/N;
-            x = (i-2*M*N) - y*N;
-
             if(x >= x1 && x < x2 && y >= y1 && y < y2) {
                 value = -I*mu->get_value(double(x)-0.5,double(y));
                 vdiag[j].real = std::real(value);

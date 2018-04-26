@@ -429,7 +429,8 @@ class FDFD_TE(FDFD):
         self.real_materials = False
 
         # factor of 3 due to 3 field components
-        self._A.setSizes([3*self._M*self._N, 3*self._M*self._N])
+        self.Nc = 3
+        self._A.setSizes([self.Nc*self._M*self._N, self.Nc*self._M*self._N])
         self._A.setType('aij')
         self._A.setUp()
 
@@ -658,8 +659,10 @@ class FDFD_TE(FDFD):
         self.Mx = src[1]
         self.My = src[2]
 
-        src_arr = np.concatenate([self.Jz.ravel(), self.Mx.ravel(),
-                                  self.My.ravel()])
+        src_arr = np.zeros(self.Nc*self._M*self._N, dtype=np.complex128)
+        src_arr[0::self.Nc] = self.Jz.ravel()
+        src_arr[1::self.Nc] = self.Mx.ravel()
+        src_arr[2::self.Nc] = self.My.ravel()
 
         self.b.setArray(src_arr[self.ib:self.ie])
 
@@ -679,8 +682,10 @@ class FDFD_TE(FDFD):
         self.Mx_adj = src[1]
         self.My_adj = src[2]
 
-        src_arr = np.concatenate([self.Jz_adj.ravel(), self.Mx_adj.ravel(),
-                                  self.My_adj.ravel()])
+        src_arr = np.zeros(self.Nc*self._M*self._N, dtype=np.complex128)
+        src_arr[0::self.Nc] = self.Jz_adj.ravel()
+        src_arr[1::self.Nc] = self.Mx_adj.ravel()
+        src_arr[2::self.Nc] = self.My_adj.ravel()
 
         self.b_adj.setArray(src_arr[self.ib:self.ie])
 
@@ -788,6 +793,7 @@ class FDFD_TE(FDFD):
 
         odx = odx * pml_x
         ody = ody * pml_y
+        Nc = self.Nc
 
         if(self._eps == None or self._mu == None):
             raise Exception('The material distributions of the system must be \
@@ -797,128 +803,138 @@ class FDFD_TE(FDFD):
             info_message('Building system matrix...')
 
         for i in xrange(self.ib, self.ie):
-            if(i < M*N ): # Jz row
-                y = int(i/N)
-                x = i - y * N
 
+            ig = int(i/Nc)
+            component = int(i - Nc*ig)
+            y = int(ig/N)
+            x = ig - y*N
+
+            if(component == 0): # Jz row
                 # relevant j coordinates
-                j0 = i
-                j1 = i+1
-                j2 = (y-1)*N + x
+                jEz = ig*Nc
+                jHx1 = ig*Nc + 1
+                jHx0 = (ig-N)*Nc + 1
+                jHy0 = ig*Nc + 2
+                jHy1 = (ig+1)*Nc + 2
+
+                #j1 = i+1
+                #j2 = (y-1)*N + x
 
                 # Diagonal element is the permittivity at (x,y)
-                A[i,j0] = 1j * eps.get_value(x,y)
+                A[i,jEz] = 1j * eps.get_value(x,y)
 
-                A[i,j0+M*N] = -ody[y,x]
-                A[i,j0+2*M*N] = -odx[y,x]
+                A[i,jHx1] = -ody[y,x]
+                A[i,jHy0] = -odx[y,x]
 
                 if(y > 0):
-                    A[i,j2 + M*N] = ody[y,x]
+                    A[i,jHx0] = ody[y,x]
 
                 if(x < N-1):
-                    A[i,j1 + 2*M*N] = odx[y,x]
+                    A[i,jHy1] = odx[y,x]
 
                 #############################
                 # enforce boundary conditions
                 #############################
                 if(y == 0):
                     if(bc[1] == '0'):
-                        A[i,j0+2*M*N] = 0
-                        if(x < N-1): A[i,j1+2*M*N] = 0
+                        A[i,jHy0] = 0
+                        if(x < N-1): A[i,jHy1] = 0
                     elif(bc[1] == 'E'):
-                        A[i,j0+M*N] = -2*ody[y,x]
+                        A[i,jHx1] = -2*ody[y,x]
                     elif(bc[1] == 'H'):
-                        A[i,j0+M*N] = 0
+                        A[i,jHx1] = 0
                     elif(bc[1] == 'P'):
-                        j3 = x + (M-1)*N
-                        A[i,j3+M*N] = ody[y,x]
+                        jHx2 = (x + (M-1)*N)*Nc+1
+                        A[i,jHx2] = ody[y,x]
 
                 elif(y == M-1):
                     if(bc[1] == 'M'):
-                        A[i,j0+M*N] = 0
+                        A[i,jHx1] = 0
 
                 if(x == N-1):
                     if(bc[0] == '0'):
-                        A[i,j0+M*N] = 0
-                        if(y > 0): A[i,j2+M*N] = 0
+                        A[i,jHx1] = 0
+                        if(y > 0): A[i,jHx0] = 0
                     elif(bc[0] == 'P'):
-                        j3 = i - N-1
-                        A[i,j3+2*M*N] = odx[y,x]
+                        jHy2 = (ig-N-1)*Nc + 2
+                        A[i,jHy2] = odx[y,x]
                 elif(x == 0):
                     if(bc[0] == 'M'):
-                        A[i,j0+2*M*N] = 0
+                        A[i,jHy0] = 0
 
-            elif(i < 2 * M*N ): # Mx row
-                y = int((i-M*N)/N)
-                x = (i-M*N) - y * N
-
+            elif(component == 1): # Mx row
                 # relevant j coordinates
+                jHx = ig*Nc + 1
+                jEz0 = ig*Nc
+                jEz1 = (ig+N)*Nc
+
                 j0 = i
                 j1 = (y+1)*N + x + M*N
 
                 # diagonal element is permeability at (x,y)
                 # if(simple_mu): A[i, j0] = -1j
-                A[i,j0] = -1j * mu.get_value(x,y+0.5)
+                A[i,jHx] = -1j * mu.get_value(x,y+0.5)
 
-                A[i, j0-M*N] = -ody[y,x]
+                A[i, jEz0] = -ody[y,x]
 
                 if(y < M-1):
-                    A[i,j1-M*N] = ody[y,x]
+                    A[i,jEz1] = ody[y,x]
 
                 #############################
                 # enforce boundary conditions
                 #############################
                 if(y == 0):
                     if(bc[1] == '0'):
-                        A[i,j0-M*N] = 0
+                        A[i,jEz0] = 0
                 elif(y == M-1):
                     if(bc[1] == 'P'):
-                        j2 = x + M*N
-                        A[i,j2-M*N] = ody[y,x]
+                        jEz2 = x*Nc
+                        A[i,jEz2] = ody[y,x]
 
                 if(x == N-1):
                     if(bc[0] == '0'):
-                        A[i,j0-M*N] = 0
-                        if(y < M-1): A[i,j1-M*N] = 0
+                        A[i,jEz0] = 0
+                        if(y < M-1): A[i,jEz1] = 0
                 elif(x == 0):
                     pass
 
             else: # My row
-                y = int((i-2*M*N)/N)
-                x = (i-2*M*N) - y * N
-
                 # relevant j coordinates
+                jHy = ig*Nc + 2
+                jEz0 = (ig-1)*Nc
+                jEz1 = ig*Nc
+
                 j0 = i
                 j1 = i-1
 
                 # diagonal is permeability at (x,y)
-                A[i,j0] = -1j * mu.get_value(x-0.5,y)
-                A[i,j0-2*M*N] = -odx[y,x]
+                A[i,jHy] = -1j * mu.get_value(x-0.5,y)
+                A[i,jEz1] = -odx[y,x]
 
                 if(x > 0):
-                    A[i,j1-2*M*N] = odx[y,x]
+                    A[i,jEz0] = odx[y,x]
 
                 #############################
                 # enforce boundary conditions
                 #############################
                 if(y == 0):
                     if(bc[1] == '0'):
-                        A[i,j0-2*M*N] = 0
-                        if(x > 0): A[i,j1-2*M*N] = 0
+                        A[i,jEz1] = 0
+                        if(x > 0): A[i,jEz0] = 0
                 elif(y == M-1):
                     pass
 
                 if(x == N-1):
                     if(bc[0] == '0'):
-                        A[i,j0-2*M*N] = 0
+                        A[i,jEz1] = 0
                 elif(x == 0):
                     if(bc[0] == 'E'):
-                        A[i,j0-2*M*N] = 0
+                        A[i,jEz1] = 0
                     elif(bc[0] == 'H'):
-                        A[i,j0-2*M*N] = -2*odx[y,x]
+                        A[i,jEz1] = -2*odx[y,x]
                     elif(bc[0] == 'P'):
-                        j2 = i + N-1
-                        A[i,j2-2*M*N] = odx[y,x]
+                        jEz2 = (ig + N-1)*Nc
+                        A[i,jEz2] = odx[y,x]
 
         # communicate off-processor values and setup internal data structures for
         # performing parallel operations
@@ -1035,9 +1051,10 @@ class FDFD_TE(FDFD):
 
             MN = self._M*self._N
 
-            self.Ez = np.reshape(fields[0:MN], [self._M, self._N])
-            self.Hx = np.reshape(fields[MN:2*MN], [self._M, self._N])
-            self.Hy = np.reshape(fields[2*MN:3*MN], [self._M, self._N])
+            Nc = self.Nc
+            self.Ez = np.reshape(fields[0::Nc], [self._M, self._N])
+            self.Hx = np.reshape(fields[1::Nc], [self._M, self._N])
+            self.Hy = np.reshape(fields[2::Nc], [self._M, self._N])
 
         # store the source power
         self._source_power = self.get_source_power()
@@ -1095,9 +1112,10 @@ class FDFD_TE(FDFD):
 
             MN = self._M*self._N
 
-            self.Ez_adj = np.reshape(fields[0:MN], [self._M, self._N])
-            self.Hx_adj = np.reshape(fields[MN:2*MN], [self._M, self._N])
-            self.Hy_adj = np.reshape(fields[2*MN:3*MN], [self._M, self._N])
+            Nc = self.Nc
+            self.Ez_adj = np.reshape(fields[0::Nc], [self._M, self._N])
+            self.Hx_adj = np.reshape(fields[1::Nc], [self._M, self._N])
+            self.Hy_adj = np.reshape(fields[2::Nc], [self._M, self._N])
 
     def get_field(self, component, domain=None):
         """Get the desired (forward) field component.
