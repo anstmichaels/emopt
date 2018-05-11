@@ -78,7 +78,7 @@ double GridCell::intersect(const Polygon_2D poly)
 
 	_diffs.clear();
 	
-	std::list<Polygon_2D>::const_iterator i;
+	std::vector<Polygon_2D>::const_iterator i;
 
     // Do the difference
 	for(i = _verts.begin(); i != _verts.end(); ++i) {

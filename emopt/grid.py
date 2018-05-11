@@ -805,6 +805,17 @@ class StructuredMaterial2D(Material2D):
         libGrid.StructuredMaterial2D_add_primitive(self._object, prim._object)
         self._primitives.append(prim)
 
+    def add_primitives(self, prims):
+        """Add multiple primitives from a list.
+
+        Parameters
+        ----------
+        prims : list of MaterialPrimitives
+            The list of MaterialPrimitives to add.
+        """
+        for p in prims:
+            self.add_primitive(p)
+
 def row_wise_A_update(eps, mu, ib, ie, M, N, x1, x2, y1, y2, vdiag):
     libGrid.row_wise_A_update(eps._object, mu._object, ib, ie, M, N, x1, x2, y1, y2, vdiag)
     return vdiag
@@ -1045,3 +1056,4 @@ class StructuredMaterial3D(Material3D):
         self._zmaxs.append(z2)
         libGrid.StructuredMaterial3D_add_primitive(self._object, prim._object,
                                                   z1, z2)
+

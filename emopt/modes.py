@@ -42,7 +42,7 @@ Modesolver for Anisotropic Dielectric Waveguides", J. Lightwave Technol. 26(11),
 import sys, slepc4py
 slepc4py.init(sys.argv)
 
-from fdfd import FieldComponent
+from defs import FieldComponent
 from misc import info_message, warning_message, error_message, \
 NOT_PARALLEL, run_on_master, MathDummy
 
@@ -1288,36 +1288,43 @@ class ModeFullVector(ModeSolver):
         bc = self._bc
 
         # handle coordinate permutations for 3D slices. This is necessary since
-        # the solver assumes the mode propagates in the z direction. 
+        # the solver assumes the mode propagates in the z direction however
+        # slices pointing in other directions may be provided when used in
+        # conjunction with the 3D solver.
         get_eps = None
         get_mu = None
+        i0 = self.domain.i1
+        j0 = self.domain.j1
+        k0 = self.domain.k1
         if(isinstance(eps, grid.Material2D)):
-            get_eps = eps.get_value
-            get_mu = mu.get_value
+            get_eps_x = lambda x,y : eps.get_value(k0+x+0.5, j0+y)
+            get_eps_y = lambda x,y : eps.get_value(k0+x, j0+y+0.5)
+            get_eps_z = lambda x,y : eps.get_value(k0+x, j0+y)
+            get_mu_x = lambda x,y : mu.get_value(k0+x, j0+y+0.5)
+            get_mu_y = lambda x,y : mu.get_value(k0+x+0.5, j0+y)
+            get_mu_z = lambda x,y : mu.get_value(k0+x+0.5, j0+y+0.5)
         elif(isinstance(eps, grid.Material3D)):
-            i0 = self.domain.i.start
-            j0 = self.domain.j.start
-            k0 = self.domain.k.start
             if(self.ndir == 'x'):
-                get_eps = lambda x,y : eps.get_value(k0,j0+x,i0+y)
-                get_mu = lambda x,y : mu.get_value(k0,j0+x,i0+y)
+                get_eps_x = lambda x,y : eps.get_value(k0,j0+x+0.5,i0+y-0.5)
+                get_eps_y = lambda x,y : eps.get_value(k0,j0+x,i0+y)
+                get_eps_z = lambda x,y : eps.get_value(k0,j0+x,i0+y-0.5)
+                get_mu_x = lambda x,y : mu.get_value(k0,j0+x,i0+y)
+                get_mu_y = lambda x,y : mu.get_value(k0,j0+x+0.5,i0+y-0.5)
+                get_mu_z = lambda x,y : mu.get_value(k0,j0+x+0.5,i0+y)
             elif(self.ndir == 'y'):
-                get_eps = lambda x,y : eps.get_value(k0+x,j0,i0+y)
-                get_mu = lambda x,y : mu.get_value(k0+x,j0,i0+y)
+                get_eps_x = lambda x,y : eps.get_value(k0+y,j0,i0+x)
+                get_eps_y = lambda x,y : eps.get_value(k0+y+0.5,j0,i0+x-0.5)
+                get_eps_z = lambda x,y : eps.get_value(k0+y,j0,i0+x-0.5)
+                get_mu_x = lambda x,y : mu.get_value(k0+y+0.5,j0,i0+x-0.5)
+                get_mu_y = lambda x,y : mu.get_value(k0+y,j0,i0+x)
+                get_mu_z = lambda x,y : mu.get_value(k0+y+0.5,j0,i0+x)
             elif(self.ndir == 'z'):
-                get_eps = lambda x,y : eps.get_value(k0+x,j0+y,i0)
-                get_mu = lambda x,y : mu.get_value(k0+x,j0+y,i0)
-
-        #if(NOT_PARALLEL):
-        #    earr = np.zeros([M,N], dtype=np.complex128)
-
-        #    for y in range(M):
-        #        for x in range(N):
-        #            earr[y,x] = get_eps(x,y)
-
-        #    import matplotlib.pyplot as plt
-        #    plt.imshow(earr.real, extent=[0, N, 0, M])
-        #    plt.show()
+                get_eps_x = lambda x,y : eps.get_value(k0+x,j0+y,i0)
+                get_eps_y = lambda x,y : eps.get_value(k0+x,j0+y,i0)
+                get_eps_z = lambda x,y : eps.get_value(k0+x,j0+y,i0)
+                get_mu_x = lambda x,y : mu.get_value(k0+x,j0+y,i0)
+                get_mu_y = lambda x,y : mu.get_value(k0+x,j0+y,i0)
+                get_mu_z = lambda x,y : mu.get_value(k0+x,j0+y,i0)
 
         for I in xrange(self.ib, self.ie):
             A[I,I] = 0.0
@@ -1338,7 +1345,7 @@ class ModeFullVector(ModeSolver):
                 A[I, JHz1] = ody
 
                 # Ex
-                A[I, JEx] = 1j*get_eps(x+0.5,y)
+                A[I, JEx] = 1j*get_eps_x(x,y)
 
                 # Setup the LHS B matrix
                 B[I,JHy] = 1j*self._dir
@@ -1377,7 +1384,7 @@ class ModeFullVector(ModeSolver):
                 A[I, JHz1] = -odx
 
                 # Ey
-                A[I, JEy] = 1j*get_eps(x,y+0.5)
+                A[I, JEy] = 1j*get_eps_y(x,y)
 
                 # Setup the LHS B matrix
                 B[I,JHx] = -1j*self._dir
@@ -1420,7 +1427,7 @@ class ModeFullVector(ModeSolver):
                 if(y < M-1): A[I, JEx1] = -ody
 
                 # Hz at x,y
-                A[I, JHz] = -1j*get_mu(x+0.5,y+0.5)
+                A[I, JHz] = -1j*get_mu_z(x,y)
 
 
                 #############################
@@ -1453,7 +1460,7 @@ class ModeFullVector(ModeSolver):
                 if(y < M-1): A[I,JEz1] = ody
 
                 # Hx at x,y
-                A[I,JHx] = -1j*get_mu(x,y+0.5)
+                A[I,JHx] = -1j*get_mu_x(x,y)
 
                 # Setup the LHS B matrix
                 B[I,JEy] = 1j*self._dir
@@ -1488,7 +1495,7 @@ class ModeFullVector(ModeSolver):
                 if(x < N-1): A[I,JEz1] = -odx
 
                 # Hy at x,y
-                A[I,JHy] = -1j*get_mu(x+0.5,y)
+                A[I,JHy] = -1j*get_mu_y(x,y)
 
                 # Setup the LHS B matrix
                 B[I,JEx] = -1j*self._dir
@@ -1532,7 +1539,7 @@ class ModeFullVector(ModeSolver):
                 A[I, JHx1] = -ody
 
                 # Ez
-                A[I, JEz] = 1j*get_eps(x,y)
+                A[I, JEz] = 1j*get_eps_z(x,y)
 
                 #############################
                 # enforce boundary conditions
@@ -1991,10 +1998,6 @@ class ModeFullVector(ModeSolver):
 
         neff = self.neff[i]
         bc = self._bc
-        dx = self.dx/self.R; dy = self.dy/self.R
-        dz = dz/self.R
-
-        ekz = np.exp(1j*self._dir*neff*dz/2)
 
         # setup arrays for storing the calculated current sources
         # These are only computed and stored on the rank 0 process 
@@ -2017,12 +2020,27 @@ class ModeFullVector(ModeSolver):
         # permute the calculated current density components to match the users
         # supplied coordinate system
         get_mu = None
-        if(self.ndir == 'x'): # PROBLEM MIGHT BEHERE!!!!!!!!!!!!!!!!!!!
+        if(self.ndir == 'x'):
             get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sy=sx, sz=sy, squeeze=True)
+            mydx = dy
+            mydy = dz
+            mydz = dz
         elif(self.ndir == 'y'):
             get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sx=sx, sz=sy, squeeze=True)
+            mydx = dz
+            mydy = dx
+            mydz = dy
         elif(self.ndir == 'z'):
             get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sx=sx, sy=sy, squeeze=True)
+            mydx = dx
+            mydy = dy
+            mydz = dz
+
+        # phase factor
+        dx = mydx/self.R
+        dy = mydy/self.R
+        dz = mydz/self.R
+        ekz = np.exp(1j*self._dir*neff*dz/2)
 
         # Get field data
         Ex = self.get_field(i, FieldComponent.Ex, permute=False)
@@ -2031,6 +2049,11 @@ class ModeFullVector(ModeSolver):
         Hx = self.get_field(i, FieldComponent.Hx, permute=False)
         Hy = self.get_field(i, FieldComponent.Hy, permute=False)
         Hz = self.get_field(i, FieldComponent.Hz, permute=False)
+
+        # normalize power to ~1.0 -- not really necessary
+        S = 0.5*mydx*mydy*np.sum(Ex*np.conj(Hy)-Ey*np.conj(Hx))
+        Ex = Ex/np.sqrt(S); Ey = Ey/np.sqrt(S); Ez = Ez/np.sqrt(S)
+        Hx = Hx/np.sqrt(S); Hy = Hy/np.sqrt(S); Hz = Hz/np.sqrt(S)
 
         if(NOT_PARALLEL):
             ## Calculate contribution of Ex
@@ -2071,6 +2094,14 @@ class ModeFullVector(ModeSolver):
 
             ## Calculate contribution of Hz
             # There isn't one
+
+            # reshape the output to make things seemless
+            Jx = np.reshape(Jx, self.domain.shape)
+            Jy = np.reshape(Jy, self.domain.shape)
+            Jz = np.reshape(Jz, self.domain.shape)
+            Mx = np.reshape(Mx, self.domain.shape)
+            My = np.reshape(My, self.domain.shape)
+            Mz = np.reshape(Mz, self.domain.shape)
 
         # permute (if necessary) and return the results
         if(self.ndir == 'x'):

@@ -1,3 +1,55 @@
+Released on 2018
+----------------
+
+1. Small bug fixes.
+
+2. Added add_primitives function to StructuredMaterial2D to reduce verbosity. This
+function takes a list of Primitive objects.
+
+3. Simple structures can now be imported from klayout! A function called
+emopt.io.load_gds_txt has been introduced which allows you to load very simple
+text-format GDS files exported from klayout. This provides users with a way to define
+their geometry using a more visual process. An example has been added which shows how
+to import GDS files.
+
+In order to import GDS files, they must be exported from klayout using File > Save as
+and then select Files of type "GDS2 Text files". It is encouraged that you define
+different shapes on unique layers so that they are easier to separate out in code.
+
+4. Fixed bugs in ModeFullVector related to generating mode source distributions for
+the 3D FDFDsolver. It turns out the coordinate permutations were not being handled
+properly which resulted in incorrect mode sources when injecting along x or y (z
+worked fine).
+
+5. Major updates to FDFD_3D. 3D solver is pretty much fully functional at this point
+with the exception that symmetry boundary conditions have not yet been implemented.
+See examples/simple_waveguide/simple_waveguide_3D.py and
+examples/simple_waveguide/simple_waveguide_mode.py for examples of how to use it.
+
+Some important notes:
+    a. The 3D solver is not quite as straightforward to use as the 2D solver. This is
+    a consequence of how the 3D equations are solved (preconditioned iterative solver
+    vs direct solver). In particular, the 3D solver uses a multigrid preconditioner
+    which solves the problem on coarser grids in order to speed up convergence of the
+    simulation. An important parameter is the number of coarser grids to use which
+    can be modified using the optional 'mglevels' argument. If not specified, FDFD_3D
+    will attempt to automatically choose a good value, but this may not always work.
+    If you find that iterations are fast but convergence is slow, try reducing the
+    number of mglevels. If the simulation just hangs before getting to the iteration
+    step, mglevels should be increased. If confused about this, feel free to drop an
+    issue on github!
+
+    b. In theory, the solver should be compatible with adjoint_method.AdjointMethod.
+    I haven't really tested this yet, so it may still be buggy. It definitely is not
+    compatible with adjoint_method.AdjointMethodFM and AdjointMethodPNF, so stay
+    tuned for updates.
+
+    c. Currently the 3D solver is far from the fasts solver out there. Right now, it
+    is pretty useable for smaller/coarser simulations. The supplied example which is
+    5x3x2.5 um with a 40 nm grid spacing runs in about 50 seconds on two Intel Xeon E5
+    v4 using 16 mpi processes. Reducing the mesh size to 30 nm increases the solve
+    time to ~2m30s-3m00s.
+
 Released on April 25, 2018
 --------------------------
 

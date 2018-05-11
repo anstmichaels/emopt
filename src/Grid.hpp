@@ -121,8 +121,9 @@ class GridMaterial2D : public Material2D {
  */
 class GridCell {
 	private:
-		std::list<Polygon_2D> _verts;
-		std::list<Polygon_2D> _diffs;
+        const static int NPOLY = 4;
+		std::vector<Polygon_2D> _verts;
+		std::vector<Polygon_2D> _diffs;
 
         Polygon_2D _original;
 

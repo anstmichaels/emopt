@@ -527,8 +527,6 @@ class AdjointMethod(object):
 
         gradient = np.zeros(lenp)
         for i in xrange(lenp):
-            if(NOT_PARALLEL):
-                print i
             p0 = params[i]
             ub = update_boxes[i]
 
@@ -751,7 +749,7 @@ class AdjointMethodMO(AdjointMethod):
 
     Attributes
     ----------
-    ams : list of :class:`.AdjointMethod`
+    adjoint_methods : list of :class:`.AdjointMethod`
         A list containing extended AdjointMethod objects
     """
     __metaclass__ = ABCMeta
@@ -761,17 +759,17 @@ class AdjointMethodMO(AdjointMethod):
         self._foms_current = np.zeros(len(ams))
 
     @property
-    def ams(self):
+    def adjoint_methods(self):
         return self._ams
 
-    @ams.getter
-    def ams(self, new_ams):
+    @adjoint_methods.setter
+    def adjoint_methods(self, new_ams):
         self._ams = new_ams
 
     def update_system(self, params):
-        # We dont need this -- all system updates are performed by
-        # AdjointMethod objects contained in self._ams
-        pass
+        """Update all of the individual AdjointMethods."""
+        for am in self._ams:
+            am.update_system(params)
 
     def calc_fom(self, sim, params):
         """Calculate the figure of merit.
@@ -925,7 +923,6 @@ class AdjointMethodMO(AdjointMethod):
         """
         # we override this function so we can initially update all of the ams
         # as desired
-        self._step = 1e-8
         self.sim = self._ams[0].sim
         for am in self._ams:
             am.update_system(params)

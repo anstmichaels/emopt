@@ -140,6 +140,7 @@ def calc_ROC_foms(x, y, Rmin, k):
     N_pts = len(x)
 
     foms = np.zeros(N_pts)
+    Rs = np.zeros(N_pts)
 
     # Original Unvectorized version
     for i in range(N_pts):
@@ -156,10 +157,11 @@ def calc_ROC_foms(x, y, Rmin, k):
          y1 = y[j1]; y2 = y[j2]; y3 = y[j3]
 
          Ri = radius_of_curvature(x1,x2,x3,y1,y2,y3)
+         Rs[i] = Ri
          fom_i = 1 - step(Ri-Rmin, k)
          foms[i] = fom_i
 
-    return np.array(foms)
+    return np.array(foms), Rs
 
 def rect(x, w1p, ws):
     """Apply a smooth rect function.

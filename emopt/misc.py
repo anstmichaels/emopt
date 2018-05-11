@@ -143,6 +143,8 @@ class DomainCoordinates(object):
         The grid spacing in y direction
     dz : float
         The grid spacing in z direction
+    shape : (int, int, int)
+        The shape of the domain.
     """
 
     def __init__(self, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz):
@@ -176,6 +178,12 @@ class DomainCoordinates(object):
         self._dy = dy
         self._dz = dz
 
+        self.i1 = i1
+        self.i2 = i2
+        self.j1 = j1
+        self.j2 = j2
+        self.k1 = k1
+        self.k2 = k2
 
     @property
     def x(self):
@@ -297,9 +305,28 @@ class DomainCoordinates(object):
     def dz(self, value):
         warning_message('dz cannot be reassigned in this way.', 'emopt.misc')
 
+    @property
+    def shape(self):
+        return (self._Nz, self._Ny, self._Nx)
+
     def get_bounding_box(self):
         return [np.min(self._x), np.max(self._x), np.min(self._y),
                 np.max(self._y), np.min(self._z), np.max(self._z),]
+
+    def contains_index(self, k, j, i):
+        return (k >= self.k1 and k < self.k2) and \
+               (j >= self.j1 and j < self.j2) and \
+               (i >= self.i1 and i < self.i2)
+
+    def copy(self):
+        x = self._x
+        y = self._y
+        z = self._z
+        dx = self._dx
+        dy = self._dy
+        dz = self._dz
+        return DomainCoordinates(x[0], x[-1], y[0], y[-1], z[0], z[-1],
+                                 dx, dy, dz)
 
 
 ####################################################################################

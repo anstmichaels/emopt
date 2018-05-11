@@ -64,7 +64,9 @@ import sys
 petsc4py.init(sys.argv)
 
 from misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, MathDummy
+NOT_PARALLEL, run_on_master, MathDummy, DomainCoordinates, COMM
+from defs import FieldComponent, SourceComponent
+import modes
 
 from grid import row_wise_A_update
 
@@ -72,28 +74,14 @@ import numpy as np
 from math import pi
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
+import array
+from mpi4py import MPI
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
 __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
-
-class FieldComponent:
-    Ex = 'Ex'
-    Ey = 'Ey'
-    Ez = 'Ez'
-    Hx = 'Hx'
-    Hy = 'Hy'
-    Hz = 'Hz'
-
-class SourceComponent:
-    Jx = 'Jx'
-    Jy = 'Jy'
-    Jz = 'Jz'
-    Mx = 'Mx'
-    My = 'My'
-    Mz = 'Mz'
 
 class FDFD(object):
     """Finite difference frequency domain solver.
@@ -579,6 +567,9 @@ class FDFD_TE(FDFD):
         self._w_pml_right = int(val[1]/dx)
         self._w_pml_top = int(val[2]/dy)
         self._w_pml_bottom = int(val[3]/dy)
+
+        self.Wreal = self._W - self._w_pml_left*dx - self._w_pml_right*dx
+        self.Hreal = self._H - self._w_pml_top*dy - self._w_pml_bottom*dy
 
         self._built = False
 
@@ -1876,9 +1867,19 @@ class FDFD_3D(FDFD):
     1. Units used for length parameters do not matter as long as they are
     consistent with one another
 
-    2. The width and the height of the system will be modified in order to
-    ensure that they are an integer multiple of dx and dy. It is important that
-    this modified width and height be used in any future calculations.
+    2. The dimensions of the system will be modified such that they are
+    consistent with the provided grid spacing. You should always reinitialize
+    your scripts X, Y, Z variables with sim.X, sim.Y, and sim.Z in order to
+    make sure everything is consistent.
+
+    3. The 3D solver internally uses an iterative Krylov subspace method with a
+    multigrid preconditioner. This is quite a bit more complicated than the
+    direct solver used in 2D so careful attention should be paid when setting
+    up the 3D solver. Additional documentation on this will come in the future.
+
+    4. The solver supports both real and complex material values, however the
+    source power calculation currently only accounts for real-valued materials.
+    This will be updated in the future.
 
     Parameters
     ----------
@@ -1902,6 +1903,10 @@ class FDFD_3D(FDFD):
     rtol : float
         The relative tolerance used to terminate the internal iterative solver.
         Smaller number = higher accuracy solution.
+    low_memory : boolean
+        If True, reduce the memory footprint of the solver at the cost of
+        performance. This is achieved by using an iterative method for the
+        coarse solver instead of a direct LU factorization. (default = False)
 
     Attributes
     ----------
@@ -1927,6 +1932,11 @@ class FDFD_3D(FDFD):
         The number of grid cells which make up the top PML region
     w_pml_bottom : int
         The number of grid cells which make up the bottom PML region
+    pml_sigma : float
+        The graded parameter of the PML. Increase this to get a "stronger" PML
+    pml_power : float
+        The power of the polynomial used to define the spatial-dependence of
+        pml_sigma.
     field_domains : list of DomainCoordinates
         The list of DomainCoordinates in which fields are recorded immediately
         following a forward solve.
@@ -1937,11 +1947,16 @@ class FDFD_3D(FDFD):
         The source power injected into the system.
     w_pml : list of float
         List of PML widths in real spatial units. This variable can be
-        reinitialized in order to change the PML widths
+        reinitialized in order to change the PML widths. The list is ordered
+        as follows: [xmin, xmax, ymin, ymax, zmin, zmax]
+    real_mats : boolean
+        If True, assume all permittivity and permeability values are real
+        valued (in power calculations).
 
     """
 
-    def __init__(self, X, Y, Z, dx, dy, dz, wavelength, mglevels=3, rtol=1e-8):
+    def __init__(self, X, Y, Z, dx, dy, dz, wavelength, mglevels=None,
+                 rtol=1e-6, low_memory=False, verbose=True):
         super(FDFD_3D, self).__init__()
 
         self._dx = dx
@@ -1952,17 +1967,14 @@ class FDFD_3D(FDFD):
         # scalaing factor used in non-dimensionalizing spatial units
         self._R = wavelength/(2*pi)
 
-        # pml widths for left, right, top, bottom
-        self._w_pml = [wavelength/2 for i in range(6)]
-        Npx = wavelength/2/dx
-        Npy = wavelength/2/dy
-        Npz = wavelength/2/dz
-        self._w_pml_xmin = int(Npx)
-        self._w_pml_xmax= int(Npx)
-        self._w_pml_ymin = int(Npy)
-        self._w_pml_ymax = int(Npy)
-        self._w_pml_zmin = int(Npz)
-        self._w_pml_zmax = int(Npz)
+        # pml widths
+        self._w_pml = [15*dx, 15*dx, 15*dy, 15*dy, 15*dz, 15*dz]
+        self._w_pml_xmin = 15
+        self._w_pml_xmax= 15
+        self._w_pml_ymin = 15
+        self._w_pml_ymax = 15
+        self._w_pml_zmin = 15
+        self._w_pml_zmax = 15
 
         # Boundary conditions. Default type is PEC on all sim boundaries
         # Note: This will result in PMC boundaries for the 2D TM simulations.
@@ -1971,7 +1983,7 @@ class FDFD_3D(FDFD):
 
         # PML parameters -- these can be changed
         self.pml_sigma = 1.0*wavelength
-        self.pml_power = 2.0
+        self.pml_power = 1.5
 
         # dx and dy are the only dimension rigorously enforced
         Nx = int(np.ceil(X/dx) + 1); self._Nx = Nx
@@ -1988,6 +2000,7 @@ class FDFD_3D(FDFD):
 
         self._eps = None
         self._mu = None
+        self.real_mats = False
 
         # Get PETSc options database
         optDB = PETSc.Options()
@@ -2001,6 +2014,18 @@ class FDFD_3D(FDFD):
         # We now prepare system matrices for coarser levels
         self._As = []
         self._Rst = []
+
+        if(mglevels == None):
+            min_ds = 0.0775 # this yields good values in general
+            mglevels = 0
+            ds = np.min([dx, dy, dz]); ds /= wavelength
+
+            while(min_ds >= ds):
+                mglevels += 1
+                min_ds /= 2
+
+            if(mglevels == 0): mglevels = 1
+
         self._mglevels = mglevels
 
         for l in range(0,mglevels-1):
@@ -2040,22 +2065,14 @@ class FDFD_3D(FDFD):
         self._As.append(self._A)
         self._AsT = [None for i in range(len(self._As))]
 
-        #self._Interp = PETSc.Mat()
-        #self._Interp.create(PETSc.COMM_WORLD)
-        #self._Interp.setSizes([self._nunks, self._nunks2h])
-        #self._Interp.setType('aij')
-        #self._Interp.setPreallocationNNZ([8,8])
-        #self._Interp.setUp()
-
         # Build the resitriction and interpolation matrices
         for l in range(1,mglevels):
             self.buildRst(l)
-        #self.buildInt()
 
         #obtain solution and RHS vectors
         x, b = self._A.getVecs()
         x.set(0)
-        b.set(1)
+        b.set(0)
         self.x = x
         self.b = b
 
@@ -2070,11 +2087,12 @@ class FDFD_3D(FDFD):
         self.ksp_iter = PETSc.KSP()
         self.ksp_iter.create(PETSc.COMM_WORLD)
 
-        #ksp_solver = 'gcr'
-        #self.ksp_iter.setType(ksp_solver)
+        self.ksp_iter.setType('gcr')
         self.ksp_iter.setInitialGuessNonzero(True)
-        #self.ksp_iter.setGMRESRestart(10)
+        #self.ksp_iter.setGCRRestart(15)
         self.ksp_iter.setTolerances(rtol=rtol)
+        optDB['-ksp_gcr_restart'] = 15
+        self.ksp_iter.setFromOptions()
 
         # Setup multigrid preconditioner
         ## Basic setup
@@ -2084,66 +2102,50 @@ class FDFD_3D(FDFD):
         pc.setFromOptions()
 
         pc.setMGType(PETSc.PC.MGType.MULTIPLICATIVE) # Multiplicative
-        pc.setMGCycleType(PETSc.PC.MGCycleType.W) # V cycle
+        pc.setMGCycleType(PETSc.PC.MGCycleType.W) # W cycle
 
         ## Setup coarse solver
-        ksp_crs = pc.getMGCoarseSolve()
-        ksp_crs.setType('preonly')
-        pc_crs = ksp_crs.getPC()
-        pc_crs.setType('lu')
-        pc_crs.setFactorSolverPackage('mumps')
+        if(not low_memory):
+            ksp_crs = pc.getMGCoarseSolve()
+            ksp_crs.setType('preonly')
+            pc_crs = ksp_crs.getPC()
+            pc_crs.setType('lu')
+            pc_crs.setFactorSolverPackage('mumps')
+            pc_crs.setFromOptions()
+        else:
+            ksp_crs = pc.getMGCoarseSolve()
+            ksp_crs.setType('bcgsl')
+            ksp_crs.setTolerances(rtol=1e-2)
+            pc_crs = ksp_crs.getPC()
+            pc_crs.setType('jacobi')
+
         self._ksp_crs = ksp_crs
 
         ## Setup Down smoothers
         for l in range(1,mglevels):
             ksp_smooth = pc.getMGSmootherDown(l)
-            ksp_smooth.setType('gmres')
+            ksp_smooth.setType('gmres') # this shouldnt work but does well
+            ksp_smooth.setGMRESRestart(4)
             ksp_smooth.setTolerances(max_it=8)
             pc_smooth = ksp_smooth.getPC()
             pc_smooth.setType('mat')
-            #pc_smooth.setFromOptions()
+            pc_smooth.setFromOptions()
 
         ## Setup Up Smoothers
         for l in range(1,mglevels):
             ksp_smooth = pc.getMGSmootherUp(l)
-            ksp_smooth.setType('gmres')
+            ksp_smooth.setType('chebyshev')
             ksp_smooth.setTolerances(max_it=4)
             pc_smooth = ksp_smooth.getPC()
             pc_smooth.setType('mat')
-            #pc_smooth.setFromOptions()
+            pc_smooth.setFromOptions()
 
         ## Set restriction and interpolation
         for l in range(1,mglevels):
             pc.setMGRestriction(l, self._Rst[l-1])
             pc.setMGInterpolation(l, self._Rst[l-1])
 
-        # create a direct linear solver
-        self.ksp_dir = PETSc.KSP()
-        self.ksp_dir.create(PETSc.COMM_WORLD)
-
-        self.ksp_dir.setType('preonly')
-        pc = self.ksp_dir.getPC()
-        pc.setType('lu')
-        pc.setFactorSolverPackage('mumps')
-
-        self._solver_type = solver
-
-        self.fields = np.array([])
-        self.Ex = np.array([])
-        self.Ey = np.array([])
-        self.Ez = np.array([])
-        self.Hx = np.array([])
-        self.Hy = np.array([])
-        self.Hz = np.array([])
-
-        self.Ex_adj = np.array([])
-        self.Ey_adj = np.array([])
-        self.Ez_adj = np.array([])
-        self.Hx_adj = np.array([])
-        self.Hy_adj = np.array([])
-        self.Hz_adj = np.array([])
-
-        self.verbose = True
+        self.verbose = verbose
         self._built = False
 
     @property
@@ -2170,6 +2172,20 @@ class FDFD_3D(FDFD):
     def Nz(self):
         return self._Nz
 
+    @property
+    def w_pml(self):
+        return self._w_pml
+
+    @w_pml.setter
+    def w_pml(self, ws):
+        self._w_pml = list(ws)
+        self._w_pml_xmin = int(ws[0] / self._dx)
+        self._w_pml_xmax= int(ws[1] / self._dx)
+        self._w_pml_ymin = int(ws[2] / self._dy)
+        self._w_pml_ymax = int(ws[3] / self._dy)
+        self._w_pml_zmin = int(ws[4] / self._dz)
+        self._w_pml_zmax = int(ws[5] / self._dz)
+
     def __pml_x(self, k):
         ## Generate the PML values for the left and right boundaries.
         Nx = self._Nx
@@ -2179,11 +2195,11 @@ class FDFD_3D(FDFD):
         w_xmin = self._w_pml_xmin
         w_xmax = self._w_pml_xmax
         if(k <= w_xmin and w_xmin > 0):
-            return 1.0 / (1.0 + 1j*sigma *
-                         ((w_xmin - k)*1.0/w_xmin)**pwr)
+            v0 = ((w_xmin - k)*1.0/w_xmin)**pwr
+            return 1.0 / (1.0 + 1j*sigma*v0)
         elif(k >= Nx-1-w_xmax and w_xmax > 0):
-            return 1.0 / (1.0 + 1j*sigma *
-                         ((k - (Nx-1-w_xmax))*1.0/w_xmax)**pwr)
+            v1 = ((k - (Nx-1-w_xmax))*1.0/w_xmax)**pwr
+            return 1.0 / (1.0 + 1j*sigma*v1)
         else:
             return 1.0
 
@@ -2196,11 +2212,11 @@ class FDFD_3D(FDFD):
         w_ymin = self._w_pml_ymin
         w_ymax = self._w_pml_ymax
         if(j <= w_ymin and w_ymin > 0):
-            return 1.0 / (1.0 + 1j*sigma *
-                         ((w_ymin - j)*1.0/w_ymin)**pwr)
+            v0 = ((w_ymin - j)*1.0/w_ymin)**pwr
+            return 1.0 / (1.0 + 1j*sigma * v0)
         elif(j >= Ny-1-w_ymax and w_ymax > 0):
-            return 1.0 / (1.0 + 1j*sigma *
-                         ((j - (Ny-1-w_ymax))*1.0/w_ymax)**pwr)
+            v1 = ((j - (Ny-1-w_ymax))*1.0/w_ymax)**pwr
+            return 1.0 / (1.0 + 1j*sigma * v1)
         else:
             return 1.0
 
@@ -2213,54 +2229,18 @@ class FDFD_3D(FDFD):
         w_zmin = self._w_pml_zmin
         w_zmax = self._w_pml_zmax
 
+
         if(i <= w_zmin and w_zmin > 0):
-            return 1.0 / (1.0 + 1j*sigma *
-                         ((w_zmin - i)*1.0/w_zmin)**pwr)
+            v0 = ((w_zmin - i)*1.0/w_zmin)**pwr
+            return 1.0 / (1.0 + 1j*sigma * v0)
         elif(i >= Nz-1-w_zmax and w_zmax > 0):
-            return 1.0 / (1.0 + 1j*sigma *
-                         ((i - (Nz-1-w_zmax))*1.0/w_zmax)**pwr)
+            v1 = ((i - (Nz-1-w_zmax))*1.0/w_zmax)**pwr
+            return 1.0 / (1.0 + 1j*sigma * v1)
         else:
             return 1.0
 
-    def test_PML(self):
-        Nx = self._Nx
-        Ny = self._Ny
-        Nz = self._Nz
-
-        xs = np.arange(0,Nx)
-        ys = np.arange(0,Ny)
-        zs = np.arange(0,Nz)
-
-        pml_x = []
-        pml_y = []
-        pml_z = []
-
-        for k in xs:
-            pml_x.append(self.__pml_x(k))
-
-        for j in ys:
-            pml_y.append(self.__pml_y(j))
-
-        for i in zs:
-            pml_z.append(self.__pml_z(i))
-
-        import matplotlib.pyplot as plt
-        f = plt.figure()
-        ax1 = f.add_subplot(311)
-        ax2 = f.add_subplot(312)
-        ax3 = f.add_subplot(313)
-
-        ax1.plot(xs, np.real(pml_x), 'b')
-        ax1.plot(xs, np.imag(pml_x), 'r')
-
-        ax2.plot(ys, np.real(pml_y), 'b')
-        ax2.plot(ys, np.imag(pml_y), 'r')
-
-        ax3.plot(ys, np.real(pml_z), 'b')
-        ax3.plot(ys, np.imag(pml_z), 'r')
-        plt.show()
-
     def buildA(self, l):
+        ## Build the system matrix for the lth layer (0 == finest grid)
         A = self._As[l]
 
         ib, ie = A.getOwnershipRange()
@@ -2331,7 +2311,7 @@ class FDFD_3D(FDFD):
                 if(y > 0): A[i, jHz0] = -1*ody * pml_y
 
                 # Hy
-                pml_z = self.__pml_z(zh)
+                pml_z = self.__pml_z(zh - 0.5*divl)
                 A[i, jHy1] = -1 * odz * pml_z
                 if(z > 0): A[i, jHy0] = odz * pml_z
 
@@ -2366,7 +2346,7 @@ class FDFD_3D(FDFD):
                 A[i, jEy] = 1j * eps.get_value(xh,yh+0.5*divl,zh-0.5*divl)
 
                 # Hx
-                pml_z = self.__pml_z(zh)
+                pml_z = self.__pml_z(zh - 0.5*divl)
                 A[i, jHx1] = odz * pml_z
                 if(z > 0): A[i,jHx0] = -1*odz * pml_z
 
@@ -2446,7 +2426,7 @@ class FDFD_3D(FDFD):
                 A[i, jHx] = -1j * mu.get_value(xh,yh+0.5*divl,zh)
 
                 # Ez
-                pml_y = self.__pml_y(yh)
+                pml_y = self.__pml_y(yh + 0.5*divl)
                 if(y < Ny-1): A[i, jEz1] = ody * pml_y
                 A[i, jEz0] = -1*ody * pml_y
 
@@ -2491,7 +2471,7 @@ class FDFD_3D(FDFD):
                 A[i, jEx0] = -1*odz * pml_z
 
                 # Ez
-                pml_x = self.__pml_x(xh)
+                pml_x = self.__pml_x(xh + 0.5*divl)
                 if(x < Nx-1): A[i, jEz1] = -1*odx * pml_x
                 A[i, jEz0] = odx * pml_x
 
@@ -2526,12 +2506,12 @@ class FDFD_3D(FDFD):
                 A[i, jHz] = -1j * mu.get_value(xh+0.5*divl,yh+0.5*divl,zh-0.5*divl)
 
                 # Ey
-                pml_x = self.__pml_x(xh)
+                pml_x = self.__pml_x(xh + 0.5*divl)
                 if(x < Nx-1): A[i, jEy1] = odx * pml_x
                 A[i, jEy0] = -1*odx * pml_x
 
                 # Ex
-                pml_y = self.__pml_y(yh)
+                pml_y = self.__pml_y(yh + 0.5*divl)
                 if(y < Ny-1): A[i, jEx1] = -1*ody * pml_y
                 A[i, jEx0] = ody * pml_y
 
@@ -2559,8 +2539,6 @@ class FDFD_3D(FDFD):
         # performing parallel operations
         A.assemblyBegin()
         A.assemblyEnd()
-
-
 
         self._built = True
 
@@ -2592,11 +2570,14 @@ class FDFD_3D(FDFD):
             self._AsT[l].conjugate()
 
     def buildRst(self, l):
+        ## Build the lth restriction matrix. This matrix "restricts" the grid
+        ## from l to l+1, producing a coarser grid with half the resolution
         R = self._Rst[l-1]
         bsize = self._bsize
 
         ib, ie = R.getOwnershipRange()
 
+        # determine how much the grid will be scaled down
         divl = 2*(self._mglevels-l-1)
         divlm1 = 2*(self._mglevels-l)
         if(divl == 0): divl = 1
@@ -2643,9 +2624,188 @@ class FDFD_3D(FDFD):
         R.assemblyBegin()
         R.assemblyEnd()
 
+    def update(self, bbox=None):
+        """(Partially) Update the system matrix.
 
-    def update(self):
-        pass
+        Updating the system matrix involves recomputing the material
+        distribution of the system.
+
+        If a bounding box is provided, only that portion of the grid will be
+        updates.
+
+        Notes
+        -----
+        This only updates the high resolution grid.
+        """
+        A = self._As[self._mglevels-1]
+
+        ib, ie = A.getOwnershipRange()
+
+        # for l > 0, we will generate A for a coarser version of the problem
+        # Coarsening occurs in factors of 2. We must modify Nx, Ny, Nz
+        # accordingly
+        Nx = self._Nx
+        Ny = self._Ny
+        Nz = self._Nz
+
+        NxNy = Nx*Ny
+        Ngrid = Nx*Ny*Nz
+
+        eps = self._eps
+        mu = self._mu
+        bc = self._bc
+
+        # similarly, dx, dy, dz must be modified
+        dx = self._dx
+        dy = self._dy
+        dz = self._dz
+
+        if(self._eps == None or self._mu == None):
+            raise Exception('The material distributions of the system must be \
+                            initialized prior to building the system matrix.')
+
+        if(bbox == None):
+            k1 = 0; k2 = self._Nx
+            j1 = 0; j2 = self._Ny
+            i1 = 0; i1 = self._Nz
+        else:
+            k1 = bbox[0]; k2 = bbox[1]
+            j1 = bbox[2]; j2 = bbox[3]
+            i1 = bbox[4]; i2 = bbox[5]
+
+        ib = self.ib
+        ie = self.ie
+        ig = 0
+        component = 0
+        x = 0; y = 0; z = 0
+        Nc = 6 # 6 field components
+
+        ig = int(ib/Nc); zmin = int(ig/NxNy)
+        ig = int(ie/Nc); zmax = int(ig/NxNy)
+
+        if(zmin > i1): i1 = zmin
+        if(zmax < i2): i2 = zmax+1
+
+        for z in range(zmin, zmax):
+            for y in range(ymin, ymax):
+                for x in range(xmin, xmax):
+
+                    jEx = Nc*(z*NxNy+y*Nx+x) + 0
+                    if(jEx >= ib and jEx <ie):
+                        A[jEx, jEx] = 1j*eps.get_value(x+0.5, y, z-0.5)
+
+                    jEy = Nc*(z*NxNy+y*Nx+x) + 1
+                    if(jEy >= ib and jEy <ie):
+                        A[jEy, jEy] = 1j * eps.get_value(x, y+0.5, z-0.5)
+
+                    jEz = Nc*(z*NxNy+y*Nx+x) + 2
+                    if(jEz >= ib and jEz <ie):
+                        A[jEz, jEz] = 1j * eps.get_value(x, y, z)
+
+                    jHx = Nc*(z*NxNy+y*Nx+x) + 3
+                    if(jHx >= ib and jHx <ie):
+                        A[jHx, jHx] = -1j * mu.get_value(x, y+0.5, z)
+
+                    jHy = Nc*(z*NxNy+y*Nx+x) + 4
+                    if(jHy >= ib and jHy <ie):
+                        A[jHy, jHy] = -1j*mu.get_value(x+0.5, y, z)
+
+                    jHz = Nc*(z*NxNy+y*Nx+x) + 5
+                    if(jHz >= ib and jHz <ie):
+                        A[jHz, jHz] = -1j * mu.get_value(x+0.5, y+0.5, z-0.5)
+
+        # communicate off-processor values and setup internal data structures for
+        # performing parallel operations
+        A.assemblyBegin()
+        A.assemblyEnd()
+
+    def update_multigrid(self, l):
+        """Update the material distributions of the restricted system matrices
+
+        Notes
+        -----
+        l : int
+            The multigrid level to update.
+        """
+        A = self._As[l]
+
+        ib, ie = A.getOwnershipRange()
+
+        # for l > 0, we will generate A for a coarser version of the problem
+        # Coarsening occurs in factors of 2. We must modify Nx, Ny, Nz
+        # accordingly
+        Nx = self._Nx
+        Ny = self._Ny
+        Nz = self._Nz
+
+        divl = 2*(self._mglevels-l-1)
+        if(divl == 0): divl = 1
+
+        Nx = int(Nx/divl)
+        Ny = int(Ny/divl)
+        Nz = int(Nz/divl)
+
+        NxNy = Nx*Ny
+        Ngrid = Nx*Ny*Nz
+
+        eps = self._eps
+        mu = self._mu
+        bc = self._bc
+
+        # similarly, dx, dy, dz must be modified
+        dx = self._X / (Nx-1)
+        dy = self._Y / (Ny-1)
+        dz = self._Z / (Nz-1)
+
+        if(self._eps == None or self._mu == None):
+            raise Exception('The material distributions of the system must be \
+                            initialized prior to building the system matrix.')
+
+        ig = 0
+        component = 0
+        x = 0; y = 0; z = 0
+        Nc = 6 # 6 field components
+        for i in xrange(ib, ie):
+
+            ig = int(i/Nc)
+            component = int(i - 6*ig)
+            z = int(ig/NxNy)
+            y = int((ig-z*NxNy)/Nx)
+            x = ig - z*NxNy - y*Nx
+
+            xh = x*divl + divl/2
+            yh = y*divl + divl/2
+            zh = z*divl + divl/2
+
+            if(component == 0): # Jx row
+                jEx = i
+                A[i, jEx] = 1j*eps.get_value(xh+0.5*divl,yh,zh-0.5*divl)
+
+            elif(component == 1): #Jy row
+                jEy = i
+                A[i, jEy] = 1j * eps.get_value(xh,yh+0.5*divl,zh-0.5*divl)
+
+            elif(component == 2): # Jz row
+                jEz = i
+                A[i, jEz] = 1j * eps.get_value(xh,yh,zh)
+
+            elif(component == 3): # Mx row
+                jHx = i
+                A[i, jHx] = -1j * mu.get_value(xh,yh+0.5*divl,zh)
+
+            elif(component == 4): # My row
+                jHy = i
+                A[i, jHy] = -1j*mu.get_value(xh+0.5*divl,yh,zh)
+
+            else: # Mz row
+                jHz = i
+                A[i, jHz] = -1j * mu.get_value(xh+0.5*divl,yh+0.5*divl,zh-0.5*divl)
+
+
+        # communicate off-processor values and setup internal data structures for
+        # performing parallel operations
+        A.assemblyBegin()
+        A.assemblyEnd()
 
     def solve_forward(self):
         """Solve the forward simulation.
@@ -2661,39 +2821,47 @@ class FDFD_3D(FDFD):
             error_message('The system matrix has not be been built. Call' \
                           ' self.build before running a simulation')
 
+        # Update multigrid matrices
+        for l in range(0,self._mglevels-1):
+            self.update_multigrid(l)
+
+        # Update the transposed matrices
+        for l in range(0, self._mglevels):
+            A = self._As[l]
+            AT = self._AsT[l]
+            ib, ie = A.getOwnershipRange()
+            for i in range(ib, ie):
+                AT[i,i] = np.conj(A[i,i])
+            AT.assemblyBegin()
+            AT.assemblyEnd()
+
         if(self.verbose and NOT_PARALLEL):
             info_message('Running forward solver...')
 
         # setup and solve Ax=b using petsc4py
         # unless otherwise specified, MUMPS (direct solver) is used.
         # Alternatively, the bicgstab iterative solver may be used.
-        if(self._solver_type == 'iterative' or self._solver_type == 'auto'):
-            ksp = self.ksp_iter
-            ksp.setInitialGuessNonzero(True)
-            ksp.setOperators(self._A, self._A)
-            ksp.setFromOptions()
+        ksp = self.ksp_iter
+        ksp.setInitialGuessNonzero(True)
+        ksp.setOperators(self._A, self._A)
+        ksp.setFromOptions()
 
-            ksp_crs = self._ksp_crs
-            ksp_crs.setInitialGuessNonzero(True)
-            ksp_crs.setOperators(self._As[0], self._As[0])
-            ksp_crs.setFromOptions()
+        ksp_crs = self._ksp_crs
+        ksp_crs.setInitialGuessNonzero(True)
+        ksp_crs.setOperators(self._As[0], self._As[0])
+        ksp_crs.setFromOptions()
 
-            for l in range(1,self._mglevels):
-                ksp_smooth = ksp.getPC().getMGSmootherDown(l)
-                ksp_smooth.setInitialGuessNonzero(True)
-                ksp_smooth.setOperators(self._As[l], self._AsT[l])
-                ksp_smooth.setFromOptions()
+        for l in range(1,self._mglevels):
+            ksp_smooth = ksp.getPC().getMGSmootherDown(l)
+            ksp_smooth.setInitialGuessNonzero(True)
+            ksp_smooth.setOperators(self._As[l], self._AsT[l])
+            ksp_smooth.setFromOptions()
 
-            for l in range(1,self._mglevels):
-                ksp_smooth = ksp.getPC().getMGSmootherUp(l)
-                ksp_smooth.setInitialGuessNonzero(True)
-                ksp_smooth.setOperators(self._As[l], self._AsT[l])
-                ksp_smooth.setFromOptions()
-
-        elif(self._solver_type == 'direct'):
-            ksp = self.ksp_dir
-            ksp.setOperators(self._M, self._M)
-            ksp.setFromOptions()
+        for l in range(1,self._mglevels):
+            ksp_smooth = ksp.getPC().getMGSmootherUp(l)
+            ksp_smooth.setInitialGuessNonzero(True)
+            ksp_smooth.setOperators(self._As[l], self._AsT[l])
+            ksp_smooth.setFromOptions()
 
         ksp.solve(self.b, self.x)
 
@@ -2703,26 +2871,356 @@ class FDFD_3D(FDFD):
                 error_message('Forward solution did not converge with error '
                               'code %d.' % (convergence))
 
-        # Save the full result on the master node so it can be accessed in the
-        # future
-        scatter, x_full = PETSc.Scatter.toZero(self.x)
-        scatter.scatter(self.x, x_full, False, PETSc.Scatter.Mode.FORWARD)
-
-        if(NOT_PARALLEL):
-            fields = x_full[...]
-            self.fields = fields
-
     def solve_adjoint(self):
-        pass
+        """Solve the adjoint simulation.
 
-    def get_field(self, component, domain=None):
-        pass
+        This is equivalent to a solution of the transpose of Maxwell's
+        equations, which is achieved by either iteratively or directly
+        solving :math:`Ax=b`.
+        """
+        if(not self._built):
+            error_message('The system matrix has not be been built. Call' \
+                          ' self.build before running a simulation')
 
-    def get_field_interp(self, component, domain=None):
-        pass
+        if(self.verbose and NOT_PARALLEL):
+            info_message('Running forward solver...')
+
+        # setup and solve Ax=b using petsc4py
+        # unless otherwise specified, MUMPS (direct solver) is used.
+        # Alternatively, the bicgstab iterative solver may be used.
+        ksp = self.ksp_iter
+        ksp.setInitialGuessNonzero(True)
+        ksp.setOperators(self._AsT[self._mglevels-1], self._A)
+        ksp.setFromOptions()
+
+        ksp_crs = self._ksp_crs
+        ksp_crs.setInitialGuessNonzero(True)
+        ksp_crs.setOperators(self._AsT[0], self._AsT[0])
+        ksp_crs.setFromOptions()
+
+        for l in range(1,self._mglevels):
+            ksp_smooth = ksp.getPC().getMGSmootherDown(l)
+            ksp_smooth.setInitialGuessNonzero(True)
+            ksp_smooth.setOperators(self._AsT[l], self._As[l])
+            ksp_smooth.setFromOptions()
+
+        for l in range(1,self._mglevels):
+            ksp_smooth = ksp.getPC().getMGSmootherUp(l)
+            ksp_smooth.setInitialGuessNonzero(True)
+            ksp_smooth.setOperators(self._AsT[l], self._As[l])
+            ksp_smooth.setFromOptions()
+
+        ksp.solve(self.b_adj, self.x_adj)
+
+        if(RANK == 0):
+            convergence = ksp.getConvergedReason()
+            if(convergence < 0):
+                error_message('Forward solution did not converge with error '
+                              'code %d.' % (convergence))
+
+        self.update_saved_fields()
+
+    def get_field(self, component, domain=None, squeeze=False):
+        """Get the uninterpolated field.
+
+        Notes
+        -----
+        Currently aggregation from the different nodes is done is a slow way.
+        It is best to avoid making many repetative calls to this function.
+
+        Parameters
+        ----------
+        component : str
+            The desired field component to retrieve (Ex, Ey, Ez, Hx, Hy, Hz)
+        domain : emopt.misc.DomainCoordinates (optional)
+            On field data from the specified domain is retrieved. If no domain
+            is specified, the whole simulation domain will be used.
+            (default=None)
+
+        Returns
+        -------
+        numpy.ndarray
+            The desired fields contained within the specified domain.
+        """
+        if(domain == None):
+            domain = DomainCoordinates(0, self._X, 0, self._Y, 0, self._Z,
+                                       self._dx, self._dy, self._dz)
+
+        # get domain bounds for quicker access
+        k1 = domain.k1; k2 = domain.k2
+        j1 = domain.j1; j2 = domain.j2
+        i1 = domain.i1; i2 = domain.i2
+
+        # grid properties. Needed in a sec
+        Nc = 6
+        Nx = self._Nx
+        NxNy = self._Nx * self._Ny
+        solution_vec = self.x.getArray()
+        values = []
+
+        # In order to get the fields only in the desired domain, we need to
+        # extract the corresponding field values from the different processes.
+        # For many 3D problems, it would be terribly inefficient (in terms of
+        # memory) to assemble all of the parts of x together and then slice out
+        # the desired rectangular piece. Instead, we will have each process
+        # extract out only the desired values and then send these values to the
+        # rank 0 process. To do this efficiently, we will limit our range of
+        # indices of x that we consider.
+        ib = self.ib
+        ie = self.ie
+
+        # based on ie, we can set a limit on z
+        ig = int(ie/Nc)
+        zmax = int(ig/NxNy)
+
+        ig = int(ib/Nc)
+        zmin = int(ig/NxNy)
+
+        if(i1 < zmin): i1 = zmin-1
+        if(i2 > zmax): i2 = zmax+1
+
+        c = 0
+        if(component == FieldComponent.Ex): c = 0
+        elif(component == FieldComponent.Ey): c = 1
+        elif(component == FieldComponent.Ez): c = 2
+        elif(component == FieldComponent.Hx): c = 3
+        elif(component == FieldComponent.Hy): c = 4
+        elif(component == FieldComponent.Hz): c = 5
+
+        for z in xrange(i1, i2):
+            for y in xrange(j1, j2):
+                for x in xrange(k1, k2):
+                    index = Nc*(z*NxNy+y*Nx+x)+c
+
+                    if(index >= ib and index < ie):
+                        values.append(solution_vec[index-ib])
+
+
+        # share the data between processors
+        comm = MPI.COMM_WORLD
+        field = comm.gather(values, root=0)
+
+        # combine and reshape the data
+        if(NOT_PARALLEL):
+            field = np.concatenate(field)
+            field = np.reshape(field, domain.shape)
+            if(squeeze): return np.squeeze(field)
+            else: return field
+        else:
+            return MathDummy()
+
+
+    def get_field_interp(self, component, domain=None, squeeze=False):
+        """Get the desired field component.
+
+        Internally, fields are solved on a staggered grid. In most cases, it is
+        desirable to know all of the field components at the same sets of
+        positions. This requires that we interpolate the fields onto a single
+        grid. In emopt, we interpolate all field components onto the Ez grid.
+
+        Parameters
+        ----------
+        component : str
+            The desired field component.
+        domain : misc.DomainCoordinates (optional)
+            The domain from which the field is retrieved. (default = None)
+
+        Returns
+        -------
+        numpy.ndarray
+            The interpolated field
+        """
+        # Ez does not need to be interpolated
+        if(component == FieldComponent.Ez):
+            return self.get_field(component, domain)
+        else:
+            # if no domain was provided
+            if(domain == None):
+                domain_interp = DomainCoordinates(0, self._X, 0, self._Y, 0, self._Z,
+                                                  self._dx, self._dy, self._dz)
+                domain = domain_interp
+
+                k1 = domain_interp.k1; k2 = domain_interp.k2
+                j1 = domain_interp.j1; j2 = domain_interp.j2
+                i1 = domain_interp.i1; i2 = domain_interp.i2
+
+            # in order to properly handle interpolation at the boundaries, we
+            # need to expand the domain
+            else:
+                k1 = domain.k1; k2 = domain.k2
+                j1 = domain.j1; j2 = domain.j2
+                i1 = domain.i1; i2 = domain.i2
+
+                if(k1 > 0): k1 -= 1
+                if(k2 < self._Nx-1): k2 += 1
+                if(j1 > 0): j1 -= 1
+                if(j2 < self._Nx-1): j2 += 1
+                if(i1 > 0): i1 -= 1
+                if(i2 < self._Nx-1): i2 += 1
+
+                domain_interp = DomainCoordinates(k1*self._dx, k2*self._dx,
+                                                  j1*self._dy, j2*self._dy,
+                                                  i1*self._dz, i2*self._dz,
+                                                  self._dx, self._dy, self._dz)
+
+                k1 = domain_interp.k1; k2 = domain_interp.k2
+                j1 = domain_interp.j1; j2 = domain_interp.j2
+                i1 = domain_interp.i1; i2 = domain_interp.i2
+
+            fraw = self.get_field(component, domain_interp)
+
+            if(RANK != 0):
+                return MathDummy
+
+            fraw = np.pad(fraw, 1, 'constant', constant_values=0)
+
+            # after interpolation, we will need to crop the field so that it
+            # matches the supplied domain
+            crop_field = lambda f : f[1+domain.i1-i1:-1-(i2-domain.i2), \
+                                      1+domain.j1-j1:-1-(j2-domain.j2), \
+                                      1+domain.k1-k1:-1-(k2-domain.k2)]
+
+            field = None
+            if(component == FieldComponent.Ex):
+                Ex = np.copy(fraw)
+                Ex[0:-1, :, 1:] += fraw[0:-1, :, 0:-1]
+                Ex[0:-1, :, 1:] += fraw[1:, :, 1:]
+                Ex[0:-1, :, 1:] += fraw[1:, :, 0:-1]
+                Ex = Ex/4.0
+                field = crop_field(Ex)
+
+            elif(component == FieldComponent.Ey):
+                Ey = np.copy(fraw)
+                Ey[0:-1, 1:, :] += fraw[0:-1, 0:-1, :]
+                Ey[0:-1, 1:, :] += fraw[1:, 1:, :]
+                Ey[0:-1, 1:, :] += fraw[1:, 0:-1, :]
+                Ey = Ey/4.0
+                field = crop_field(Ey)
+
+            elif(component == FieldComponent.Hx):
+                Hx = np.copy(fraw)
+                Hx[:, 1:, :] += fraw[:, 0:-1, :]
+                Hx = Hx/2.0
+                field = crop_field(Hx)
+
+            elif(component == FieldComponent.Hy):
+                Hy = np.copy(fraw)
+                Hy[:, :, 1:] += fraw[:, :, 0:-1]
+                Hy = Hy/2.0
+                field = crop_field(Hy)
+
+            elif(component == FieldComponent.Hz):
+                Hz = np.copy(fraw)
+                Hz[0:-1, 1:, 1:] += fraw[0:-1, 1:, 0:-1]
+                Hz[0:-1, 1:, 1:] += fraw[0:-1, 0:-1, 1:]
+                Hz[0:-1, 1:, 1:] += fraw[0:-1, 0:-1, 0:-1]
+                Hz[0:-1, 1:, 1:] += fraw[1:, 1:, 1:]
+                Hz[0:-1, 1:, 1:] += fraw[1:, 1:, 0:-1]
+                Hz[0:-1, 1:, 1:] += fraw[1:, 0:-1, 1:]
+                Hz[0:-1, 1:, 1:] += fraw[1:, 0:-1, 0:-1]
+                Hz = Hz/8.0
+                field = crop_field(Hz)
+            else:
+                pass
+
+            if(squeeze): return np.squeeze(field)
+            else: return field
 
     def get_adjoint_field(self, component, domain=None):
-        pass
+        """Get the adjoint field.
+
+        Notes
+        -----
+        1. This function is primarily intended as a diagnostics tool. If
+        implementing and adjoint method, consult the emopt.adjoint_method
+        documentation.
+
+        2. Currently aggregation from the different nodes is done is a slow way.
+        It is best to avoid making many repetative calls to this function.
+
+        Parameters
+        ----------
+        component : str
+            The desired adjoint field component to retrieve (Ex, Ey, Ez, Hx,
+            Hy, Hz). Note that the adjoint field is somewhat fictitious, so
+            "field component" refers to the part of the solution vector from
+            which to collect the fields.
+        domain : emopt.misc.DomainCoordinates (optional)
+            On field data from the specified domain is retrieved. If no domain
+            is specified, the whole simulation domain will be used.
+            (default=None)
+
+        Returns
+        -------
+        numpy.ndarray
+            The desired fields contained within the specified domain.
+        """
+        if(domain == None):
+            domain = DomainCoordinates(0, self._X, 0, self._Y, 0, self._Z,
+                                       self._dx, self._dy, self._dz)
+
+        # get domain bounds for quicker access
+        k1 = domain.k1; k2 = domain.k2
+        j1 = domain.j1; j2 = domain.j2
+        i1 = domain.i1; i2 = domain.i2
+
+        # grid properties. Needed in a sec
+        Nc = 6
+        Nx = self._Nx
+        NxNy = self._Nx * self._Ny
+        solution_vec = self.x_adj.getArray()
+        values = []
+
+        # In order to get the fields only in the desired domain, we need to
+        # extract the corresponding field values from the different processes.
+        # For many 3D problems, it would be terribly inefficient (in terms of
+        # memory) to assemble all of the parts of x together and then slice out
+        # the desired rectangular piece. Instead, we will have each process
+        # extract out only the desired values and then send these values to the
+        # rank 0 process. To do this efficiently, we will limit our range of
+        # indices of x that we consider.
+        ib = self.ib
+        ie = self.ie
+
+        # based on ie, we can set a limit on z
+        ig = int(ib/Nc)
+        zb = int(ig/NxNy)
+
+        ig = int(ie/Nc)
+        ze = int(ig/NxNy)
+
+        if(i1 < zb): i1 = zb
+        if(i2 > ze): i2 = ze+1
+
+        c = 0
+        if(component == FieldComponent.Ex): c = 0
+        elif(component == FieldComponent.Ey): c = 1
+        elif(component == FieldComponent.Ez): c = 2
+        elif(component == FieldComponent.Hx): c = 3
+        elif(component == FieldComponent.Hy): c = 4
+        elif(component == FieldComponent.Hz): c = 5
+
+        for z in xrange(i1, i2):
+            for y in xrange(j1, j2):
+                for x in xrange(k1, k2):
+                    index = Nc*(z*NxNy+y*Nx+x)+c
+
+                    if(index >= ib and index < ie):
+                        values.append(solution_vec[index-ib])
+
+
+        # share the data between processors
+        comm = MPI.COMM_WORLD
+        field = comm.gather(values, root=0)
+
+        # combine and reshape the data
+        if(NOT_PARALLEL):
+            field = np.concatenate(field)
+            field = np.reshape(field, domain.shape)
+            return field
+        else:
+            return MathDummy()
+
 
     def set_materials(self, eps, mu):
         """Set the material distributions of the system to be simulated.
@@ -2737,58 +3235,281 @@ class FDFD_3D(FDFD):
         self._eps = eps
         self._mu = mu
 
-    def set_sources(self, src):
+    def set_sources(self, src, domain, mode_num=0):
         """Set the sources of the system used in the forward solve.
 
         Notes
         -----
-        Like the underlying fields, the current sources are represented on a
+        1. Like the underlying fields, the current sources are represented on a
         set of shifted grids. If manually setting the source, this should be
         taken into account.
 
-        Todo
-        ----
-        1. Implement a more user-friendly version of these sources (so that you do
-        not need to deal with the Yee cell implementation).
+        2. If using a mode source to set the sources, the mode source must be
+        built and run prior to calling this function.
 
-        2. Implement this in a better parallelized way
+        3. This function can be called repeatedly to modify the source
+        distribution. Calling this function does not zero the current
+        distribution.
 
         Parameters
         ----------
-        src : tuple of numpy.ndarray
-            The current sources in the form (Jz, Mx, My).  Each array in the
-            tiple should be a 2D numpy.ndarry with dimensions MxN.
+        src : modes.ModeFullVector or tuple of numpy.ndarray
+            Either a ModeFullVector object or a set of arrays containing
+            current source distributions.
         """
-        Jx = src[0]
-        Jy = src[1]
-        Jz = src[2]
-        Mx = src[3]
-        My = src[4]
-        Mz = src[5]
-
         Nc = 6
-        src_arr = np.zeros(self.nunks, dtype=np.complex128)
-        src_arr[0::Nc] = Jx.ravel()
-        src_arr[1::Nc] = Jy.ravel()
-        src_arr[2::Nc] = Jz.ravel()
-        src_arr[3::Nc] = Mx.ravel()
-        src_arr[4::Nc] = My.ravel()
-        src_arr[5::Nc] = Mz.ravel()
+        Nx = self._Nx
+        NxNy = self._Nx * self._Ny
+        ib = self.ib
+        ie = self.ie
+        src_arr = self.b.getArray()
 
-        self.b.setArray(src_arr[self.ib:self.ie])
+        if(type(src) == tuple or type(src) == list):
+            # the source vector is distributed across the different processes.
+            # We need to extract out only the locally stored values from the
+            # provided arrays.
+            k1 = domain.k1; k2 = domain.k2
+            j1 = domain.j1; j2 = domain.j2
+            i1 = domain.i1; i2 = domain.i2
 
-    def set_adjoint_sources(self, src):
-        pass
+            # restrict the range of zs to only those owned locally by this
+            # processor
+            ig = int(ie/Nc)
+            zmax = int(ig/NxNy)+1
+
+            ig = int(ib/Nc)
+            zmin = int(ig/NxNy)-1
+
+            if(i1 > zmin): zmin = i1
+            if(i2 < zmax): zmax = i2
+
+            Jx = src[0]; Jy = src[1]; Jz = src[2]
+            Mx = src[3]; My = src[4]; Mz = src[5]
+
+            for i in range(zmin, zmax):
+                for j in range(j1,j2):
+                    for k in range(k1,k2):
+                        index = Nc*(i*NxNy+j*Nx+k)
+                        if(index >= ib and index < ie):
+                            src_arr[index - ib + 0] = Jx[i-i1, j-j1, k-k1]
+                            src_arr[index - ib + 1] = Jy[i-i1, j-j1, k-k1]
+                            src_arr[index - ib + 2] = Jz[i-i1, j-j1, k-k1]
+                            src_arr[index - ib + 3] = Mx[i-i1, j-j1, k-k1]
+                            src_arr[index - ib + 4] = My[i-i1, j-j1, k-k1]
+                            src_arr[index - ib + 5] = Mz[i-i1, j-j1, k-k1]
+
+            self.b.setArray(src_arr)
+
+        elif(type(src) == modes.ModeFullVector):
+            Jx, Jy, Jz, Mx, My, Mz = src.get_source(mode_num,
+                                                    self._dx,
+                                                    self._dy,
+                                                    self._dz)
+
+            # for now, we are just going to send all current sources to every
+            # processor. This is inefficient but very simple. Fortunately, the
+            # mode source should have a small memory footprint.
+            Jx = COMM.bcast(Jx, root=0)
+            Jy = COMM.bcast(Jy, root=0)
+            Jz = COMM.bcast(Jz, root=0)
+            Mx = COMM.bcast(Mx, root=0)
+            My = COMM.bcast(My, root=0)
+            Mz = COMM.bcast(Mz, root=0)
+
+            # recursively call set_source with the distributed arrays. this is
+            # gross, I know...
+            self.set_sources([Jx, Jy, Jz, Mx, My, Mz], domain)
+
+
+    def set_adjoint_sources(self, dFdxs):
+        """Set the adjoint sources.
+
+        This function exists to maintain compatibility with the adjoint method
+        class which expects a function which accepts a single argument in order
+        to set the adjoint source distribution.
+
+        This functionality is complicated in 3D as we have to be a bit more
+        careful with how we share data between processors.
+
+        Parameters
+        ----------
+        dFdxs : tuple of lists
+            Tuple containing a list of numpy.ndarray as the first element and a
+            list of correpsonding DomainCoordinates as the second argument.
+        """
+        for src, domain in zip(dFdxs[0], dFdxs[1]):
+            self.update_adjoint_sources(src, domain)
+
+    def update_adjoint_sources(self, src, domain):
+        """Update the adjoint source.
+
+        Parameters
+        ----------
+        src : numpy.ndarray
+            The source distribution
+        domain : misc.DomainCoordinates
+            The region in the grid corresponding to src.
+        """
+        Nc = 6
+        Nx = self._Nx
+        NxNy = self._Nx * self._Ny
+        ib = self.ib
+        ie = self.ie
+        src_arr = self.b_adj.getArray()
+
+        # the source vector is distributed across the different processes.
+        # We need to extract out only the locally stored values from the
+        # provided arrays.
+        k1 = domain.k1; k2 = domain.k2
+        j1 = domain.j1; j2 = domain.j2
+        i1 = domain.i1; i2 = domain.i2
+
+        # restrict the range of zs to only those owned locally by this
+        # processor
+        ig = int(ie/Nc)
+        zmax = int(ig/NxNy)
+
+        ig = int(ib/Nc)
+        zmin = int(ig/NxNy)
+
+        if(i1 > zmin): zmin = i1
+        if(i2 < zmax): zmax = i2
+
+        Jx = src[0]; Jy = src[1]; Jz = src[2]
+        Mx = src[3]; My = src[4]; Mz = src[5]
+
+        for i in range(zmin,zmax):
+            for j in range(j1,j2):
+                for k in range(k1,k2):
+                    index = Nc*(i*NxNy+j*Nx+k)
+                    if(index >= ib and index < ie):
+                        src_arr[index - ib + 0] = Jx[i-i1, j-j1, k-k1]
+                        src_arr[index - ib + 1] = Jy[i-i1, j-j1, k-k1]
+                        src_arr[index - ib + 2] = Jz[i-i1, j-j1, k-k1]
+                        src_arr[index - ib + 3] = Mx[i-i1, j-j1, k-k1]
+                        src_arr[index - ib + 4] = My[i-i1, j-j1, k-k1]
+                        src_arr[index - ib + 5] = Mz[i-i1, j-j1, k-k1]
+
+        self.b_adj.setArray(np.conj(src_arr))
 
     def update_saved_fields(self):
-        pass
+        """Update the saved fields based on the domains contained in
+        FDFD_3D.field_domains.
 
-    def get_source_power(self, src):
-        """
         Notes
         -----
-        This should exclude any influence due to non-physical boundary
-        conditions like PMLs (if possible)
+        1. This is primarily for internal use only.
+        2. The fields are NOT squeezed
         """
-        pass
+        del self._saved_fields
+        self._saved_fields = []
 
+        for d in self._field_domains:
+            Ex = self.get_field_interp(FieldComponent.Ex, domain=d)
+            Ey = self.get_field_interp(FieldComponent.Ey, domain=d)
+            Ez = self.get_field_interp(FieldComponent.Ez, domain=d)
+            Hx = self.get_field_interp(FieldComponent.Hx, domain=d)
+            Hy = self.get_field_interp(FieldComponent.Hy, domain=d)
+            Hz = self.get_field_interp(FieldComponent.Hz, domain=d)
+
+            self._saved_fields.append([Ex, Ey, Ez, Hx, Hy, Hz])
+
+    def get_source_power(self):
+        """Get source power.
+
+        The source power is the total electromagnetic power radiated by the
+        electric and magnetic current sources.
+
+        Returns
+        -------
+        float
+            The source power.
+        """
+        Psrc = 0.0
+
+        # define pml boundary domains
+        dx = self._dx; dy = self._dy; dz = self._dz
+        xmin = self._w_pml_xmin*dx; xmax = self._X - self._w_pml_xmax*dx
+        ymin = self._w_pml_ymin*dy; ymax = self._Y - self._w_pml_ymax*dy
+        zmin = self._w_pml_zmin*dz; zmax = self._Z - self._w_pml_zmax*dz
+
+        x1 = DomainCoordinates(xmin, xmin, ymin, ymax, zmin, zmax, dx, dy, dz)
+        x2 = DomainCoordinates(xmax, xmax, ymin, ymax, zmin, zmax, dx, dy, dz)
+        y1 = DomainCoordinates(xmin, xmax, ymin, ymin, zmin, zmax, dx, dy, dz)
+        y2 = DomainCoordinates(xmin, xmax, ymax, ymax, zmin, zmax, dx, dy, dz)
+        z1 = DomainCoordinates(xmin, xmax, ymin, ymax, zmin, zmin, dx, dy, dz)
+        z2 = DomainCoordinates(xmin, xmax, ymin, ymax, zmax, zmax, dx, dy, dz)
+
+        # calculate power transmitter through xmin boundary
+        Ey = self.get_field_interp('Ey', x1)
+        Ez = self.get_field_interp('Ez', x1)
+        Hy = self.get_field_interp('Hy', x1)
+        Hz = self.get_field_interp('Hz', x1)
+
+        if(NOT_PARALLEL):
+            Px = -0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
+            print Px
+            Psrc += Px
+        del Ey; del Ez; del Hy; del Hz
+
+        # calculate power transmitter through xmax boundary
+        Ey = self.get_field_interp('Ey', x2)
+        Ez = self.get_field_interp('Ez', x2)
+        Hy = self.get_field_interp('Hy', x2)
+        Hz = self.get_field_interp('Hz', x2)
+
+        if(NOT_PARALLEL):
+            Px = 0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
+            print Px
+            Psrc += Px
+        del Ey; del Ez; del Hy; del Hz
+
+        # calculate power transmitter through ymin boundary
+        Ex = self.get_field_interp('Ex', y1)
+        Ez = self.get_field_interp('Ez', y1)
+        Hx = self.get_field_interp('Hx', y1)
+        Hz = self.get_field_interp('Hz', y1)
+
+        if(NOT_PARALLEL):
+            Py = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
+            print Py
+            Psrc += Py
+        del Ex; del Ez; del Hx; del Hz
+
+        # calculate power transmitter through ymax boundary
+        Ex = self.get_field_interp('Ex', y2)
+        Ez = self.get_field_interp('Ez', y2)
+        Hx = self.get_field_interp('Hx', y2)
+        Hz = self.get_field_interp('Hz', y2)
+
+        if(NOT_PARALLEL):
+            Py = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
+            print Py
+            Psrc += Py
+        del Ex; del Ez; del Hx; del Hz
+
+        # calculate power transmitter through zmin boundary
+        Ex = self.get_field_interp('Ex', z1)
+        Ey = self.get_field_interp('Ey', z1)
+        Hx = self.get_field_interp('Hx', z1)
+        Hy = self.get_field_interp('Hy', z1)
+
+        if(NOT_PARALLEL):
+            Pz = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
+            print Pz
+            Psrc += Pz
+        del Ex; del Ey; del Hx; del Hy
+
+        # calculate power transmitter through zmin boundary
+        Ex = self.get_field_interp('Ex', z2)
+        Ey = self.get_field_interp('Ey', z2)
+        Hx = self.get_field_interp('Hx', z2)
+        Hy = self.get_field_interp('Hy', z2)
+
+        if(NOT_PARALLEL):
+            Pz = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
+            print Pz
+            Psrc += Pz
+        del Ex; del Ey; del Hx; del Hy
+
+        return Psrc

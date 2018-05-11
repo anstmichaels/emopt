@@ -1,3 +1,25 @@
+"""Demonstrates how to run a simple 3D simulation using emopt.
+
+This script sets up a waveguide and mode source and then plots a slice of the
+resulting field.
+
+To run the script run:
+
+    $ mpirun -n 16 python simple_waveguide_mode_3D.py
+
+If you want to run the script on a different number of processors, change 16 to
+the desired value.
+
+Furthermore, if you would like to monitor the process of the solver, you can
+add the '-ksp_monitor_true_residual' command line argument:
+
+    $ mpirun -n 16 python simple_waveguide_mode_3D.py -ksp_monitor_true_residual
+
+and look at the last number that is printed each iteration. The simulation
+terminates when this value drops below the specified rtol (which defaults to
+1e-6)
+"""
+
 import emopt
 from emopt.misc import NOT_PARALLEL
 
@@ -10,20 +32,21 @@ from mpi4py import MPI
 ####################################################################################
 # Simulation parameters
 ####################################################################################
-X = 3.0
+X = 5.0
 Y = 3.0
-Z = 3.0
-dx = 0.03
-dy = dx
-dz = dx
+Z = 2.5
+dx = 0.04
+dy = 0.04
+dz = 0.04
 
 wavelength = 1.55
 
 #####################################################################################
 # Setup simulation
 #####################################################################################
-sim = emopt.fdfd.FDFD_3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-6)
-sim.w_pml = [0.3, 0.3, 0.3, 0.3]
+sim = emopt.fdfd.FDFD_3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5)
+w_pml = dx * 15
+sim.w_pml = [w_pml, w_pml, w_pml, w_pml, w_pml, w_pml]
 
 X = sim.X
 Y = sim.Y
@@ -54,80 +77,31 @@ sim.build()
 #####################################################################################
 # Setup the sources
 #####################################################################################
-mode_slice = emopt.misc.DomainCoordinates(0.4, 0.4, 0.3, Y-0.3, 0.3, Z-0.3, dx, dy, dz)
+mode_slice = emopt.misc.DomainCoordinates(0.8, 0.8, w_pml, Y-w_pml, w_pml, Z-w_pml, dx, dy, dz)
 
-mode = emopt.modes.Mode_FullVector(wavelength, eps, mu, mode_slice, n0=3.45,
+mode = emopt.modes.ModeFullVector(wavelength, eps, mu, mode_slice, n0=3.45,
                                    neigs=4)
 mode.build()
 mode.solve()
-Jxs, Jys, Jzs, Mxs, Mys, Mzs = mode.get_source(0, dx, dy ,dz)
+sim.set_sources(mode, mode_slice)
 
-Jxs = emopt.misc.COMM.bcast(Jxs, root=0)
-Jys = emopt.misc.COMM.bcast(Jys, root=0)
-Jzs = emopt.misc.COMM.bcast(Jzs, root=0)
-Mxs = emopt.misc.COMM.bcast(Mxs, root=0)
-Mys = emopt.misc.COMM.bcast(Mys, root=0)
-Mzs = emopt.misc.COMM.bcast(Mzs, root=0)
-
-Jx = np.zeros([Nz, Ny, Nx], dtype=np.complex128)
-Jy = np.zeros([Nz, Ny, Nx], dtype=np.complex128)
-Jz = np.zeros([Nz, Ny, Nx], dtype=np.complex128)
-Mx = np.zeros([Nz, Ny, Nx], dtype=np.complex128)
-My = np.zeros([Nz, Ny, Nx], dtype=np.complex128)
-Mz = np.zeros([Nz, Ny, Nx], dtype=np.complex128)
-
-Jx[mode_slice.i, mode_slice.j, mode_slice.k] = np.reshape(Jxs, [mode_slice.Nz, mode_slice.Ny, 1])
-Jy[mode_slice.i, mode_slice.j, mode_slice.k] = np.reshape(Jys, [mode_slice.Nz, mode_slice.Ny, 1])
-Jz[mode_slice.i, mode_slice.j, mode_slice.k] = np.reshape(Jzs, [mode_slice.Nz, mode_slice.Ny, 1])
-Mx[mode_slice.i, mode_slice.j, mode_slice.k] = np.reshape(Mxs, [mode_slice.Nz, mode_slice.Ny, 1])
-My[mode_slice.i, mode_slice.j, mode_slice.k] = np.reshape(Mys, [mode_slice.Nz, mode_slice.Ny, 1])
-Mz[mode_slice.i, mode_slice.j, mode_slice.k] = np.reshape(Mzs, [mode_slice.Nz, mode_slice.Ny, 1])
-
-src = [Jx, Jy, Jz, Mx, My, Mz]
-sim.set_sources(src)
-
+#####################################################################################
+# Simulate and view results
+#####################################################################################
 sim.solve_forward()
 
-if(NOT_PARALLEL):
-    #flr = flr_full
-    fields = sim.fields
-
-
-    Ey = fields[1::6]
-    Ey = np.reshape(Ey, (Nz, Ny, Nx))
-    Ez = fields[2::6]
-    Ez = np.reshape(Ez, (Nz, Ny, Nx))
-    Hy = fields[4::6]
-    Hy = np.reshape(Hy, (Nz, Ny, Nx))
-    Hz = fields[5::6]
-    Hz = np.reshape(Hz, (Nz, Ny, Nx))
-
-    P = dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-    S = (np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-    print 'Power: ', P
-
-    #Ezlr = x2h[0::6]
-    #Ezlr = np.reshape(Ezlr, (int(Nz/2), int(Ny/2), int(Nx/2)))
+field_monitor = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, Z/2, Z/2,
+                                  dx, dy, dz)
+Ey = sim.get_field_interp('Ey', domain=field_monitor, squeeze=True)
 
 if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
-    #eps_slice = eps_grid[wg_slice.i, wg_slice.j, wg_slice.k].real
-    #eps_slice = eps_slice[0, :, :]
+    eps_arr = eps.get_values_in(field_monitor, squeeze=True)
 
-    E_slice = Ey[Nz/2, :, :]
-    #Ez_slice = Ez_slice[:, 0, :]
-
-    vmax = np.max(np.real(E_slice))
+    vmax = np.max(np.real(Ey))
     f = plt.figure()
     ax = f.add_subplot(111)
-    ax.imshow(np.real(E_slice), extent=[0,X,0,Y], vmin=-vmax, vmax=vmax, cmap='seismic')
+    ax.imshow(np.real(Ey), extent=[0,X-2*w_pml,0,Y-2*w_pml], vmin=-vmax, vmax=vmax, cmap='seismic')
     plt.show()
 
-    #Ez_slice = Ezlr[:, int(Ny/4), :]
-
-    #vmax = np.max(np.real(Ez_slice))
-    #f = plt.figure()
-    #ax = f.add_subplot(111)
-    #ax.imshow(np.real(Ez_slice), extent=[0,Nx,0,Nz], vmin=-vmax, vmax=vmax, cmap='seismic')
-    #plt.show()
