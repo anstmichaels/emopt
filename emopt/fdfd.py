@@ -2088,7 +2088,7 @@ class FDFD_3D(FDFD):
         self.ksp_iter.create(PETSc.COMM_WORLD)
 
         self.ksp_iter.setType('gcr')
-        self.ksp_iter.setInitialGuessNonzero(True)
+        #self.ksp_iter.setInitialGuessNonzero(True)
         #self.ksp_iter.setGCRRestart(15)
         self.ksp_iter.setTolerances(rtol=rtol)
         optDB['-ksp_gcr_restart'] = 15
@@ -2125,7 +2125,7 @@ class FDFD_3D(FDFD):
         for l in range(1,mglevels):
             ksp_smooth = pc.getMGSmootherDown(l)
             ksp_smooth.setType('gmres') # this shouldnt work but does well
-            ksp_smooth.setGMRESRestart(4)
+            ksp_smooth.setGMRESRestart(10)
             ksp_smooth.setTolerances(max_it=8)
             pc_smooth = ksp_smooth.getPC()
             pc_smooth.setType('mat')
@@ -2134,7 +2134,7 @@ class FDFD_3D(FDFD):
         ## Setup Up Smoothers
         for l in range(1,mglevels):
             ksp_smooth = pc.getMGSmootherUp(l)
-            ksp_smooth.setType('chebyshev')
+            ksp_smooth.setType('gmres')
             ksp_smooth.setTolerances(max_it=4)
             pc_smooth = ksp_smooth.getPC()
             pc_smooth.setType('mat')
@@ -2667,7 +2667,7 @@ class FDFD_3D(FDFD):
         if(bbox == None):
             k1 = 0; k2 = self._Nx
             j1 = 0; j2 = self._Ny
-            i1 = 0; i1 = self._Nz
+            i1 = 0; i2 = self._Nz
         else:
             k1 = bbox[0]; k2 = bbox[1]
             j1 = bbox[2]; j2 = bbox[3]
@@ -2687,8 +2687,8 @@ class FDFD_3D(FDFD):
         if(zmax < i2): i2 = zmax+1
 
         for z in range(zmin, zmax):
-            for y in range(ymin, ymax):
-                for x in range(xmin, xmax):
+            for y in range(j1, j2):
+                for x in range(k1, k2):
 
                     jEx = Nc*(z*NxNy+y*Nx+x) + 0
                     if(jEx >= ib and jEx <ie):
@@ -2842,24 +2842,22 @@ class FDFD_3D(FDFD):
         # unless otherwise specified, MUMPS (direct solver) is used.
         # Alternatively, the bicgstab iterative solver may be used.
         ksp = self.ksp_iter
-        ksp.setInitialGuessNonzero(True)
+        ksp.setInitialGuessNonzero(False)
         ksp.setOperators(self._A, self._A)
         ksp.setFromOptions()
 
         ksp_crs = self._ksp_crs
-        ksp_crs.setInitialGuessNonzero(True)
+        ksp_crs.setInitialGuessNonzero(False)
         ksp_crs.setOperators(self._As[0], self._As[0])
         ksp_crs.setFromOptions()
 
         for l in range(1,self._mglevels):
             ksp_smooth = ksp.getPC().getMGSmootherDown(l)
-            ksp_smooth.setInitialGuessNonzero(True)
             ksp_smooth.setOperators(self._As[l], self._AsT[l])
             ksp_smooth.setFromOptions()
 
         for l in range(1,self._mglevels):
             ksp_smooth = ksp.getPC().getMGSmootherUp(l)
-            ksp_smooth.setInitialGuessNonzero(True)
             ksp_smooth.setOperators(self._As[l], self._AsT[l])
             ksp_smooth.setFromOptions()
 
@@ -2883,30 +2881,28 @@ class FDFD_3D(FDFD):
                           ' self.build before running a simulation')
 
         if(self.verbose and NOT_PARALLEL):
-            info_message('Running forward solver...')
+            info_message('Running adjoint solver...')
 
         # setup and solve Ax=b using petsc4py
         # unless otherwise specified, MUMPS (direct solver) is used.
         # Alternatively, the bicgstab iterative solver may be used.
         ksp = self.ksp_iter
-        ksp.setInitialGuessNonzero(True)
+        ksp.setInitialGuessNonzero(False)
         ksp.setOperators(self._AsT[self._mglevels-1], self._A)
         ksp.setFromOptions()
 
         ksp_crs = self._ksp_crs
-        ksp_crs.setInitialGuessNonzero(True)
+        ksp_crs.setInitialGuessNonzero(False)
         ksp_crs.setOperators(self._AsT[0], self._AsT[0])
         ksp_crs.setFromOptions()
 
         for l in range(1,self._mglevels):
             ksp_smooth = ksp.getPC().getMGSmootherDown(l)
-            ksp_smooth.setInitialGuessNonzero(True)
             ksp_smooth.setOperators(self._AsT[l], self._As[l])
             ksp_smooth.setFromOptions()
 
         for l in range(1,self._mglevels):
             ksp_smooth = ksp.getPC().getMGSmootherUp(l)
-            ksp_smooth.setInitialGuessNonzero(True)
             ksp_smooth.setOperators(self._AsT[l], self._As[l])
             ksp_smooth.setFromOptions()
 
@@ -3126,7 +3122,7 @@ class FDFD_3D(FDFD):
             if(squeeze): return np.squeeze(field)
             else: return field
 
-    def get_adjoint_field(self, component, domain=None):
+    def get_adjoint_field(self, component, domain=None, squeeze=False):
         """Get the adjoint field.
 
         Notes
@@ -3217,7 +3213,8 @@ class FDFD_3D(FDFD):
         if(NOT_PARALLEL):
             field = np.concatenate(field)
             field = np.reshape(field, domain.shape)
-            return field
+            if(squeeze): return np.squeeze(field)
+            else: return field
         else:
             return MathDummy()
 
@@ -3377,6 +3374,14 @@ class FDFD_3D(FDFD):
 
         Jx = src[0]; Jy = src[1]; Jz = src[2]
         Mx = src[3]; My = src[4]; Mz = src[5]
+
+        # these are most likely only know on rank 0--communicate data
+        Jx = COMM.bcast(Jx, root=0)
+        Jy = COMM.bcast(Jy, root=0)
+        Jz = COMM.bcast(Jz, root=0)
+        Mx = COMM.bcast(Mx, root=0)
+        My = COMM.bcast(My, root=0)
+        Mz = COMM.bcast(Mz, root=0)
 
         for i in range(zmin,zmax):
             for j in range(j1,j2):
