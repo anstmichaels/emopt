@@ -21,6 +21,7 @@ import sys
 sys.path.insert(0, os.path.abspath('../../emopt/'))
 
 from subprocess import call
+call(["ls", "../../"])
 call(["cp", "../../emopt/*.py", "./"])
 
 
