@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.abspath('../../emopt/'))
 import mock
 MOCK_MODULES = ['numpy', 'scipy', 'petsc4py', 'mpi4py', 'matplotlib',
                 'matplotlib.pyplot', 'h5py', 'shapely', 'shapely.geometry',
-                'shapely.ops', 'numpy.ctypeslib', 'scipy.optimize']
+                'shapely.ops', 'numpy.ctypeslib', 'scipy.optimize', 'slepc4py']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
