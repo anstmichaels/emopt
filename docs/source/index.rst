@@ -23,7 +23,7 @@ techniques, EMopt allows you to compute sensitivities (i.e. gradient of a
 figure of merit with respect to design variables which define an
 electromagnetic device's shape) with very high accuracy. This allows you to
 easily take adavantage of powerful minimization techniques in order to optimize
-you electromagnetic device.
+your electromagnetic device.
 
 .. toctree::
     :hidden:
