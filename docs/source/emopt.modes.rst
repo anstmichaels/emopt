@@ -1,7 +1,7 @@
 emopt\.modes
 ============
 
-.. automodule:: emopt.modes
+.. automodule:: modes
    :members:
    :undoc-members:
    :show-inheritance:

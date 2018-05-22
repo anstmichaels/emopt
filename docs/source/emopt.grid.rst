@@ -4,7 +4,7 @@
 emopt\.grid
 ###########
 
-.. automodule:: emopt.grid
+.. automodule:: grid
    :members:
    :undoc-members:
    :show-inheritance:

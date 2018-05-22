@@ -26,8 +26,6 @@ import numpy as np
 import scipy
 from ctypes import c_int, c_double
 
-print 'This is a test'
-
 from misc import DomainCoordinates
 from misc import warning_message
 
