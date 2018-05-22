@@ -13,12 +13,14 @@ optimizations.
     :maxdepth: 3
     :caption: 2D Examples
 
+    tutorial_2D_waveguide_sim
     tutorial_2D_grating_coupler
 
 .. toctree::
     :maxdepth: 3
     :caption: 3D Examples
 
+    tutorial_3D_waveguide_sim
     tutorial_3D_mmi_splitter
 
 ===================

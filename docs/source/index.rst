@@ -1,7 +1,4 @@
-.. EMopt documentation master file, created by
-   sphinx-quickstart on Sun Nov  5 22:02:02 2017.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. _emopt_documentation_index:
 
 ###################
 EMopt Documentation
@@ -25,12 +22,17 @@ smoothing interface, meanwhile, is independent and can be used with the adjoint
 method + FDFD libraries or with other 3rd party solvers.
 
 .. toctree::
-   :maxdepth: 3
-   :caption: Getting Started
+    :hidden:
 
-   installation
-   at_a_glance
-   tutorials
+    self
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Getting Started
+
+    installation
+    at_a_glance
+    tutorials
 
 Module Index
 ============

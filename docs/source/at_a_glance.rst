@@ -34,6 +34,15 @@ and permeability values are *relative* values. That is, we work with
 permeability are :math:`\epsilon = \epsilon_r \epsilon_0` and
 :math:`\mu = \mu_r \mu_0`.
 
+===========================
+The EMopt Coordinate System
+===========================
+
+In EMopt, the origin is always assumed to be the minimum (x,y,z) coordinate of
+the simulation domain. In other words, in 2D, the simulation domain is the
+rectangle defined by the points (0,0) and (X,Y), and in 3D, the simulation
+domain is the rectangular prism defined by the points (0,0,0) and (X,Y,Z).
+
 ===================================
 Defining Structures with emopt.grid
 ===================================
