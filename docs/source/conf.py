@@ -20,8 +20,8 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../emopt/'))
 
-import glob
-print glob.glob('../../emopt/*')
+from subprocess import call
+call(["cp", "../../emopt/*.py", "./"])
 
 
 # -- General configuration ------------------------------------------------
