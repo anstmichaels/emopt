@@ -20,12 +20,10 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../emopt/'))
 
-import glob
-from subprocess import call
-files = glob.glob('../../emopt/*.py')
-
-for fname in files:
-    call(["cp", fname, "./"])
+import mock
+MOCK_MODULES = ['numpy', 'scipy', 'petsc4py', 'mpi4py', 'matplotlib',
+                'matplotlib.pyplot', 'h5py', 'shapely', 'shapely.geometry',
+                'shapely.ops', 'numpy.ctypeslib', 'scipy.optimize']
 
 
 # -- General configuration ------------------------------------------------
