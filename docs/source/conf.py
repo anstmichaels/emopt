@@ -19,7 +19,9 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../../emopt/'))
-print os.getcwd()
+
+import glob
+print glob.glob('../../emopt/*')
 
 
 # -- General configuration ------------------------------------------------
