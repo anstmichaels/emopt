@@ -20,9 +20,12 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../emopt/'))
 
+import glob
 from subprocess import call
-call(["ls", "../../emopt/"])
-call(["cp", "../../emopt/*.py", "./"])
+files = glob.glob('../../emopt/*.py')
+
+for fname in files:
+    call(["cp", fname, "./"])
 
 
 # -- General configuration ------------------------------------------------
