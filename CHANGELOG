@@ -1,3 +1,24 @@
+Released on May 21, 2018
+
+1. Added code needed for most 3D optimizations!
+
+3D optimizations can now be run. For a demonstration see examples/MMI_splitter_3D.
+The process for optimizing in 3D is very similar to 2D. There are some minor
+differences due to the additional spatial dimension, but philosophically everything
+is the same.
+
+There is one caveat: currently AdjointMethodPNF does not support 3D simulations (I
+need to come up with a cleaner dimension-agnostic way to handle absorption in the
+source power calculation). For non-complex materials, this same functionality can be
+achieved using functions provided by emopt.fomutils. See the above examples for
+details.
+
+2. Added a function emopt.grid.Polygon.populate_lines which will insert evenly-spaced
+points into lists of line segments. This is useful when setting up more complicated
+shape optimizations in which you want to manipulate a complicated smooth boundary.
+
+3. Bug fixes, 3D solver performance improvements.
+
 Released on May 11, 2018
 ------------------------
 

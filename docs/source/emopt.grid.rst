@@ -1,5 +1,8 @@
+.. _emopt_grid:
+
+###########
 emopt\.grid
-===========
+###########
 
 .. automodule:: emopt.grid
    :members:

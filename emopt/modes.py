@@ -1270,7 +1270,7 @@ class ModeFullVector(ModeSolver):
         This function is run on all nodes.
         """
         if(self.verbose and NOT_PARALLEL):
-            info_message('Building system matrix...')
+            info_message('Building mode solver system matrix...')
 
         dx = self.dx/self.R # non-dimensionalize
         dy = self.dy/self.R # non-dimensionalize
@@ -2058,13 +2058,6 @@ class ModeFullVector(ModeSolver):
         if(NOT_PARALLEL):
             ## Calculate contribution of Ex
             Ex = np.pad(Ex, 1, 'constant', constant_values=0)
-
-            # handle boundary conditions
-            if(bc[0] == 'E'): Ex[:,0] = -1*Ex[:, 1]
-            elif(bc[0] == 'H'): Ex[:,0] = Ex[:, 1]
-            if(bc[1] == 'E'): Ex[0,:] = Ex[1, :]
-            elif(bc[1] == 'H'): Ex[0,:] = -1*Ex[1, :]
-
             My += Ex[1:-1, 1:-1]*ekz/dz
 
             ## Calculate contribution of Ey
@@ -2080,6 +2073,11 @@ class ModeFullVector(ModeSolver):
 
             ## Calculate contribution of Hx
             Hx = np.pad(Hx, 1, 'constant', constant_values=0)
+
+            # Handle boundary conditions
+            if(bc[1] == 'E'): Hx[0,:] = -1*Hx[1,:]
+            elif(bc[1] == 'H'): Hx[0,:] = Hx[1,:]
+
             mu = get_mu(0.0, 0.5)
             Jy += Hx[1:-1, 1:-1]/dz
             Jz += -1*(Hx[1:-1, 1:-1] - Hx[0:-2, 1:-1])/dy
@@ -2087,6 +2085,11 @@ class ModeFullVector(ModeSolver):
 
             ## Calculate contribution of Hy
             Hy = np.pad(Hy, 1, 'constant', constant_values=0)
+
+            # Handle boundary conditions
+            if(bc[0] == 'E'): Hy[:,0] = -1*Hy[:,1]
+            elif(bc[0] == 'H'): Hy[:,0] = Hy[:,1]
+
             mu = get_mu(0.5, 0.0)
             Jx += -Hy[1:-1, 1:-1]/dz
             Jz += (Hy[1:-1, 1:-1] - Hy[1:-1, 0:-2])/dx

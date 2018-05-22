@@ -430,10 +430,17 @@ class AdjointMethod(object):
             List of tuples containing (x_min, x_max, y_min, y_max) where x_min,
             etc are the minimum and maximum x and y spatial indices.
         """
-        M = sim.M
-        N = sim.N
-        lenp = len(params)
-        return [(0, N, 0, M) for i in range(lenp)]
+        if(type(sim) == fdfd.FDFD_TE or type(sim) == fdfd.FDFD_TM):
+            M = sim.M
+            N = sim.N
+            lenp = len(params)
+            return [(0, N, 0, M) for i in range(lenp)]
+        elif(type(sim) == fdfd.FDFD_3D):
+            Nx = sim.Nx
+            Ny = sim.Ny
+            Nz = sim.Nz
+            lenp = len(params)
+            return [(0, Nx, 0, Ny, 0, Nz) for i in range(lenp)]
 
     def fom(self, params):
         """Run a forward simulation and calculate the figure of merit.
@@ -540,7 +547,8 @@ class AdjointMethod(object):
 
             # calculate dAdp and assemble the full result on the master node
             dAdp = (Af-Ai)/step
-            product = x_adj * dAdp * x
+            if(type(sim) == fdfd.FDFD_3D): product = np.conj(x_adj) * dAdp * x
+            else: product = x_adj * dAdp * x
             grad_part = -2*np.real( np.sum(product[...]) )
 
             # send the partially computed gradient to the master node to finish
@@ -594,8 +602,11 @@ class AdjointMethod(object):
 
         # This should return only non-null on RANK=0
         dFdx = self.calc_dFdx(self.sim, params)
-        dFdx = comm.bcast(dFdx, root=0)
 
+        #if(isinstance(self.sim, fdfd.FDFD_TE)):
+        dFdx = comm.bcast(dFdx, root=0)
+        #elif(isinstance(self.sim, fdfd.FDFD_3D)):
+        #    pass
 
         # run the adjoint source
         self.sim.set_adjoint_sources(dFdx)

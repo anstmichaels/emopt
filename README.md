@@ -1,5 +1,5 @@
 # EMopt
-A toolkit for for shape optimization of (2D and 3D) electromagnetic structures.
+A toolkit for shape optimization of (2D and 3D) electromagnetic structures.
 
 EMopt implements the adjoint method along with subroutines for smoothing of material interfaces on a rectangular grid (grid smoothing) in order compute gradients of a function of the electic and magnetic field.  These gradients can be used in conjunction with a number of minimization techniques in order to optimize a complicated passive electromagnetic device. The included adjoint method code relies on a small simple finite difference frequency domain (FDFD) solver which solves Maxwell's equations on a rectangular grid.  The grid smoothing interface, meanwhile, is independent and can be used with the adjoint method + FDFD libraries or with other 3rd party solvers.
 
@@ -228,8 +228,8 @@ $ pip install --user scipy
 $ pip install --user mpi4py
 ```
 
-To install petsc4py, we need to ensure that the environment variable PETSC_DIR is
-is to our PETSc installation directory.
+To install petsc4py, we need to ensure that the environment variable PETSC_DIR
+is to our PETSc installation directory:
 
 ```
 $ export PETSC_DIR=$HOME/local/petsc/petsc-3.8.0

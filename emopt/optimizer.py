@@ -41,7 +41,7 @@ The :class:`.Optimizer` is used approximately as follows:
 
 import fdfd # this needs to come first
 from misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master
+NOT_PARALLEL, run_on_master, COMM
 
 import numpy as np
 from math import pi
@@ -156,7 +156,12 @@ class Optimizer(object):
         self.am = am
 
         self.p0 = p0
-        self.callback = callback_func
+
+        if(callback_func is None):
+            self.callback = lambda p : None
+        else:
+            self.callback = callback_func
+
         self.opt_method = opt_method
         self.Nmax = Nmax
         self.tol = tol
@@ -180,7 +185,6 @@ class Optimizer(object):
         params = np.zeros(self.p0.shape)
         if(RANK == 0):
             fom, params = self.run_sequence(self.am)
-            return fom, params
         else:
             while(running):
                 # Wait for commands from the master node
@@ -195,7 +199,14 @@ class Optimizer(object):
                 elif(command == self.RunCommands.EXIT):
                     running = False
 
-        return None, None
+            fom = None
+            params = None
+
+        # share the final fom and parameters with all processes
+        fom = COMM.bcast(fom, root=0)
+        params = COMM.bcast(params, root=0)
+
+        return fom, params
 
 
     def __fom(self, params):

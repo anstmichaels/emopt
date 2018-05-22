@@ -1,7 +1,9 @@
 """
 Common functions useful for calculating figures of merit and their derivatives.
 """
-import fdfd
+import fdfd, misc
+from misc import NOT_PARALLEL
+from defs import FieldComponent
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -629,10 +631,6 @@ def interpolated_dFdx_2D(sim, dFdEzi, dFdHxi, dFdHyi):
     dFdHy : numpy.array
         2D numpy array containing derivative of FOM with respect to
         INTERPOLATED Hy
-    x_fom : int or numpy.array
-        x indices of figure of merit
-    y_fom : int or numpy.array
-        t indices of figure of merit
 
     Returns
     -------
@@ -683,6 +681,153 @@ def interpolated_dFdx_2D(sim, dFdEzi, dFdHxi, dFdHyi):
 
     return dFdEz, dFdHx, dFdHy
 
+def interpolated_dFdx_3D(sim, domain, dFdExi, dFdEyi, dFdEzi, dFdHxi, dFdHyi, dFdHzi):
+    """Account for interpolated fields in a 'naive' derivative of a figure of
+    merit.
+
+    In order to calculate any sort of quantity that involves power flow, we
+    must interpolate the fields such that they are all known at the same point
+    in space.  This process of interpolation must be handled very carefully in
+    the contex of calculating gradients of a figure of merit.  In order to
+    simplify this process and minimize the number of errors made, you can
+    naively calculate the derivatives with respect to the interpolated fields
+    and then compensate in order to ensure that the derivatives are correct
+    with respect to the 'True' undelying shifted fields.
+
+    Notes
+    -----
+    Not all of the symmetry options have been tested. If you encounter issues
+    with gradient accuracy, please post an issue on github!
+
+    Parameters
+    ----------
+    sim : fdfd.FDFD_3D
+        The simulation object--needed for boundary condition information
+    domain : misc.DomainCoordinates
+        The domain in which the derivative of the FOM has been computed
+    dFdEx : numpy.array
+        3D numpy array containing derivative of FOM with respect to
+        INTERPOLATED Ex
+    dFdEy : numpy.array
+        3D numpy array containing derivative of FOM with respect to
+        INTERPOLATED Ey
+    dFdEz : numpy.array
+        3D numpy array containing derivative of FOM with respect to
+        INTERPOLATED Ez
+    dFdHx : numpy.array
+        2D numpy array containing derivative of FOM with respect to
+        INTERPOLATED Hx
+    dFdHy : numpy.array
+        2D numpy array containing derivative of FOM with respect to
+        INTERPOLATED Hy
+    dFdHz : numpy.array
+        2D numpy array containing derivative of FOM with respect to
+        INTERPOLATED Hz
+
+    Returns
+    -------
+    misc.DomainCoordinates, numpy.ndarray, numpy.ndarray, numpy.ndarray,
+    numpy.ndarray, numpy.ndarray, numpy.ndarray
+        The modified derivatives which account for interpolation and the
+        modified DomainCoordinates
+    """
+    # We will need to work with an array which is larger than the supplied
+    # domain
+    Nz, Ny, Nx = domain.shape
+
+    Nx +=2; Ny += 2; Nz += 2
+    shape = (Nz, Ny, Nx)
+
+    # problem may be related to fact that there is averaging along x. This
+    # means we need to add in a new x-normal plane...
+    dFdEx = np.zeros(shape, dtype=np.complex128)
+    dFdEx[1:-1, 1:-1, 1:-1] += dFdExi/4.0
+    dFdEx[1:-1, 1:-1, 0:-2] += dFdExi/4.0
+    dFdEx[2:, 1:-1, 1:-1]   += dFdExi/4.0
+    dFdEx[2:, 1:-1, 0:-2]   += dFdExi/4.0
+
+    # Handle boundary conditions for Ex
+    if(domain.k1 == 0 and sim.bc[0] == 'H'):
+        dFdEx[1:-1, 1:-1, 1] += dFdExi[:, :, 0]/4.0
+        dFdEx[2:, 1:-1, 1] += dFdExi[:, :, 0]/4.0
+    elif(domain.k1 == 0 and sim.bc[0] == 'E'):
+        dFdEy[1:-1, 1, 1:-1] -= dFdEyi[:, 0, :]/4.0
+        dFdEy[2:, 1, 1:-1] -= dFdEyi[:, 0, :]/4.0
+
+    dFdEx = dFdEx[1:, 0:-1, 0:-1]
+
+    dFdEy = np.zeros(shape, dtype=np.complex128)
+    dFdEy[1:-1, 1:-1, 1:-1] += dFdEyi/4.0
+    dFdEy[1:-1, 0:-2, 1:-1] += dFdEyi/4.0
+    dFdEy[2:, 1:-1, 1:-1]   += dFdEyi/4.0
+    dFdEy[2:, 0:-2, 1:-1]   += dFdEyi/4.0
+
+    # Handle boundary conditions for Ey
+    if(domain.j1 == 0 and sim.bc[1] == 'H'):
+        dFdEy[1:-1, 1, 1:-1] += dFdEyi[:, 0, :]/4.0
+        dFdEy[2:, 1, 1:-1] += dFdEyi[:, 0, :]/4.0
+    elif(domain.j1 == 0 and sim.bc[1] == 'E'):
+        dFdEy[1:-1, 1, 1:-1] -= dFdEyi[:, 0, :]/4.0
+        dFdEy[2:, 1, 1:-1] -= dFdEyi[:, 0, :]/4.0
+
+    dFdEy = dFdEy[1:, 0:-1, 0:-1]
+
+    # Ez is Uninterpolated
+    dFdEz = np.zeros(shape, dtype=np.complex128)
+    dFdEz[1:-1, 1:-1, 1:-1] = dFdEzi
+    dFdEz = dFdEz[1:, 0:-1, 0:-1]
+
+    # This one might have a problem... It leads to a higher gradient error in
+    # initial tests 
+    dFdHx = np.zeros(shape, dtype=np.complex128)
+    dFdHx[1:-1, 1:-1, 1:-1] += dFdHxi/2.0
+    dFdHx[1:-1, 0:-2, 1:-1] += dFdHxi/2.0
+
+    # Handle boundary conditions for Hx
+    if(domain.j1 == 0 and sim.bc[1] == 'H'):
+        dFdHx[1:-1, 1, 1:-1] += dFdHxi[:, 0, :]/2.0
+    elif(domain.j1 == 0 and sim.bc[1] == 'E'):
+        dFdHx[1:-1, 1, 1:-1] -= dFdHxi[:, 0, :]/2.0
+
+    dFdHx = dFdHx[1:, 0:-1, 0:-1]
+
+    dFdHy = np.zeros(shape, dtype=np.complex128)
+    dFdHy[1:-1, 1:-1, 1:-1] += dFdHyi/2.0
+    dFdHy[1:-1, 1:-1, 0:-2] += dFdHyi/2.0
+    dFdHy = dFdHy[1:, 0:-1, 0:-1]
+
+    # This one might have a problem... It leads to a higher gradient error in
+    # initial tests
+    dFdHz = np.zeros(shape, dtype=np.complex128)
+    dFdHz[1:-1, 1:-1, 1:-1] += dFdHzi/8.0
+    dFdHz[1:-1, 0:-2, 1:-1] += dFdHzi/8.0
+    dFdHz[1:-1, 1:-1, 0:-2] += dFdHzi/8.0
+    dFdHz[1:-1, 0:-2, 0:-2] += dFdHzi/8.0
+    dFdHz[2:, 1:-1, 1:-1]   += dFdHzi/8.0
+    dFdHz[2:, 0:-2, 1:-1]   += dFdHzi/8.0
+    dFdHz[2:, 1:-1, 0:-2]   += dFdHzi/8.0
+    dFdHz[2:, 0:-2, 0:-2]   += dFdHzi/8.0
+
+    # Handle boundary conditions for Hz
+    if(domain.j1 == 0 and sim.bc[1] == 'H'):
+        dFdHz[1:-1, 1, 1:-1] += dFdHzi[:, 0, :]/8.0
+        dFdHz[1:-1, 1, 0:-2] += dFdHzi[:, 0, :]/8.0
+        dFdHz[2:, 1, 1:-1]   += dFdHzi[:, 0, :]/8.0
+        dFdHz[2:, 1, 0:-2]   += dFdHzi[:, 0, :]/8.0
+    elif(domain.j1 == 0 and sim.bc[1] == 'E'):
+        dFdHz[1:-1, 1, 1:-1] -= dFdHzi[:, 0, :]/8.0
+        dFdHz[1:-1, 1, 0:-2] -= dFdHzi[:, 0, :]/8.0
+        dFdHz[2:, 1, 1:-1]   -= dFdHzi[:, 0, :]/8.0
+        dFdHz[2:, 1, 0:-2]   -= dFdHzi[:, 0, :]/8.0
+
+    dFdHz = dFdHz[1:, 0:-1, 0:-1]
+
+    domain = domain.copy()
+    domain.grow(1,0,1,0,0,1)
+
+    return domain, dFdEx, dFdEy, dFdEz, dFdHx, dFdHy, dFdHz
+
+
 def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
     """Compute the derivative of a figure of merit which has power
     normalization.
@@ -714,7 +859,7 @@ def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
 
     Parameters
     ----------
-    sim : gremlin.FDFD_TE
+    sim : emopt.fdfd.FDFD_TE
         simulation object which is needed in order to access field components
         as well as grid parameters
     f : float
@@ -825,7 +970,7 @@ def power_norm_dFdx_TM(sim, f, dfdHz, dfdEx, dfdEy):
 
     Parameters
     ----------
-    sim : gremlin.FDFD_TM
+    sim : emopt.fdfd.FDFD_TM
         simulation object which is needed in order to access field components
         as well as grid parameters
     f : float
@@ -904,6 +1049,260 @@ def power_norm_dFdx_TM(sim, f, dfdHz, dfdEx, dfdEy):
     dFdHz, dFdEx, dFdEy = interpolated_dFdx_2D(sim, dFdHz, dFdEx, dFdEy)
 
     return dFdHz, dFdEx, dFdEy
+
+def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz):
+    """Compute the derivative of a figure of merit which has power
+    normalization.
+
+    The behavior of this function is very similar to its 2D counterparts.
+
+    Notes
+    -----
+    Currently, this function does NOT account for the fact that the fields are
+    interpolated. This will lead to some finite amount of error in the gradient
+    calculations. In most cases, this increased error should not cause any
+    issues.
+
+    Parameters
+    ----------
+    sim : emopt.fdfd.FDFD_3D
+        simulation object which is needed in order to access field components
+        as well as grid parameters
+    f : float
+        current value of merit function
+    dfdEx : numpy.ndarray
+        derivative w.r.t. Ex of non-normalized figure of merit
+    dfdEy : numpy.ndarray
+        derivative w.r.t. Ey of non-normalized figure of merit
+    dfdEz : numpy.ndarray
+        derivative w.r.t. Ez of non-normalized figure of merit
+    dfdHx : numpy.ndarray
+        derivative w.r.t. Hx of non-normalized figure of merit
+    dfdHy : numpy.ndarray
+        derivative w.r.t. Hy of non-normalized figure of merit
+    dfdHz : numpy.ndarray
+        derivative w.r.t. Hy of non-normalized figure of merit
+
+    Returns
+    -------
+    list
+        List of source arrays and domains in the format needed by
+        emotp.fdfd.FDFD_3D.set_adjoint_source(src)
+    """
+    # the source power is integral to this calculation, obviously
+    Psrc = sim.source_power
+
+    adj_sources = []
+    adj_domains = []
+
+    if(NOT_PARALLEL):
+        dfdEH = interpolated_dFdx_3D(sim, domain, dfdEx, dfdEy, dfdEz,
+                                     dfdHx, dfdHy, dfdHz)
+        adj_sources.append(dfdEH[1:]); adj_domains.append(dfdEH[0])
+
+    # setup the domains that are needed to get the power flux
+    w_pml = sim.w_pml
+    w_pml_xmin = w_pml[0]
+    w_pml_xmax = w_pml[1]
+    w_pml_ymin = w_pml[2]
+    w_pml_ymax = w_pml[3]
+    w_pml_zmin = w_pml[4]
+    w_pml_zmax = w_pml[5]
+    dx = sim.dx; dy = sim.dy; dz = sim.dz
+    X = sim.X; Y = sim.Y; Z = sim.Z
+
+    xmin = w_pml_xmin; xmax = X-w_pml_xmax
+    ymin = w_pml_ymin; ymax = Y-w_pml_ymax
+    zmin = w_pml_zmin; zmax = Z-w_pml_zmax
+
+    x1 = misc.DomainCoordinates(xmin, xmin, ymin, ymax, zmin, zmax, dx, dy, dz)
+    x2 = misc.DomainCoordinates(xmax, xmax, ymin, ymax, zmin, zmax, dx, dy, dz)
+    y1 = misc.DomainCoordinates(xmin, xmax, ymin, ymin, zmin, zmax, dx, dy, dz)
+    y2 = misc.DomainCoordinates(xmin, xmax, ymax, ymax, zmin, zmax, dx, dy, dz)
+    z1 = misc.DomainCoordinates(xmin, xmax, ymin, ymax, zmin, zmin, dx, dy, dz)
+    z2 = misc.DomainCoordinates(xmin, xmax, ymin, ymax, zmax, zmax, dx, dy, dz)
+
+    # calculate dFdx for xmax
+    dshape = x1.shape
+    Ey = sim.get_field_interp(FieldComponent.Ey, domain=x1)
+    Ez = sim.get_field_interp(FieldComponent.Ez, domain=x1)
+    Hy = sim.get_field_interp(FieldComponent.Hy, domain=x1)
+    Hz = sim.get_field_interp(FieldComponent.Hz, domain=x1)
+
+    if(NOT_PARALLEL):
+        dSdEx = np.zeros(dshape, dtype=np.complex128)
+        dSdEy = -0.25 * dy * dz * np.conj(Hz)
+        dSdEz = 0.25 * dy * dz * np.conj(Hy)
+        dSdHx = np.zeros(dshape, dtype=np.complex128)
+        dSdHy = 0.25 * dy * dz * np.conj(Ez)
+        dSdHz = -0.25 * dy * dz * np.conj(Ey)
+
+        dPdEx = -1 * f * dSdEx / Psrc**2
+        dPdEy = -1 * f * dSdEy / Psrc**2
+        dPdEz = -1 * f * dSdEz / Psrc**2
+        dPdHx = -1 * f * dSdHx / Psrc**2
+        dPdHy = -1 * f * dSdHy / Psrc**2
+        dPdHz = -1 * f * dSdHz / Psrc**2
+
+        dPdEH = interpolated_dFdx_3D(sim, x1, dPdEx, dPdEy, dPdEz,
+                                     dPdHx, dPdHy, dPdHz)
+
+        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+
+    # clean up
+    del Ey; del Ez; del Hy; del Hz
+
+    # calculate dFdx for xmax
+    dshape = x2.shape
+    Ey = sim.get_field_interp(FieldComponent.Ey, domain=x2)
+    Ez = sim.get_field_interp(FieldComponent.Ez, domain=x2)
+    Hy = sim.get_field_interp(FieldComponent.Hy, domain=x2)
+    Hz = sim.get_field_interp(FieldComponent.Hz, domain=x2)
+
+    if(NOT_PARALLEL):
+        dSdEx = np.zeros(dshape, dtype=np.complex128)
+        dSdEy = 0.25 * dy * dz * np.conj(Hz)
+        dSdEz = -0.25 * dy * dz * np.conj(Hy)
+        dSdHx = np.zeros(dshape, dtype=np.complex128)
+        dSdHy = -0.25 * dy * dz * np.conj(Ez)
+        dSdHz = 0.25 * dy * dz * np.conj(Ey)
+
+        dPdEx = -1 * f * dSdEx / Psrc**2
+        dPdEy = -1 * f * dSdEy / Psrc**2
+        dPdEz = -1 * f * dSdEz / Psrc**2
+        dPdHx = -1 * f * dSdHx / Psrc**2
+        dPdHy = -1 * f * dSdHy / Psrc**2
+        dPdHz = -1 * f * dSdHz / Psrc**2
+
+        dPdEH = interpolated_dFdx_3D(sim, x2, dPdEx, dPdEy, dPdEz,
+                                     dPdHx, dPdHy, dPdHz)
+
+        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+
+    # clean up
+    del Ey; del Ez; del Hy; del Hz
+
+    # calculate dFdx for ymin
+    dshape = y1.shape
+    Ex = sim.get_field_interp(FieldComponent.Ex, domain=y1)
+    Ez = sim.get_field_interp(FieldComponent.Ez, domain=y1)
+    Hx = sim.get_field_interp(FieldComponent.Hx, domain=y1)
+    Hz = sim.get_field_interp(FieldComponent.Hz, domain=y1)
+
+    if(NOT_PARALLEL):
+        dSdEx = 0.25 * dx * dz * np.conj(Hz)
+        dSdEy = np.zeros(dshape, dtype=np.complex128)
+        dSdEz = -0.25 * dx * dz * np.conj(Hx)
+        dSdHx = -0.25 * dx * dz * np.conj(Ez)
+        dSdHy = np.zeros(dshape, dtype=np.complex128)
+        dSdHz = 0.25 * dx * dz * np.conj(Ex)
+
+        dPdEx = -1 * f * dSdEx / Psrc**2
+        dPdEy = -1 * f * dSdEy / Psrc**2
+        dPdEz = -1 * f * dSdEz / Psrc**2
+        dPdHx = -1 * f * dSdHx / Psrc**2
+        dPdHy = -1 * f * dSdHy / Psrc**2
+        dPdHz = -1 * f * dSdHz / Psrc**2
+
+        dPdEH = interpolated_dFdx_3D(sim, y1, dPdEx, dPdEy, dPdEz,
+                                     dPdHx, dPdHy, dPdHz)
+
+        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+
+    # clean up
+    del Ex; del Ez; del Hx; del Hz
+
+    # calculate dFdx for ymax
+    dshape = y2.shape
+    Ex = sim.get_field_interp(FieldComponent.Ex, domain=y2)
+    Ez = sim.get_field_interp(FieldComponent.Ez, domain=y2)
+    Hx = sim.get_field_interp(FieldComponent.Hx, domain=y2)
+    Hz = sim.get_field_interp(FieldComponent.Hz, domain=y2)
+
+    if(NOT_PARALLEL):
+        dSdEx = -0.25 * dx * dz * np.conj(Hz)
+        dSdEy = np.zeros(dshape, dtype=np.complex128)
+        dSdEz = 0.25 * dx * dz * np.conj(Hx)
+        dSdHx = 0.25 * dx * dz * np.conj(Ez)
+        dSdHy = np.zeros(dshape, dtype=np.complex128)
+        dSdHz = -0.25 * dx * dz * np.conj(Ex)
+
+        dPdEx = -1 * f * dSdEx / Psrc**2
+        dPdEy = -1 * f * dSdEy / Psrc**2
+        dPdEz = -1 * f * dSdEz / Psrc**2
+        dPdHx = -1 * f * dSdHx / Psrc**2
+        dPdHy = -1 * f * dSdHy / Psrc**2
+        dPdHz = -1 * f * dSdHz / Psrc**2
+
+        dPdEH = interpolated_dFdx_3D(sim, y2, dPdEx, dPdEy, dPdEz,
+                                     dPdHx, dPdHy, dPdHz)
+
+        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+
+    # clean up
+    del Ex; del Ez; del Hx; del Hz
+
+    # calculate dFdx for zmin
+    dshape = z1.shape
+    Ex = sim.get_field_interp(FieldComponent.Ex, domain=z1)
+    Ey = sim.get_field_interp(FieldComponent.Ey, domain=z1)
+    Hx = sim.get_field_interp(FieldComponent.Hx, domain=z1)
+    Hy = sim.get_field_interp(FieldComponent.Hy, domain=z1)
+
+    if(NOT_PARALLEL):
+        dSdEx = -0.25 * dx * dy * np.conj(Hy)
+        dSdEy = 0.25 * dx * dy * np.conj(Hx)
+        dSdEz = np.zeros(dshape, dtype=np.complex128)
+        dSdHx = 0.25 * dx * dy * np.conj(Ey)
+        dSdHy = -0.25 * dx * dy * np.conj(Ex)
+        dSdHz = np.zeros(dshape, dtype=np.complex128)
+
+        dPdEx = -1 * f * dSdEx / Psrc**2
+        dPdEy = -1 * f * dSdEy / Psrc**2
+        dPdEz = -1 * f * dSdEz / Psrc**2
+        dPdHx = -1 * f * dSdHx / Psrc**2
+        dPdHy = -1 * f * dSdHy / Psrc**2
+        dPdHz = -1 * f * dSdHz / Psrc**2
+
+        dPdEH = interpolated_dFdx_3D(sim, z1, dPdEx, dPdEy, dPdEz,
+                                     dPdHx, dPdHy, dPdHz)
+
+        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+
+    # clean up
+    del Ex; del Ey; del Hx; del Hy
+
+    # calculate dFdx for zmin
+    dshape = z2.shape
+    Ex = sim.get_field_interp(FieldComponent.Ex, domain=z2)
+    Ey = sim.get_field_interp(FieldComponent.Ey, domain=z2)
+    Hx = sim.get_field_interp(FieldComponent.Hx, domain=z2)
+    Hy = sim.get_field_interp(FieldComponent.Hy, domain=z2)
+
+    if(NOT_PARALLEL):
+        dSdEx = 0.25 * dx * dy * np.conj(Hy)
+        dSdEy = -0.25 * dx * dy * np.conj(Hx)
+        dSdEz = np.zeros(dshape, dtype=np.complex128)
+        dSdHx = -0.25 * dx * dy * np.conj(Ey)
+        dSdHy = 0.25 * dx * dy * np.conj(Ex)
+        dSdHz = np.zeros(dshape, dtype=np.complex128)
+
+        dPdEx = -1 * f * dSdEx / Psrc**2
+        dPdEy = -1 * f * dSdEy / Psrc**2
+        dPdEz = -1 * f * dSdEz / Psrc**2
+        dPdHx = -1 * f * dSdHx / Psrc**2
+        dPdHy = -1 * f * dSdHy / Psrc**2
+        dPdHz = -1 * f * dSdHz / Psrc**2
+
+        dPdEH = interpolated_dFdx_3D(sim, z2, dPdEx, dPdEy, dPdEz,
+                                     dPdHx, dPdHy, dPdHz)
+
+        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+
+    # clean up
+    del Ex; del Ey; del Hx; del Hy
+
+    return [adj_sources, adj_domains]
 
 def power_norm_dFdx(sim, f, dfdA1, dfdA2, dfdA3):
     if(type(sim) == fdfd.FDFD_TM):

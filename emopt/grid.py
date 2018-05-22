@@ -750,6 +750,66 @@ class Polygon(MaterialPrimitive):
         libGrid.Polygon_set_material(self._object, mat.real, mat.imag)
         self._value = mat
 
+    @staticmethod
+    def populate_lines(xs, ys, ds):
+        """Populate one or more line segments with points.
+
+        This is useful when defining polygons that will be manipulated by an
+        optimization. Given one or more line segments, a new set of line
+        segments is created which are filled with points spaced approximately
+        by ds.
+
+        For example, let's say you start with this line segment:
+
+            *-------------------------------*
+
+        defined by xs=[x1, x2] and ys=[y1,y1]. Using a value of ds = (x2-x1)/4
+        would yield a new set of line segments:
+
+            *-------*-------*-------*-------*
+
+        Notes
+        -----
+        This function assumes that the supplied line segments fit together
+        end-to-end!
+
+        Parameters
+        ----------
+        xs : list or numpy.array
+            The list of x coordinates of the *connected* line segments
+        ys : list or numpy.array
+            The list of y coordinates of the *connected* line segments
+        ds : float
+            The approximate point spacing in the new set of line segments
+
+        Returns
+        -------
+        numpy.ndarray, numpy.ndarray
+            Arrays containing the new x and y coordinates
+        """
+        Np = len(xs)
+
+        xf = np.array([xs[0]])
+        yf = np.array([ys[0]])
+
+        for i in range(Np-1):
+            x2 = xs[i+1]
+            x1 = xs[i]
+            y2 = ys[i+1]
+            y1 = ys[i]
+
+            s = np.sqrt((x2-x1)**2 + (y2-y1)**2)
+            Ns = np.ceil(s/ds)
+            if(Ns < 2): Ns = 2
+
+            xnew = np.linspace(x1, x2, Ns); xnew = xnew[1:]
+            ynew = np.linspace(y1, y2, Ns); ynew = ynew[1:]
+
+            xf = np.concatenate([xf, xnew])
+            yf = np.concatenate([yf, ynew])
+
+        return xf, yf
+
 class StructuredMaterial2D(Material2D):
     """Create a 2D material consisting of one or more primitive shapes
     (rectangles, polyongs, etc)

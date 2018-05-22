@@ -36,7 +36,8 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
-    'sphinx.ext.githubpages']
+    'sphinx.ext.githubpages',
+    'sphinxcontrib.fulltoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -52,7 +53,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'EMopt'
-copyright = u'2017, Andrew Michaels'
+copyright = u'2018, University of California, Berkeley'
 author = u'Andrew Michaels'
 
 # The version info for the project you're documenting, acts as replacement for

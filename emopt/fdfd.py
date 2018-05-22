@@ -2082,48 +2082,93 @@ class FDFD_3D(FDFD):
         self.ib, self.ie = self._A.getOwnershipRange()
         self.A_diag_update = np.zeros(self.ie-self.ib, dtype=np.complex128)
 
-        # iterative or direct
-        # create an iterative linear solver
-        self.ksp_iter = PETSc.KSP()
-        self.ksp_iter.create(PETSc.COMM_WORLD)
+        # create an iterative linear solver which uses a multigrid
+        # preconditioner and a matrix preconditioner in each smoother. The
+        # matrix is the Hermitian of the A matrix in each level (yielding a
+        # positive semi definite system which is compatible with multigrid)
+        # NOTE: at the coarsest level, we use LU factorization (via MUMPS). In
+        # order to save the symbolic factorization to speed up repeated calls,
+        # we need two separate solvers: one for the forward solve and one for
+        # the adjoint solve. In reality this shouldnt be necessary, but we dont
+        # have direct access to the internals of the multigrid code.
 
-        self.ksp_iter.setType('gcr')
-        #self.ksp_iter.setInitialGuessNonzero(True)
-        #self.ksp_iter.setGCRRestart(15)
-        self.ksp_iter.setTolerances(rtol=rtol)
-        optDB['-ksp_gcr_restart'] = 15
-        self.ksp_iter.setFromOptions()
+        #FORWARD solver
+        self.ksp_iter_fwd = PETSc.KSP()
+        self.ksp_iter_fwd.create(PETSc.COMM_WORLD)
+
+        self.ksp_iter_fwd.setType('gcr')
+        self.ksp_iter_fwd.setTolerances(rtol=rtol)
+        optDB['-ksp_gcr_restart'] = 30
+        self.ksp_iter_fwd.setFromOptions()
+
+        #ADJOINT solver
+        self.ksp_iter_adj = PETSc.KSP()
+        self.ksp_iter_adj.create(PETSc.COMM_WORLD)
+
+        self.ksp_iter_adj.setType('gcr')
+        self.ksp_iter_adj.setTolerances(rtol=rtol)
+        optDB['-ksp_gcr_restart'] = 30
+        self.ksp_iter_adj.setFromOptions()
 
         # Setup multigrid preconditioner
         ## Basic setup
-        pc = self.ksp_iter.getPC()
-        pc.setType('mg')
+        pc_fwd = self.ksp_iter_fwd.getPC()
+        pc_adj = self.ksp_iter_adj.getPC()
+        pc_fwd.setType('mg')
+        pc_adj.setType('mg')
         optDB['-pc_mg_levels'] = mglevels
-        pc.setFromOptions()
+        pc_fwd.setFromOptions()
+        pc_adj.setFromOptions()
 
-        pc.setMGType(PETSc.PC.MGType.MULTIPLICATIVE) # Multiplicative
-        pc.setMGCycleType(PETSc.PC.MGCycleType.W) # W cycle
+        pc_fwd.setMGType(PETSc.PC.MGType.MULTIPLICATIVE) # Multiplicative
+        pc_adj.setMGType(PETSc.PC.MGType.MULTIPLICATIVE) # Multiplicative
+        pc_fwd.setMGCycleType(PETSc.PC.MGCycleType.W) # W cycle
+        pc_adj.setMGCycleType(PETSc.PC.MGCycleType.W) # W cycle
 
         ## Setup coarse solver
         if(not low_memory):
-            ksp_crs = pc.getMGCoarseSolve()
+            ksp_crs = pc_fwd.getMGCoarseSolve()
             ksp_crs.setType('preonly')
             pc_crs = ksp_crs.getPC()
             pc_crs.setType('lu')
             pc_crs.setFactorSolverPackage('mumps')
             pc_crs.setFromOptions()
+            self._ksp_crs_fwd = ksp_crs
+
+            ksp_crs = pc_adj.getMGCoarseSolve()
+            ksp_crs.setType('preonly')
+            pc_crs = ksp_crs.getPC()
+            pc_crs.setType('lu')
+            pc_crs.setFactorSolverPackage('mumps')
+            pc_crs.setFromOptions()
+            self._ksp_crs_adj = ksp_crs
         else:
-            ksp_crs = pc.getMGCoarseSolve()
+            ksp_crs = pc_fwd.getMGCoarseSolve()
             ksp_crs.setType('bcgsl')
             ksp_crs.setTolerances(rtol=1e-2)
             pc_crs = ksp_crs.getPC()
             pc_crs.setType('jacobi')
+            self._ksp_crs_fwd = ksp_crs
 
-        self._ksp_crs = ksp_crs
+            ksp_crs = pc_adj.getMGCoarseSolve()
+            ksp_crs.setType('bcgsl')
+            ksp_crs.setTolerances(rtol=1e-2)
+            pc_crs = ksp_crs.getPC()
+            pc_crs.setType('jacobi')
+            self._ksp_crs_adj = ksp_crs
+
 
         ## Setup Down smoothers
         for l in range(1,mglevels):
-            ksp_smooth = pc.getMGSmootherDown(l)
+            ksp_smooth = pc_fwd.getMGSmootherDown(l)
+            ksp_smooth.setType('gmres') # this shouldnt work but does well
+            ksp_smooth.setGMRESRestart(10)
+            ksp_smooth.setTolerances(max_it=8)
+            pc_smooth = ksp_smooth.getPC()
+            pc_smooth.setType('mat')
+            pc_smooth.setFromOptions()
+
+            ksp_smooth = pc_adj.getMGSmootherDown(l)
             ksp_smooth.setType('gmres') # this shouldnt work but does well
             ksp_smooth.setGMRESRestart(10)
             ksp_smooth.setTolerances(max_it=8)
@@ -2133,7 +2178,14 @@ class FDFD_3D(FDFD):
 
         ## Setup Up Smoothers
         for l in range(1,mglevels):
-            ksp_smooth = pc.getMGSmootherUp(l)
+            ksp_smooth = pc_fwd.getMGSmootherUp(l)
+            ksp_smooth.setType('gmres')
+            ksp_smooth.setTolerances(max_it=4)
+            pc_smooth = ksp_smooth.getPC()
+            pc_smooth.setType('mat')
+            pc_smooth.setFromOptions()
+
+            ksp_smooth = pc_adj.getMGSmootherUp(l)
             ksp_smooth.setType('gmres')
             ksp_smooth.setTolerances(max_it=4)
             pc_smooth = ksp_smooth.getPC()
@@ -2142,8 +2194,11 @@ class FDFD_3D(FDFD):
 
         ## Set restriction and interpolation
         for l in range(1,mglevels):
-            pc.setMGRestriction(l, self._Rst[l-1])
-            pc.setMGInterpolation(l, self._Rst[l-1])
+            pc_fwd.setMGRestriction(l, self._Rst[l-1])
+            pc_fwd.setMGInterpolation(l, self._Rst[l-1])
+
+            pc_adj.setMGRestriction(l, self._Rst[l-1])
+            pc_adj.setMGInterpolation(l, self._Rst[l-1])
 
         self.verbose = verbose
         self._built = False
@@ -2171,6 +2226,26 @@ class FDFD_3D(FDFD):
     @property
     def Nz(self):
         return self._Nz
+
+    @property
+    def dx(self):
+        return self._dx
+
+    @property
+    def dy(self):
+        return self._dy
+
+    @property
+    def dz(self):
+        return self._dz
+
+    @property
+    def bc(self):
+        return ''.join(self._bc)
+
+    @bc.setter
+    def bc(self, newbc):
+        self._bc = list(newbc)
 
     @property
     def w_pml(self):
@@ -2319,14 +2394,24 @@ class FDFD_3D(FDFD):
                 # enforce boundary conditions
                 #############################
                 if(z == 0):
-                    A[i, jHz1] = 0.0
-                    if(y > 0): A[i, jHz0] = 0.0
+                    if(bc[2] == '0'):
+                        A[i, jHz1] = 0.0
+                        if(y > 0): A[i, jHz0] = 0.0
+                    elif(bc[2] == 'E'):
+                        A[i, jHy1] = -2 * odz
+                    elif(bc[2] == 'H'):
+                        A[i, jHy1] = 0
                 elif(z == Nz-1):
                     pass
 
                 if(y == 0):
-                    A[i, jHy1] = 0
-                    if(z > 0): A[i, jHy0] = 0
+                    if(bc[1] == '0'):
+                        A[i, jHy1] = 0
+                        if(z > 0): A[i, jHy0] = 0
+                    elif(bc[1] == 'E'):
+                        A[i, jHz1] = 2 * ody
+                    elif(bc[1] == 'H'):
+                        A[i, jHz1] = 0
                 elif(y == Ny-1):
                     pass
 
@@ -2359,8 +2444,13 @@ class FDFD_3D(FDFD):
                 # enforce boundary conditions
                 #############################
                 if(z == 0):
-                    A[i, jHz1] = 0.0
-                    if(x > 0): A[i, jHz0] = 0.0
+                    if(bc[2] == '0'):
+                        A[i, jHz1] = 0.0
+                        if(x > 0): A[i, jHz0] = 0.0
+                    elif(bc[2] == 'E'):
+                        A[i, jHx1] = 2 * odz
+                    elif(bc[2] == 'H'):
+                        A[i, jHx1] = 0
                 elif(z == Nz-1):
                     pass
 
@@ -2370,8 +2460,13 @@ class FDFD_3D(FDFD):
                     pass
 
                 if(x == 0):
-                    A[i, jHx1] = 0.0
-                    if(z > 0): A[i, jHx0] = 0.0
+                    if(bc[0] == '0'):
+                        A[i, jHx1] = 0.0
+                        if(z > 0): A[i, jHx0] = 0.0
+                    elif(bc[0] == 'E'):
+                        A[i, jHz1] = -2*odx
+                    elif(bc[0] == 'H'):
+                        A[i, jHz1] = 0
                 elif(x == Nx-1):
                     pass
 
@@ -2404,14 +2499,24 @@ class FDFD_3D(FDFD):
                     pass
 
                 if(y == 0):
-                    A[i, jHy1] = 0.0
-                    if(x > 0): A[i, jHy0] = 0.0
+                    if(bc[1] == '0'):
+                        A[i, jHy1] = 0.0
+                        if(x > 0): A[i, jHy0] = 0.0
+                    elif(bc[1] == 'E'):
+                        A[i, jHx1] = -2*ody
+                    elif(bc[1] == 'H'):
+                        A[i, jHx1] = 0
                 elif(y == Ny-1):
                     pass
 
                 if(x == 0):
-                    A[i, jHx1] = 0.0
-                    if(y > 0): A[i, jHx0] = 0.0
+                    if(bc[0] == '0'):
+                        A[i, jHx1] = 0.0
+                        if(y > 0): A[i, jHx0] = 0.0
+                    elif(bc[0] == 'E'):
+                        A[i, jHy1] = 2*odx
+                    elif(bc[0] == 'H'):
+                        A[i, jHy1] = 0
                 elif(x == Nx-1):
                     pass
 
@@ -2841,12 +2946,12 @@ class FDFD_3D(FDFD):
         # setup and solve Ax=b using petsc4py
         # unless otherwise specified, MUMPS (direct solver) is used.
         # Alternatively, the bicgstab iterative solver may be used.
-        ksp = self.ksp_iter
+        ksp = self.ksp_iter_fwd
         ksp.setInitialGuessNonzero(False)
         ksp.setOperators(self._A, self._A)
         ksp.setFromOptions()
 
-        ksp_crs = self._ksp_crs
+        ksp_crs = self._ksp_crs_fwd
         ksp_crs.setInitialGuessNonzero(False)
         ksp_crs.setOperators(self._As[0], self._As[0])
         ksp_crs.setFromOptions()
@@ -2869,6 +2974,11 @@ class FDFD_3D(FDFD):
                 error_message('Forward solution did not converge with error '
                               'code %d.' % (convergence))
 
+        Psrc = self.get_source_power()
+        if(NOT_PARALLEL): self._source_power = Psrc
+        else: self._source_power = MathDummy()
+        self.update_saved_fields()
+
     def solve_adjoint(self):
         """Solve the adjoint simulation.
 
@@ -2886,12 +2996,12 @@ class FDFD_3D(FDFD):
         # setup and solve Ax=b using petsc4py
         # unless otherwise specified, MUMPS (direct solver) is used.
         # Alternatively, the bicgstab iterative solver may be used.
-        ksp = self.ksp_iter
+        ksp = self.ksp_iter_adj
         ksp.setInitialGuessNonzero(False)
-        ksp.setOperators(self._AsT[self._mglevels-1], self._A)
+        ksp.setOperators(self._AsT[self._mglevels-1], self._AsT[-1])
         ksp.setFromOptions()
 
-        ksp_crs = self._ksp_crs
+        ksp_crs = self._ksp_crs_adj
         ksp_crs.setInitialGuessNonzero(False)
         ksp_crs.setOperators(self._AsT[0], self._AsT[0])
         ksp_crs.setFromOptions()
@@ -2906,7 +3016,9 @@ class FDFD_3D(FDFD):
             ksp_smooth.setOperators(self._AsT[l], self._As[l])
             ksp_smooth.setFromOptions()
 
+        self.b_adj.conjugate()
         ksp.solve(self.b_adj, self.x_adj)
+        self.b_adj.conjugate()
 
         if(RANK == 0):
             convergence = ksp.getConvergedReason()
@@ -2914,7 +3026,6 @@ class FDFD_3D(FDFD):
                 error_message('Forward solution did not converge with error '
                               'code %d.' % (convergence))
 
-        self.update_saved_fields()
 
     def get_field(self, component, domain=None, squeeze=False):
         """Get the uninterpolated field.
@@ -3028,7 +3139,8 @@ class FDFD_3D(FDFD):
         """
         # Ez does not need to be interpolated
         if(component == FieldComponent.Ez):
-            return self.get_field(component, domain)
+            if(squeeze): return np.squeeze(self.get_field(component, domain))
+            else: return self.get_field(component, domain)
         else:
             # if no domain was provided
             if(domain == None):
@@ -3050,9 +3162,9 @@ class FDFD_3D(FDFD):
                 if(k1 > 0): k1 -= 1
                 if(k2 < self._Nx-1): k2 += 1
                 if(j1 > 0): j1 -= 1
-                if(j2 < self._Nx-1): j2 += 1
+                if(j2 < self._Ny-1): j2 += 1
                 if(i1 > 0): i1 -= 1
-                if(i2 < self._Nx-1): i2 += 1
+                if(i2 < self._Nz-1): i2 += 1
 
                 domain_interp = DomainCoordinates(k1*self._dx, k2*self._dx,
                                                   j1*self._dy, j2*self._dy,
@@ -3066,9 +3178,15 @@ class FDFD_3D(FDFD):
             fraw = self.get_field(component, domain_interp)
 
             if(RANK != 0):
-                return MathDummy
+                return MathDummy()
 
             fraw = np.pad(fraw, 1, 'constant', constant_values=0)
+
+            # set boundary values equal to original boundary values. These may
+            # be changed depending on boundary conditions in a second
+            #fraw[0, :, :] = fraw[1, :, :]; fraw[-1, :, :] = fraw[-2, :, :]
+            #fraw[:, 0, :] = fraw[:, 1, :]; fraw[:, -1, :] = fraw[:, -2, :]
+            #fraw[:, :, 0] = fraw[:, :, 1]; fraw[:, :, -1] = fraw[:, :, -2]
 
             # after interpolation, we will need to crop the field so that it
             # matches the supplied domain
@@ -3077,35 +3195,72 @@ class FDFD_3D(FDFD):
                                       1+domain.k1-k1:-1-(k2-domain.k2)]
 
             field = None
+            bc = self._bc
             if(component == FieldComponent.Ex):
+                # Handle special boundary conditions
+                if(k1 == 0 and bc[0] == 'E'):
+                    fraw[:, :, 0] = -1*fraw[:,:,1]
+                elif(k1 == 0 and bc[0] == 'H'):
+                    fraw[:, :, 0] = fraw[:, :, 1]
+
                 Ex = np.copy(fraw)
-                Ex[0:-1, :, 1:] += fraw[0:-1, :, 0:-1]
-                Ex[0:-1, :, 1:] += fraw[1:, :, 1:]
-                Ex[0:-1, :, 1:] += fraw[1:, :, 0:-1]
+                Ex [1:-1, :, 1:-1] += fraw[1:-1, :, 0:-2]
+                Ex [1:-1, :, 1:-1] += fraw[2:, :, 1:-1]
+                Ex [1:-1, :, 1:-1] += fraw[2:, :, 0:-2]
                 Ex = Ex/4.0
                 field = crop_field(Ex)
 
             elif(component == FieldComponent.Ey):
+                # handle special boundary conditions
+                if(j1 == 0 and bc[1] == 'E'):
+                    fraw[:, 0, :] = -1*fraw[:, 1, :]
+                elif(j1 == 0 and bc[1] == 'H'):
+                    fraw[:, 0, :] = fraw[:, 1, :]
+
                 Ey = np.copy(fraw)
-                Ey[0:-1, 1:, :] += fraw[0:-1, 0:-1, :]
-                Ey[0:-1, 1:, :] += fraw[1:, 1:, :]
-                Ey[0:-1, 1:, :] += fraw[1:, 0:-1, :]
+                Ey[1:-1, 1:-1, :] += fraw[1:-1, 0:-2, :]
+                Ey[1:-1, 1:-1, :] += fraw[2:, 1:-1, :]
+                Ey[1:-1, 1:-1, :] += fraw[2:, 0:-2, :]
                 Ey = Ey/4.0
                 field = crop_field(Ey)
 
             elif(component == FieldComponent.Hx):
+                # handle special boundary conditions
+                if(j1 == 0 and bc[1] == 'E'):
+                    fraw[:, 0, :] = -1*fraw[:, 1, :]
+                elif(j1 == 0 and bc[1] == 'H'):
+                    fraw[:, 0, :] = fraw[:, 1, :]
+
                 Hx = np.copy(fraw)
                 Hx[:, 1:, :] += fraw[:, 0:-1, :]
                 Hx = Hx/2.0
                 field = crop_field(Hx)
 
             elif(component == FieldComponent.Hy):
+                # Handle special boundary conditions
+                if(k1 == 0 and bc[0] == 'E'):
+                    fraw[:, :, 0] = -1*fraw[:,:,1]
+                elif(k1 == 0 and bc[0] == 'H'):
+                    fraw[:, :, 0] = fraw[:, :, 1]
+
                 Hy = np.copy(fraw)
                 Hy[:, :, 1:] += fraw[:, :, 0:-1]
                 Hy = Hy/2.0
                 field = crop_field(Hy)
 
             elif(component == FieldComponent.Hz):
+                # Handle special boundary conditions
+                if(k1 == 0 and bc[0] == 'E'):
+                    fraw[:, :, 0] = -1*fraw[:,:,1]
+                elif(k1 == 0 and bc[0] == 'H'):
+                    fraw[:, :, 0] = fraw[:, :, 1]
+
+                # handle special boundary conditions
+                if(j1 == 0 and bc[1] == 'E'):
+                    fraw[:, 0, :] = -1*fraw[:, 1, :]
+                elif(j1 == 0 and bc[1] == 'H'):
+                    fraw[:, 0, :] = fraw[:, 1, :]
+
                 Hz = np.copy(fraw)
                 Hz[0:-1, 1:, 1:] += fraw[0:-1, 1:, 0:-1]
                 Hz[0:-1, 1:, 1:] += fraw[0:-1, 0:-1, 1:]
@@ -3121,6 +3276,7 @@ class FDFD_3D(FDFD):
 
             if(squeeze): return np.squeeze(field)
             else: return field
+
 
     def get_adjoint_field(self, component, domain=None, squeeze=False):
         """Get the adjoint field.
@@ -3286,14 +3442,29 @@ class FDFD_3D(FDFD):
             for i in range(zmin, zmax):
                 for j in range(j1,j2):
                     for k in range(k1,k2):
-                        index = Nc*(i*NxNy+j*Nx+k)
+                        index = Nc*(i*NxNy+j*Nx+k) + 0
                         if(index >= ib and index < ie):
-                            src_arr[index - ib + 0] = Jx[i-i1, j-j1, k-k1]
-                            src_arr[index - ib + 1] = Jy[i-i1, j-j1, k-k1]
-                            src_arr[index - ib + 2] = Jz[i-i1, j-j1, k-k1]
-                            src_arr[index - ib + 3] = Mx[i-i1, j-j1, k-k1]
-                            src_arr[index - ib + 4] = My[i-i1, j-j1, k-k1]
-                            src_arr[index - ib + 5] = Mz[i-i1, j-j1, k-k1]
+                            src_arr[index - ib] = Jx[i-i1, j-j1, k-k1]
+
+                        index = Nc*(i*NxNy+j*Nx+k)+1
+                        if(index >= ib and index < ie):
+                            src_arr[index - ib] = Jy[i-i1, j-j1, k-k1]
+
+                        index = Nc*(i*NxNy+j*Nx+k)+2
+                        if(index >= ib and index < ie):
+                            src_arr[index - ib] = Jz[i-i1, j-j1, k-k1]
+
+                        index = Nc*(i*NxNy+j*Nx+k)+3
+                        if(index >= ib and index < ie):
+                            src_arr[index - ib] = Mx[i-i1, j-j1, k-k1]
+
+                        index = Nc*(i*NxNy+j*Nx+k)+4
+                        if(index >= ib and index < ie):
+                            src_arr[index - ib] = My[i-i1, j-j1, k-k1]
+
+                        index = Nc*(i*NxNy+j*Nx+k)+5
+                        if(index >= ib and index < ie):
+                            src_arr[index - ib] = Mz[i-i1, j-j1, k-k1]
 
             self.b.setArray(src_arr)
 
@@ -3328,12 +3499,17 @@ class FDFD_3D(FDFD):
         This functionality is complicated in 3D as we have to be a bit more
         careful with how we share data between processors.
 
+        Notes
+        -----
+        1. This function clears the current adjoint source vector when called.
+
         Parameters
         ----------
         dFdxs : tuple of lists
             Tuple containing a list of numpy.ndarray as the first element and a
             list of correpsonding DomainCoordinates as the second argument.
         """
+        self.b_adj.set(0)
         for src, domain in zip(dFdxs[0], dFdxs[1]):
             self.update_adjoint_sources(src, domain)
 
@@ -3349,6 +3525,8 @@ class FDFD_3D(FDFD):
         """
         Nc = 6
         Nx = self._Nx
+        Ny = self._Ny
+        Nz = self._Nz
         NxNy = self._Nx * self._Ny
         ib = self.ib
         ie = self.ie
@@ -3364,16 +3542,34 @@ class FDFD_3D(FDFD):
         # restrict the range of zs to only those owned locally by this
         # processor
         ig = int(ie/Nc)
-        zmax = int(ig/NxNy)
+        zmax = int(ig/NxNy)+1
 
         ig = int(ib/Nc)
-        zmin = int(ig/NxNy)
+        zmin = int(ig/NxNy)-1
 
         if(i1 > zmin): zmin = i1
         if(i2 < zmax): zmax = i2
 
-        Jx = src[0]; Jy = src[1]; Jz = src[2]
-        Mx = src[3]; My = src[4]; Mz = src[5]
+        # we need to be careful that any part of the supplied source/domain
+        # which extends outside of the simulation region is ignored
+        xmin = k1; xmax = k2
+        ymin = j1; ymax = j2
+        if(xmin < 0): xmin = 0
+        if(ymin < 0): ymin = 0
+        if(zmin < 0): zmin = 0
+
+        if(xmax > Nx-1): xmax = Nx-1
+        if(ymax > Ny-1): ymax = Ny-1
+        if(zmax > Nz-1): zmax = Nz-1
+
+        #print xmin, xmin-k1, ymin, ymin-j1, zmin, zmin-i1
+
+        Jx = src[0]
+        Jy = src[1]
+        Jz = src[2]
+        Mx = src[3]
+        My = src[4]
+        Mz = src[5]
 
         # these are most likely only know on rank 0--communicate data
         Jx = COMM.bcast(Jx, root=0)
@@ -3384,18 +3580,33 @@ class FDFD_3D(FDFD):
         Mz = COMM.bcast(Mz, root=0)
 
         for i in range(zmin,zmax):
-            for j in range(j1,j2):
-                for k in range(k1,k2):
-                    index = Nc*(i*NxNy+j*Nx+k)
+            for j in range(ymin,ymax):
+                for k in range(xmin,xmax):
+                    index = Nc*(i*NxNy+j*Nx+k)+0
                     if(index >= ib and index < ie):
-                        src_arr[index - ib + 0] = Jx[i-i1, j-j1, k-k1]
-                        src_arr[index - ib + 1] = Jy[i-i1, j-j1, k-k1]
-                        src_arr[index - ib + 2] = Jz[i-i1, j-j1, k-k1]
-                        src_arr[index - ib + 3] = Mx[i-i1, j-j1, k-k1]
-                        src_arr[index - ib + 4] = My[i-i1, j-j1, k-k1]
-                        src_arr[index - ib + 5] = Mz[i-i1, j-j1, k-k1]
+                        src_arr[index - ib] += Jx[i-i1, j-j1, k-k1]
 
-        self.b_adj.setArray(np.conj(src_arr))
+                    index = Nc*(i*NxNy+j*Nx+k)+1
+                    if(index >= ib and index < ie):
+                        src_arr[index - ib] += Jy[i-i1, j-j1, k-k1]
+
+                    index = Nc*(i*NxNy+j*Nx+k)+2
+                    if(index >= ib and index < ie):
+                        src_arr[index - ib] += Jz[i-i1, j-j1, k-k1]
+
+                    index = Nc*(i*NxNy+j*Nx+k)+3
+                    if(index >= ib and index < ie):
+                        src_arr[index - ib] += Mx[i-i1, j-j1, k-k1]
+
+                    index = Nc*(i*NxNy+j*Nx+k)+4
+                    if(index >= ib and index < ie):
+                        src_arr[index - ib] += My[i-i1, j-j1, k-k1]
+
+                    index = Nc*(i*NxNy+j*Nx+k)+5
+                    if(index >= ib and index < ie):
+                        src_arr[index - ib] += Mz[i-i1, j-j1, k-k1]
+
+        self.b_adj.setArray(src_arr)
 
     def update_saved_fields(self):
         """Update the saved fields based on the domains contained in
@@ -3417,7 +3628,7 @@ class FDFD_3D(FDFD):
             Hy = self.get_field_interp(FieldComponent.Hy, domain=d)
             Hz = self.get_field_interp(FieldComponent.Hz, domain=d)
 
-            self._saved_fields.append([Ex, Ey, Ez, Hx, Hy, Hz])
+            self._saved_fields.append((Ex, Ey, Ez, Hx, Hy, Hz))
 
     def get_source_power(self):
         """Get source power.
@@ -3434,9 +3645,9 @@ class FDFD_3D(FDFD):
 
         # define pml boundary domains
         dx = self._dx; dy = self._dy; dz = self._dz
-        xmin = self._w_pml_xmin*dx; xmax = self._X - self._w_pml_xmax*dx
-        ymin = self._w_pml_ymin*dy; ymax = self._Y - self._w_pml_ymax*dy
-        zmin = self._w_pml_zmin*dz; zmax = self._Z - self._w_pml_zmax*dz
+        xmin = self._w_pml[0]; xmax = self._X - self._w_pml[1]
+        ymin = self._w_pml[2]; ymax = self._Y - self._w_pml[3]
+        zmin = self._w_pml[4]; zmax = self._Z - self._w_pml[5]
 
         x1 = DomainCoordinates(xmin, xmin, ymin, ymax, zmin, zmax, dx, dy, dz)
         x2 = DomainCoordinates(xmax, xmax, ymin, ymax, zmin, zmax, dx, dy, dz)
@@ -3453,7 +3664,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Px = -0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-            print Px
+            #print Px
             Psrc += Px
         del Ey; del Ez; del Hy; del Hz
 
@@ -3465,7 +3676,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Px = 0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-            print Px
+            #print Px
             Psrc += Px
         del Ey; del Ez; del Hy; del Hz
 
@@ -3477,7 +3688,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Py = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
-            print Py
+            #print Py
             Psrc += Py
         del Ex; del Ez; del Hx; del Hz
 
@@ -3489,7 +3700,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Py = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
-            print Py
+            #print Py
             Psrc += Py
         del Ex; del Ez; del Hx; del Hz
 
@@ -3501,7 +3712,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Pz = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
-            print Pz
+            #print Pz
             Psrc += Pz
         del Ex; del Ey; del Hx; del Hy
 
@@ -3513,7 +3724,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Pz = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
-            print Pz
+            #print Pz
             Psrc += Pz
         del Ex; del Ey; del Hx; del Hy
 

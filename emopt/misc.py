@@ -150,18 +150,49 @@ class DomainCoordinates(object):
     def __init__(self, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz):
         i1 = int(zmin/dz)
         i2 = int(zmax/dz)+1
+
+        j1 = int(ymin/dy)
+        j2 = int(ymax/dy)+1
+
+        k1 = int(xmin/dx)
+        k2 = int(xmax/dx)+1
+
+        self.set_region(k1, k2, j1, j2, i1, i2, dx, dy, dz)
+
+
+    def set_region(self, k1, k2, j1, j2, i1, i2, dx, dy, dz):
+        """Set the region contained within the DomainCoordinates.
+
+        Parameters
+        ----------
+        k1 : int
+            The minimum x index.
+        k2 : int
+            The maximum x index.
+        j1 : int
+            The minimum y index.
+        j2 : int
+            The maximum y index.
+        i1 : int
+            The minimum z index.
+        i2 : int
+            The maximum z index.
+        dx : float
+            The grid spacing along x
+        dy : float
+            The grid spacing along y
+        dz : float
+            The grid spacing along z
+        """
+
         ilist = np.arange(i1, i2, 1, dtype=np.int)
         self._z = dz * ilist.astype(np.double)
         self._i = slice(i1, i2)
 
-        j1 = int(ymin/dy)
-        j2 = int(ymax/dy)+1
         jlist = np.arange(j1, j2, 1, dtype=np.int)
         self._y = dy * jlist.astype(np.double)
         self._j = slice(j1, j2)
 
-        k1 = int(xmin/dx)
-        k2 = int(xmax/dx)+1
         klist = np.arange(k1, k2, 1, dtype=np.int)
         self._x = dx * klist.astype(np.double)
         self._k = slice(k1, k2)
@@ -318,7 +349,45 @@ class DomainCoordinates(object):
                (j >= self.j1 and j < self.j2) and \
                (i >= self.i1 and i < self.i2)
 
+    def grow(self, x1, x2, y1, y2, z1, z2):
+        """Grow the size of DomainCoordinates in each direction by a specified
+        number of grid cells.
+
+        Notes
+        -----
+        If the input values are negative, the region will shrink! Use this with
+        caution as we do not error check.
+
+        Parameters
+        ----------
+        x1 : int
+            The number of grid cells to grow in the -x direction
+        x2 :int
+            The number of grid cells to grow in the +x direction
+        y1 : int
+            The number of grid cells to grow in the -y direction
+        y2 :int
+            The number of grid cells to grow in the +y direction
+        z1 : int
+            The number of grid cells to grow in the -z direction
+        z2 :int
+            The number of grid cells to grow in the +z direction
+        """
+        k1 = self.k1 - x1; k2 = self.k2 + x2
+        j1 = self.j1 - y1; j2 = self.j2 + y2
+        i1 = self.i1 - z1; i2 = self.i2 + z2
+
+        self.set_region(k1, k2, j1, j2, i1, i2, self._dx, self._dy, self._dz)
+
     def copy(self):
+        """Copy the domain.
+
+        Returns
+        -------
+        DomainCoordinates
+            A new DomainCoordinates object with the exact same dimensions as
+            this one.
+        """
         x = self._x
         y = self._y
         z = self._z
