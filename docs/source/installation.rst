@@ -5,6 +5,7 @@ Installation Instructions
 #########################
 
 These instructions will help you get EMopt up and running on your system.
+Currently the installation requires some manual labor.
 
 ======================
 Software Prerequisites
