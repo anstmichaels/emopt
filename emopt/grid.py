@@ -752,7 +752,8 @@ class Material3D(object):
 
         return value
 
-    def get_values(self, k1, k2, j1, j2, i1, i2, sx=0, sy=0, sz=0, arr=None):
+    def get_values(self, k1, k2, j1, j2, i1, i2, sx=0, sy=0, sz=0, arr=None,
+                   reshape=True):
         """Get the values of the material distribution within a set of array
         indicesa set of array indices.
 
@@ -787,13 +788,14 @@ class Material3D(object):
         if(type(arr) == type(None)):
             arr = np.zeros(Nx*Ny*Nz, dtype=np.complex128)
         else:
-            arr = np.ravel()
+            arr = np.ravel(arr)
 
         libGrid.Material3D_get_values(self._object, arr, k1, k2, j1, j2, i1,
                                       i2, sx, sy, sz)
 
         # This might result in an expensive copy operation, unfortunately
-        arr = np.reshape(arr, [Nz, Ny, Nx])
+        if(reshape):
+            arr = np.reshape(arr, [Nz, Ny, Nx])
 
         return arr
 

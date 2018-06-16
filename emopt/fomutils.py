@@ -491,115 +491,6 @@ class ModeMatch:
         """
         ds = self.ds1*self.ds2
         return 1/4.0 * ds * np.real(self.Pm) * (np.conj(self.Eym)*self.x_dot_s - np.conj(self.Exm)*self.y_dot_s) * np.conj(self.am)/np.conj(self.Pm)
-class ModeOverlap:
-
-    def __init__(self, normal, ds, Exm=None, Eym=None, Ezm=None, Hxm=None, Hym=None, Hzm=None):
-
-        input_fields = [Exm, Eym, Ezm, Hxm, Hym, Hzm]
-
-        self.fshape = [0,0]
-        for f in input_fields:
-            if(f is not None):
-                self.fshape = f.shape
-                break
-
-        if(self.fshape == [0,0]):
-            raise ValueError('No fields were passed to ModeMatch.  Mode matching is impossible without fields!')
-
-        self.Exm = Exm if Exm is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Eym = Eym if Eym is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Ezm = Ezm if Ezm is not None else np.zeros(self.fshape, dtype=np.complex128)
-
-        self.Hxm = Hxm if Hxm is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Hym = Hym if Hym is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Hzm = Hzm if Hzm is not None else np.zeros(self.fshape, dtype=np.complex128)
-
-        self.normal = np.array(normal)
-        self.ds = ds
-
-        # cartesian basis vectors
-        self.xhat = np.array([1, 0, 0])
-        self.yhat = np.array([0, 1, 0])
-        self.zhat = np.array([0, 0, 1])
-
-        self.x_dot_s = self.xhat.dot(self.normal)
-        self.y_dot_s = self.yhat.dot(self.normal)
-        self.z_dot_s = self.zhat.dot(self.normal)
-
-        # Calculate the mode field power normalization
-        Pxm = self.Eym * np.conj(self.Hzm) - self.Ezm * np.conj(self.Hym)
-        Pym = -self.Exm * np.conj(self.Hzm) + self.Ezm * np.conj(self.Hxm)
-        Pzm = self.Exm * np.conj(self.Hym) - self.Eym * np.conj(self.Hxm)
-
-        self.Pm = ds*np.sum(self.x_dot_s * Pxm + \
-                            self.y_dot_s * Pym + \
-                            self.z_dot_s * Pzm )
-
-        self.F1 = 0.0 + 1j*0.0
-        self.F2 = 0.0 + 1j*0.0
-        self.efficiency = 0.0
-
-        self.Ex = np.zeros(self.fshape, dtype=np.complex128)
-        self.Ey = np.zeros(self.fshape, dtype=np.complex128)
-        self.Ez = np.zeros(self.fshape, dtype=np.complex128)
-        self.Hx = np.zeros(self.fshape, dtype=np.complex128)
-        self.Hy = np.zeros(self.fshape, dtype=np.complex128)
-        self.Hz = np.zeros(self.fshape, dtype=np.complex128)
-
-    ## Some of the calculations are redundant, so we calculate most things in advance and 
-    # save them for future access.
-    def compute(self, Ex=None, Ey=None, Ez=None, Hx=None, Hy=None, Hz=None):
-        self.Ex = Ex if Ex is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Ey = Ey if Ey is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Ez = Ez if Ez is not None else np.zeros(self.fshape, dtype=np.complex128)
-
-        self.Hx = Hx if Hx is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Hy = Hy if Hy is not None else np.zeros(self.fshape, dtype=np.complex128)
-        self.Hz = Hz if Hz is not None else np.zeros(self.fshape, dtype=np.complex128)
-
-        F1x =  self.Ey * np.conj(self.Hzm) - self.Ez * np.conj(self.Hym)
-        F1y = -self.Ex * np.conj(self.Hzm) + self.Ez * np.conj(self.Hxm)
-        F1z =  self.Ex * np.conj(self.Hym) - self.Ey * np.conj(self.Hxm)
-
-        F2x =  self.Eym * np.conj(self.Hz) - self.Ezm * np.conj(self.Hy)
-        F2y = -self.Exm * np.conj(self.Hz) + self.Ezm * np.conj(self.Hx)
-        F2z =  self.Exm * np.conj(self.Hy) - self.Eym * np.conj(self.Hx)
-
-        self.F1 = self.ds * np.sum(F1x * self.x_dot_s + F1y * self.y_dot_s + F1z * self.z_dot_s)
-        self.F2 = self.ds * np.sum(F2x * self.x_dot_s + F2y * self.y_dot_s + F2z * self.z_dot_s)
-        F = self.F1*self.F2 / self.Pm
-
-        print self.F1/self.Pm, np.conj(self.F2/self.Pm)
-
-        self.efficiency = 0.5 * (F + np.conj(F)).real
-
-    def F1(self):
-        return self.F1
-
-    def F2(self):
-        return self.F2
-
-    def get_efficiency(self, P_in):
-        return self.efficiency/2.0/P_in
-
-    def get_dFdEx(self):
-        return 0.5 * self.F2 / self.Pm * (-np.conj(self.Hzm)*self.y_dot_s + np.conj(self.Hym)*self.z_dot_s)
-
-    def get_dFdEy(self):
-        return 0.5 * self.F2 / self.Pm * (np.conj(self.Hzm)*self.x_dot_s - np.conj(self.Hxm)*self.z_dot_s)
-
-    def get_dFdEz(self):
-        return 0.5 * self.F2 / self.Pm * (-np.conj(self.Hym)*self.x_dot_s - np.conj(self.Hxm)*self.y_dot_s)
-
-    def get_dFdHx(self):
-        return 0.5 * np.conj(self.F1 / self.Pm) * (np.conj(self.Ezm)*self.y_dot_s - np.conj(self.Eym)*self.z_dot_s)
-
-    def get_dFdHy(self):
-        return 0.5 * np.conj(self.F1 / self.Pm) * (-np.conj(self.Ezm)*self.x_dot_s + np.conj(self.Exm)*self.z_dot_s)
-
-    def get_dFdHz(self):
-        return 0.5 * np.conj(self.F1 / self.Pm) * (-np.conj(self.Exm)*self.y_dot_s + np.conj(self.Eym)*self.x_dot_s)
-
 
 def interpolated_dFdx_2D(sim, dFdEzi, dFdHxi, dFdHyi):
     """Account for interpolated fields in a 'naive' derivative of a figure of
@@ -751,8 +642,8 @@ def interpolated_dFdx_3D(sim, domain, dFdExi, dFdEyi, dFdEzi, dFdHxi, dFdHyi, dF
         dFdEx[1:-1, 1:-1, 1] += dFdExi[:, :, 0]/4.0
         dFdEx[2:, 1:-1, 1] += dFdExi[:, :, 0]/4.0
     elif(domain.k1 == 0 and sim.bc[0] == 'E'):
-        dFdEy[1:-1, 1, 1:-1] -= dFdEyi[:, 0, :]/4.0
-        dFdEy[2:, 1, 1:-1] -= dFdEyi[:, 0, :]/4.0
+        dFdEx[1:-1, 1, 1:-1] -= dFdExi[:, 0, :]/4.0
+        dFdEx[2:, 1, 1:-1] -= dFdExi[:, 0, :]/4.0
 
     dFdEx = dFdEx[1:, 0:-1, 0:-1]
 
@@ -1089,7 +980,6 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         List of source arrays and domains in the format needed by
         emotp.fdfd.FDFD_3D.set_adjoint_source(src)
     """
-    # the source power is integral to this calculation, obviously
     Psrc = sim.source_power
 
     adj_sources = []
@@ -1111,9 +1001,23 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
     dx = sim.dx; dy = sim.dy; dz = sim.dz
     X = sim.X; Y = sim.Y; Z = sim.Z
 
-    xmin = w_pml_xmin; xmax = X-w_pml_xmax
-    ymin = w_pml_ymin; ymax = Y-w_pml_ymax
-    zmin = w_pml_zmin; zmax = Z-w_pml_zmax
+    if(w_pml_xmin > 0): xmin = w_pml_xmin + dx
+    else: xmin = 0.0
+
+    if(w_pml_xmax > 0): xmax = X - w_pml_xmax - dx
+    else: xmax = X
+
+    if(w_pml_ymin > 0): ymin = w_pml_ymin + dy
+    else: ymin = 0.0
+
+    if(w_pml_ymax > 0): ymax = Y - w_pml_ymax - dy
+    else: ymax = Y
+
+    if(w_pml_zmin > 0): zmin = w_pml_zmin + dz
+    else: zmin = 0.0
+
+    if(w_pml_zmax > 0): zmax = Z - w_pml_zmax - dz
+    else: zmax = Z
 
     x1 = misc.DomainCoordinates(xmin, xmin, ymin, ymax, zmin, zmax, dx, dy, dz)
     x2 = misc.DomainCoordinates(xmax, xmax, ymin, ymax, zmin, zmax, dx, dy, dz)
@@ -1122,14 +1026,14 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
     z1 = misc.DomainCoordinates(xmin, xmax, ymin, ymax, zmin, zmin, dx, dy, dz)
     z2 = misc.DomainCoordinates(xmin, xmax, ymin, ymax, zmax, zmax, dx, dy, dz)
 
-    # calculate dFdx for xmax
+    # calculate dFdx for xmin
     dshape = x1.shape
     Ey = sim.get_field_interp(FieldComponent.Ey, domain=x1)
     Ez = sim.get_field_interp(FieldComponent.Ez, domain=x1)
     Hy = sim.get_field_interp(FieldComponent.Hy, domain=x1)
     Hz = sim.get_field_interp(FieldComponent.Hz, domain=x1)
 
-    if(NOT_PARALLEL):
+    if(NOT_PARALLEL and sim.bc[0] != 'E' and sim.bc[0] != 'H'):
         dSdEx = np.zeros(dshape, dtype=np.complex128)
         dSdEy = -0.25 * dy * dz * np.conj(Hz)
         dSdEz = 0.25 * dy * dz * np.conj(Hy)
@@ -1189,7 +1093,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
     Hx = sim.get_field_interp(FieldComponent.Hx, domain=y1)
     Hz = sim.get_field_interp(FieldComponent.Hz, domain=y1)
 
-    if(NOT_PARALLEL):
+    if(NOT_PARALLEL and sim.bc[1] != 'E' and sim.bc[1] != 'H'):
         dSdEx = 0.25 * dx * dz * np.conj(Hz)
         dSdEy = np.zeros(dshape, dtype=np.complex128)
         dSdEz = -0.25 * dx * dz * np.conj(Hx)
@@ -1249,7 +1153,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
     Hx = sim.get_field_interp(FieldComponent.Hx, domain=z1)
     Hy = sim.get_field_interp(FieldComponent.Hy, domain=z1)
 
-    if(NOT_PARALLEL):
+    if(NOT_PARALLEL and sim.bc[2] != 'E' and sim.bc[2] != 'H'):
         dSdEx = -0.25 * dx * dy * np.conj(Hy)
         dSdEy = 0.25 * dx * dy * np.conj(Hx)
         dSdEz = np.zeros(dshape, dtype=np.complex128)

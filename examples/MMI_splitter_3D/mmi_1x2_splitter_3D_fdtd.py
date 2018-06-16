@@ -1,4 +1,5 @@
-"""Demonstrates how optimize an MMI 1x2 splitter in 3D.
+"""Demonstrates how optimize an MMI 1x2 splitter in 3D using the CW-FDTD
+solver.
 
 This optimization involves varying the width and height of a silicon slab in
 order to fine tune multimode interference with the ultimate goal of splitting
@@ -23,19 +24,14 @@ conditions.
 
 To run the script run:
 
-    $ mpirun -n 16 python mmi_1x2_splitter_3D.py
+    $ mpirun -n 16 python mmi_1x2_splitter_3D_fdtd.py
 
 If you want to run the script on a different number of processors, change 16 to
 the desired value.
 
-Furthermore, if you would like to monitor the process of the solver, you can
-add the '-ksp_monitor_true_residual' command line argument:
-
-    $ mpirun -n 16 python mmi_1x2_splitter_3D.py -ksp_monitor_true_residual
-
-and look at the last number that is printed each iteration. The simulation
-terminates when this value drops below the specified rtol (which defaults to
-1e-6)
+The primary advantage of using the FDTD solver is that it enables us to tackle
+much larger/higher resolution problems. In this example, we use a finer grid
+spacing than the FDFD example.
 """
 
 import emopt
@@ -142,10 +138,10 @@ class MMISplitterAdjointMethod(AdjointMethod):
 ####################################################################################
 X = 5.0   # simulation size along x
 Y = 4.0/2 # simulation size along y
-Z = 2.5/2 # simulation size along z
-dx = 0.04 # grid spacing along x
-dy = 0.04 # grid spacing along y
-dz = 0.04 # grid spacing along z
+Z = 2.5   # simulation size along z
+dx = 0.03 # grid spacing along x
+dy = 0.03 # grid spacing along y
+dz = 0.03 # grid spacing along z
 
 wavelength = 1.55
 
@@ -154,13 +150,17 @@ wavelength = 1.55
 #####################################################################################
 # Setup the simulation--rtol tells the iterative solver when to stop. 5e-5
 # yields reasonably accurate results/gradients
-sim = emopt.fdfd.FDFD_3D(X,Y,Z,dx,dy,dz,wavelength, rtol=5e-5)
+sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-6, min_rindex=1.44)
 w_pml = dx * 15 # set the PML width
+sim.src_ramp_time = sim.Nlambda * 20
+sim.Nmax = sim.Nlambda * 250
 
-# we use symmetry boundary conditions at y=0 and z=0 to speed things up. We
-# need to make sure to set the PML widths at these boundaries to zero!
-sim.w_pml = [w_pml, w_pml, 0, w_pml, 0, w_pml]
-sim.bc = '0HE'
+# we use symmetry boundary conditions at y=0 to speed things up. We
+# need to make sure to set the PML width at the minimum y boundary is set to
+# zero. Currently, FDTD cannot compute accurate gradients using symmetry in z
+# :(
+sim.w_pml = [w_pml, w_pml, 0, w_pml, w_pml, w_pml]
+sim.bc = '0H0'
 
 # get actual simulation dimensions
 X = sim.X
@@ -190,10 +190,10 @@ wg_out.material_value = 3.45**2
 rbg.material_value = 1.444**2
 
 eps = emopt.grid.StructuredMaterial3D(X, Y, Z, dx, dy, dz)
-eps.add_primitive(wg_in, -h_si/2, h_si/2)
-eps.add_primitive(mmi, -h_si/2, h_si/2)
-eps.add_primitive(wg_out, -h_si/2, h_si/2)
-eps.add_primitive(rbg, -Z, Z)
+eps.add_primitive(wg_in,  Z/2-h_si/2, Z/2+h_si/2)
+eps.add_primitive(mmi,    Z/2-h_si/2, Z/2+h_si/2)
+eps.add_primitive(wg_out, Z/2-h_si/2, Z/2+h_si/2)
+eps.add_primitive(rbg,    -Z, Z)
 
 mu = emopt.grid.ConstantMaterial3D(1.0)
 
@@ -205,14 +205,14 @@ sim.build()
 # Setup the sources
 #####################################################################################
 # We excite the system by injecting the fundamental mode of the input waveguide
-input_slice = emopt.misc.DomainCoordinates(16*dx, 16*dx, 0, Y-w_pml, 0, Z-w_pml, dx, dy, dz)
+input_slice = emopt.misc.DomainCoordinates(16*dx, 16*dx, 0, Y-w_pml, w_pml, Z-w_pml, dx, dy, dz)
 
 mode = emopt.modes.ModeFullVector(wavelength, eps, mu, input_slice, n0=3.45,
                                    neigs=4)
 
 # The mode boundary conditions should match the simulation boundary conditins.
 # Mode is in the y-z plane, so the boundary conditions are HE
-mode.bc = 'HE'
+mode.bc = 'H0'
 mode.build()
 mode.solve()
 
@@ -224,13 +224,14 @@ sim.set_sources(mode, input_slice)
 # we need to calculate the field used as the reference field in our mode match
 # figure of merit calculation. This is the fundamental super mode of the output
 # waveguides.
-fom_slice = emopt.misc.DomainCoordinates(X-w_pml-dx, X-w_pml-dx, 0, Y-w_pml, 0, Z-w_pml, dx, dy, dz)
+fom_slice = emopt.misc.DomainCoordinates(X-w_pml-4*dx, X-w_pml-4*dx, 0, Y-w_pml,
+                                         w_pml, Z-w_pml, dx, dy, dz)
 
 fom_mode = emopt.modes.ModeFullVector(wavelength, eps, mu, fom_slice, n0=3.45,
                                    neigs=4)
 
 # Need to be consistent with boundary conditions!
-fom_mode.bc = 'HE'
+fom_mode.bc = 'H0'
 fom_mode.build()
 fom_mode.solve()
 
@@ -275,8 +276,8 @@ fom, pfinal = opt.run()
 # run a simulation to make sure we visualize the correct data
 am.fom(pfinal)
 
-field_monitor = emopt.misc.DomainCoordinates(w_pml, X-w_pml, 0, Y-w_pml, 0, 0,
-                                  dx, dy, dz)
+field_monitor = emopt.misc.DomainCoordinates(w_pml, X-w_pml, 0, Y-w_pml, Z/2,
+                                             Z/2, dx, dy, dz)
 
 # visualize the final results!
 Ey = sim.get_field_interp('Ey', domain=field_monitor, squeeze=True)

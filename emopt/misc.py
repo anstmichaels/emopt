@@ -19,6 +19,7 @@ __status__ = "development"
 COMM = PETSc.COMM_WORLD.tompi4py()
 RANK = PETSc.COMM_WORLD.getRank()
 NOT_PARALLEL = (RANK == 0)
+N_PROC = PETSc.COMM_WORLD.getSize()
 
 def run_on_master(func):
     """Prevent a decorated function from running on any node but the master

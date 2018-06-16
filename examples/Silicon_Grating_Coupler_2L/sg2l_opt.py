@@ -436,7 +436,7 @@ if __name__ == '__main__':
     design_params[-1] = -shift_bot -(1-df)*period
     design_params[-2] = -(1-df)*period
 
-    #am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
+    am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
 
     fom_list = []
     callback = lambda x : plot_update(x, fom_list, sim, am)

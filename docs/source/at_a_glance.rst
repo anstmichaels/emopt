@@ -50,8 +50,8 @@ Defining Structures with emopt.grid
 A core part of emopt is the :ref:`emopt_grid` module which provides users with
 a way of defining structures/material distributions on a rectangular grid. In
 particular, :ref:`emopt_grid` provides an interface for defining collections of
-:class:`MaterialPrimitive` which are rectangles and polygons. In 2D, these
-:class:`MaterialPrimitive` can be overlayed with different priorities to form
+:class:`grid.MaterialPrimitive` which are rectangles and polygons. In 2D, these
+:class:`grid.MaterialPrimitive` can be overlayed with different priorities to form
 complex 2D distributions of materials. In 3D, they can be prescribed a
 thickness and stacked to form complex layered structures.
 
@@ -78,8 +78,8 @@ these solvers are ideally suited for simulating dielectric structures whereas
 metallic structures may lead to issues (due to either problem size or grid
 smoothing errors).
 
-Using the EMopt's FDFD solvers involves creating an FDFD object (:class:`FDFD_TE`
-or :class:`FDFD_TM` in 2D or :class:`FDFD_3D` in 3D) which defines
+Using the EMopt's FDFD solvers involves creating an FDFD object (:class:`fdfd.FDFD_TE`
+or :class:`fdfd.FDFD_TM` in 2D or :class:`fdfd.FDFD_3D` in 3D) which defines
 the simulation size and resolution, defining the structure, defining the
 sources, building the system, and then running the simulation. In 2D, you have
 the option of running either a TE or TM simulation (full-vector + anisotropies
@@ -128,6 +128,24 @@ are increased. Specifically, we specify rectangular domains which are ideally
 much smaller than the whole simulation region (e.g. a plane) and specify the
 sources or retrieve the fields in these domains.
 
+.. note:: 3D solver options
+
+    Currently, EMopt provides two 3D solvers to choose from. The first is an
+    FDFD solver which works well for smaller problems and the second is a
+    CW-FDTD solver which works well for problems of any size.
+
+    For very small problems, the FDFD solver may be a bit faster. Furthermore,
+    the FDFD solver will typically produce more accurate gradients, regardless
+    of how grid spacings are chosen or which boundary conditions are used.
+
+    For modest to large problems (in terms of either size or resolution), the
+    FDTD solver should be used. The 3D solver will scale to larger numbers of
+    cores better and uses *considerably* less memory than the FDFD solver.
+    The primary disadvantage of the FDTD solver is that it requires that the
+    grid spacing be equal in all directions in order to calculate accurate
+    gradients. Furthermore, symmetry boundary conditions can lead to
+    inconsistent gradient calculations.
+
 ===========================
 Calculating Waveguide Modes
 ===========================
@@ -172,9 +190,130 @@ The process for calculating 2D modes is almost identical.
 Calculating Sensitivities
 =========================
 
+A key component of EMopt is the calculation of sensitivities (i.e., gradients
+of a figure of merit which describe an electromagnetic device's performance
+with respect to design variables which describe the device's shape). In order
+to effciently compute the sensitivities, EMopt implements the adjoint method.
+This implementation has been designed in order to make it relatively easy to
+use for any device, figure of merit, and set of design variables that you would
+like to work with.
+
+Sensitivity analysis in EMopt makes heavy use of object oriented programming.
+In particular, in order to apply the adjoint method to a specific figure of
+merit and set of design variables, you must implement your own class which
+extends the :class:`adjoint_method.AdjointMethod` class defined in EMopt. In
+this custom implementation, you tell EMopt how to update your structure given a
+set of design variables, how to calculate your figure of merit, and how to take
+its derivative with respect to the field quantities. For example:
+
+.. code-block:: python
+
+    from emopt.adjoint_method import AdjointMethod
+
+    class MyAdjointMethod(AdjointMethod):
+        def __init__(self, sim):
+            super(MyAdjointMethod, self).__init__(sim)
+            # define other variables you need
+
+        def update_system(self, params):
+            """Update the simulation geometry based on the list of design
+            parameters given in params."""
+            # e.g. self.rect.width = params[0]
+
+        def calc_fom(self, sim, params):
+            """Calculate the figure of merit."""
+            Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[0] # get fields
+            fom = ...# calculate fom using Ex, Ey, Ez, Hx, Hy, Hz
+            return fom
+
+        def calc_dFdx(self, sim, params):
+            """Calculate the derivative of the figure of merit with respect to
+            Ex, Ey, Ez, Hx, Hy, Hz"""
+            Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[0] # get fields
+            dFdEx = ... # calc derivative with respect to x
+            dFdEy = ... # calc derivative with respect to y
+            ...
+            # the value we return will depend on the type of solver you are
+            # using--see example projects
+            return (dFdEx, dFdEy, dFdEz,
+                    dFdHx, dFdHy, dFdHz)
+
+        def calc_grad_y(self, sim, params):
+            """Calculate the derivative of the figure of merit with respect to
+            the design parameters themselves. This is useful for penalty
+            functions."""
+            dFdp = ... # calc using params
+            return dFdp
+
+After implementing your own :class:`AdjointMethod` class, it is straightforward
+to use it to calculate the figure of merit and its gradient with respect to the
+design variables. The base class implemented by EMopt will take care of all of
+the dirty work internally:
+
+.. code-block:: python
+
+    am = MyAdjointMethod(sim, ...)
+    design_params = # list of initial values for design params
+
+    # compute figure of merit
+    fom = am.fom(design_params)
+
+    # verify the gradients are accurate
+    am.check_gradient(design_params)
+
+    # compute gradient of figure of merit
+    gradient = am.gradient(design_params)
+
+.. note::
+    
+    In the current version of EMopt, the value returned by :meth:`calc_dFdx`
+    depends on whether you are working with a 2D or 3D solver. In 2D,
+    :meth:`calc_dFdx` should return a tuple of arrays which specify dFdx in the
+    whole simulation area. In 3D, it should return two lists. The first list
+    should contain sets of 6 dFdx arrays (one for each field component) and the
+    second should contain corresponding DomainCoordinates which specify where
+    in the simulation those derivatives are from.
+
 =====================
 Running Optimizations
 =====================
+
+Optimizing electromagnetic structures is the bread and butter of EMopt. The
+Maxwell solvers, mode solvers, and adjoint method implementation provided by
+EMopt have all been created with optimization in mind. Technically, as soon as
+you have set up a custom :class:`AdjointMethod` class, you are ready to
+optimize your electromagnetic structure.
+
+Unfortunately, because EMopt is written from the ground up based on MPI (for
+parallelism) using the gradient information provided by :class:`AdjointMethod`
+in conjunction with other optimization packages (e.g. scipy.optimize) is not
+straightforward. In order to simplify this process, EMopt implements a small
+class which interfaces between EMopt's parallelized components and scipy's
+optimization library. This :class:`optimizer.Optimizer` class provides a very
+simple interface for setting up and running an optimization. The process of
+running an optimization is typically as follows:
+
+.. code-block:: python
+
+    import emopt
+
+    # setup simulation, AdjointMethod, etc
+    ...
+
+    opt = emopt.optimizer.Optimizer(am, params, Nmax=100, opt_method='L-BFGS-B')
+    fom, params_final = opt.run()
+
+This snippet will run an optimization using the limited memory BFGS method
+provided by scipy for a maximum of 100 iterations and then return the final
+figure of merit and design parameters.
+
+.. note:: 
+    
+    Before running a simulation, you are strongly encouraged to check that your
+    gradients are accurate using :meth:`AdjointMethod.check_gradient`. The
+    primary source of difficulties encountered when running gradient-based
+    optimizations with EMopt is gradient inaccuracies which result from bugs in
+    your code!
 
 ==========
 References

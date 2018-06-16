@@ -57,7 +57,6 @@ correctly-sized zeroed numpy array on the non-master nodes.
 necessary in 3D when the total grid size is very large.
 """
 
-
 # Initialize petsc first
 import petsc4py
 import sys
@@ -67,6 +66,7 @@ from misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, MathDummy, DomainCoordinates, COMM
 from defs import FieldComponent, SourceComponent
 import modes
+from simulation import MaxwellSolver
 
 from grid import row_wise_A_update
 
@@ -83,7 +83,7 @@ __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-class FDFD(object):
+class FDFD(MaxwellSolver):
     """Finite difference frequency domain solver.
 
     This class provides the generalized interface for a finite diffrence
@@ -152,95 +152,17 @@ class FDFD(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self):
+    def __init__(self, ndims):
+        super(FDFD, self).__init__(ndims)
         self._A = PETSc.Mat()
         self._A.create(PETSc.COMM_WORLD)
 
         # number of unknowns (field componenets * grid points)
         self._nunks = 0
 
-        self._field_domains = []
-        self._saved_fields = []
-        self._source_power = []
-
     @property
     def nunks(self):
         return self._nunks
-
-    @property
-    def field_domains(self):
-        return self._field_domains
-
-    @field_domains.setter
-    def field_domains(self, domains):
-        self._field_domains = domains
-
-    @property
-    def saved_fields(self):
-        return self._saved_fields
-
-    @saved_fields.setter
-    def saved_fields(self, newf):
-        warning_message('Saved fields cannot be modified externally.',
-                        'emopt.fdfd')
-
-    @property
-    def source_power(self):
-        return self._source_power
-
-    @source_power.setter
-    def source_power(self, newp):
-        warning_message('The source power cannot be modified.', 'emopt.fdfd')
-
-    @abstractmethod
-    def solve_forward(self):
-        pass
-
-    @abstractmethod
-    def solve_adjoint(self):
-        pass
-
-    @abstractmethod
-    def get_field(self, component, domain=None):
-        pass
-
-    @abstractmethod
-    def get_field_interp(self, component, domain=None):
-        pass
-
-    @abstractmethod
-    def get_adjoint_field(self, component, domain=None):
-        pass
-
-    @abstractmethod
-    def build(self):
-        pass
-
-    @abstractmethod
-    def update(self, x1, x2, y1, y2):
-        pass
-
-    @abstractmethod
-    def set_sources(self, src):
-        pass
-
-    @abstractmethod
-    def set_adjoint_sources(self, src):
-        pass
-
-    @abstractmethod
-    def update_saved_fields(self):
-        pass
-
-    @abstractmethod
-    def get_source_power(self, src):
-        """
-        Notes
-        -----
-        This should exclude any influence due to non-physical boundary
-        conditions like PMLs (if possible)
-        """
-        pass
 
     def get_A_diag(self, vdiag=None):
         """Get the diagonal entries of the system matrix A.
@@ -270,6 +192,22 @@ class FDFD(object):
         #if(NOT_PARALLEL):
         #    return vdiag_full[...]
         return vdiag
+
+    @abstractmethod
+    def calc_ydAx(self, Adiag0):
+        """Calculate y^T * (A1-A0) * x.
+
+        Parameters
+        ----------
+        Adiag0 : PETSc.Vec
+            The diagonal of the FDFD matrix.
+
+        Returns
+        -------
+        complex
+            The product y^T * (A1-A0) * x
+        """
+        pass
 
     @run_on_master
     def spy_A(self):
@@ -372,7 +310,7 @@ class FDFD_TE(FDFD):
 
     def __init__(self, W, H, dx, dy, wavelength, solver='auto',
                  ksp_solver='gmres'):
-        super(FDFD_TE, self).__init__()
+        super(FDFD_TE, self).__init__(2)
 
         self._dx = dx
         self._dy = dy
@@ -432,6 +370,8 @@ class FDFD_TE(FDFD):
         self.x_adj = x.copy()
         self.b_adj = b.copy()
 
+        self._Adiag1 = x.copy() # used for retrieving Adiag in calc_ydAx
+
         self.ib, self.ie = self._A.getOwnershipRange()
         self.A_diag_update = np.zeros(self.ie-self.ib, dtype=np.complex128)
 
@@ -447,7 +387,10 @@ class FDFD_TE(FDFD):
         pc = self.ksp_iter.getPC()
         if(solver == 'iterative_lu'):
             pc.setType('lu')
-            pc.setFactorSolverPackage('mumps')
+            try:
+                pc.setFactorSolverPackage('mumps')
+            except AttributeError as ae:
+                pc.setFactorSolverType('mumps')
             pc.setReusePreconditioner(True)
         else:
             pc.setType('none')
@@ -459,7 +402,11 @@ class FDFD_TE(FDFD):
         self.ksp_dir.setType('preonly')
         pc = self.ksp_dir.getPC()
         pc.setType('lu')
-        pc.setFactorSolverPackage('mumps')
+
+        try:
+            pc.setFactorSolverPackage('mumps')
+        except AttributeError as ae:
+            pc.setFactorSolverType('mumps')
 
         self._solver_type = solver
 
@@ -1379,6 +1326,27 @@ class FDFD_TE(FDFD):
 
         return P_S + P_loss.real
 
+    def calc_ydAx(self, Adiag0):
+        """Calculate y^T * (A1-A0) * x.
+
+        Parameters
+        ----------
+        Adiag0 : PETSc.Vec
+            The diagonal of the FDFD matrix.
+
+        Returns
+        -------
+        complex
+            The product y^T * (A1-A0) * x
+        """
+        x = self.x
+        y = self.x_adj
+        Adiag1 = self._Adiag1
+        self.get_A_diag(Adiag1)
+
+        product = y * (Adiag1-Adiag0) * x
+        return np.sum(product[...])
+
 class FDFD_TM(FDFD_TE):
     """Simulate Maxwell's equations in 2D with TM-polarized fields.
 
@@ -1957,7 +1925,7 @@ class FDFD_3D(FDFD):
 
     def __init__(self, X, Y, Z, dx, dy, dz, wavelength, mglevels=None,
                  rtol=1e-6, low_memory=False, verbose=True):
-        super(FDFD_3D, self).__init__()
+        super(FDFD_3D, self).__init__(3)
 
         self._dx = dx
         self._dy = dy
@@ -2079,6 +2047,8 @@ class FDFD_3D(FDFD):
         self.x_adj = x.copy()
         self.b_adj = b.copy()
 
+        self._Adiag1 = x.copy() # used in calc_ydAx to avoid reallocation
+
         self.ib, self.ie = self._A.getOwnershipRange()
         self.A_diag_update = np.zeros(self.ie-self.ib, dtype=np.complex128)
 
@@ -2096,18 +2066,20 @@ class FDFD_3D(FDFD):
         self.ksp_iter_fwd = PETSc.KSP()
         self.ksp_iter_fwd.create(PETSc.COMM_WORLD)
 
-        self.ksp_iter_fwd.setType('gcr')
+        self.ksp_iter_fwd.setType('fgmres')
+        self.ksp_iter_fwd.setGMRESRestart(20)
         self.ksp_iter_fwd.setTolerances(rtol=rtol)
-        optDB['-ksp_gcr_restart'] = 30
+        #optDB['-ksp_gcr_restart'] = 10
         self.ksp_iter_fwd.setFromOptions()
 
         #ADJOINT solver
         self.ksp_iter_adj = PETSc.KSP()
         self.ksp_iter_adj.create(PETSc.COMM_WORLD)
 
-        self.ksp_iter_adj.setType('gcr')
+        self.ksp_iter_adj.setType('fgmres')
+        self.ksp_iter_adj.setGMRESRestart(20)
         self.ksp_iter_adj.setTolerances(rtol=rtol)
-        optDB['-ksp_gcr_restart'] = 30
+        #optDB['-ksp_gcr_restart'] = 10
         self.ksp_iter_adj.setFromOptions()
 
         # Setup multigrid preconditioner
@@ -2131,7 +2103,12 @@ class FDFD_3D(FDFD):
             ksp_crs.setType('preonly')
             pc_crs = ksp_crs.getPC()
             pc_crs.setType('lu')
-            pc_crs.setFactorSolverPackage('mumps')
+
+            try:
+                pc_crs.setFactorSolverPackage('mumps')
+            except AttributeError as ae:
+                pc_crs.setFactorSolverType('mumps')
+
             pc_crs.setFromOptions()
             self._ksp_crs_fwd = ksp_crs
 
@@ -2139,7 +2116,12 @@ class FDFD_3D(FDFD):
             ksp_crs.setType('preonly')
             pc_crs = ksp_crs.getPC()
             pc_crs.setType('lu')
-            pc_crs.setFactorSolverPackage('mumps')
+
+            try:
+                pc_crs.setFactorSolverPackage('mumps')
+            except AttributeError as ae:
+                pc_crs.setFactorSolverType('mumps')
+
             pc_crs.setFromOptions()
             self._ksp_crs_adj = ksp_crs
         else:
@@ -2147,21 +2129,21 @@ class FDFD_3D(FDFD):
             ksp_crs.setType('bcgsl')
             ksp_crs.setTolerances(rtol=1e-2)
             pc_crs = ksp_crs.getPC()
-            pc_crs.setType('jacobi')
+            pc_crs.setType('mat')
             self._ksp_crs_fwd = ksp_crs
 
             ksp_crs = pc_adj.getMGCoarseSolve()
             ksp_crs.setType('bcgsl')
             ksp_crs.setTolerances(rtol=1e-2)
             pc_crs = ksp_crs.getPC()
-            pc_crs.setType('jacobi')
+            pc_crs.setType('mat')
             self._ksp_crs_adj = ksp_crs
 
 
         ## Setup Down smoothers
         for l in range(1,mglevels):
             ksp_smooth = pc_fwd.getMGSmootherDown(l)
-            ksp_smooth.setType('gmres') # this shouldnt work but does well
+            ksp_smooth.setType('gmres')
             ksp_smooth.setGMRESRestart(10)
             ksp_smooth.setTolerances(max_it=8)
             pc_smooth = ksp_smooth.getPC()
@@ -2169,7 +2151,7 @@ class FDFD_3D(FDFD):
             pc_smooth.setFromOptions()
 
             ksp_smooth = pc_adj.getMGSmootherDown(l)
-            ksp_smooth.setType('gmres') # this shouldnt work but does well
+            ksp_smooth.setType('gmres')
             ksp_smooth.setGMRESRestart(10)
             ksp_smooth.setTolerances(max_it=8)
             pc_smooth = ksp_smooth.getPC()
@@ -2926,6 +2908,9 @@ class FDFD_3D(FDFD):
             error_message('The system matrix has not be been built. Call' \
                           ' self.build before running a simulation')
 
+        if(self.verbose and NOT_PARALLEL):
+            info_message('Updating preconditioner...')
+
         # Update multigrid matrices
         for l in range(0,self._mglevels-1):
             self.update_multigrid(l)
@@ -3645,9 +3630,23 @@ class FDFD_3D(FDFD):
 
         # define pml boundary domains
         dx = self._dx; dy = self._dy; dz = self._dz
-        xmin = self._w_pml[0]; xmax = self._X - self._w_pml[1]
-        ymin = self._w_pml[2]; ymax = self._Y - self._w_pml[3]
-        zmin = self._w_pml[4]; zmax = self._Z - self._w_pml[5]
+        if(self._w_pml[0] > 0): xmin = self._w_pml[0] + dx
+        else: xmin = 0.0
+
+        if(self._w_pml[1] > 0): xmax = self._X - self._w_pml[1] - dx
+        else: xmax = self._X
+
+        if(self._w_pml[2] > 0): ymin = self._w_pml[2] + dy
+        else: ymin = 0.0
+
+        if(self._w_pml[3] > 0): ymax = self._Y - self._w_pml[3] - dy
+        else: ymax = self._Y
+
+        if(self._w_pml[4] > 0): zmin = self._w_pml[4] + dz
+        else: zmin = 0.0
+
+        if(self._w_pml[5] > 0): zmax = self._Z - self._w_pml[5] - dz
+        else: zmax = self._Z
 
         x1 = DomainCoordinates(xmin, xmin, ymin, ymax, zmin, zmax, dx, dy, dz)
         x2 = DomainCoordinates(xmax, xmax, ymin, ymax, zmin, zmax, dx, dy, dz)
@@ -3662,7 +3661,7 @@ class FDFD_3D(FDFD):
         Hy = self.get_field_interp('Hy', x1)
         Hz = self.get_field_interp('Hz', x1)
 
-        if(NOT_PARALLEL):
+        if(NOT_PARALLEL and self._bc[0] != 'E' and self._bc[0] != 'H'):
             Px = -0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
             #print Px
             Psrc += Px
@@ -3686,7 +3685,7 @@ class FDFD_3D(FDFD):
         Hx = self.get_field_interp('Hx', y1)
         Hz = self.get_field_interp('Hz', y1)
 
-        if(NOT_PARALLEL):
+        if(NOT_PARALLEL and self._bc[1] != 'E' and self._bc[1] != 'H'):
             Py = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
             #print Py
             Psrc += Py
@@ -3710,7 +3709,7 @@ class FDFD_3D(FDFD):
         Hx = self.get_field_interp('Hx', z1)
         Hy = self.get_field_interp('Hy', z1)
 
-        if(NOT_PARALLEL):
+        if(NOT_PARALLEL and self._bc[2] != 'E' and self._bc[2] != 'H'):
             Pz = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
             #print Pz
             Psrc += Pz
@@ -3729,3 +3728,24 @@ class FDFD_3D(FDFD):
         del Ex; del Ey; del Hx; del Hy
 
         return Psrc
+
+    def calc_ydAx(self, Adiag0):
+        """Calculate y^T * (A1-A0) * x.
+
+        Parameters
+        ----------
+        Adiag0 : PETSc.Vec
+            The diagonal of the FDFD matrix.
+
+        Returns
+        -------
+        complex
+            The product y^T * (A1-A0) * x
+        """
+        x = self.x
+        y = self.x_adj
+        Adiag1 = self._Adiag1
+        self.get_A_diag(Adiag1)
+
+        product = np.conj(y) * (Adiag1-Adiag0) * x
+        return np.sum(product[...])

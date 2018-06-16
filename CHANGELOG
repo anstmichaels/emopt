@@ -1,3 +1,39 @@
+Released on June 15, 2018
+-------------------------
+
+1. Introduced new 3D CW-FDTD solver.
+
+This new solver scales to larger/higher resolution problems much better than the
+current 3D FDFD solver. This makes it useful for optimizing larger problems which
+require high simulation resolutions (i.e. anytime you desire high coupling
+efficiencies).
+
+The implementation of this new solver differs a bit from a typical FDTD solver.
+Specifically, it uses a ramped CW source to solve for  the frequency domain fields at
+a single frequency. This has a number of advantages for using it to do optimization
+and has the added benefit of being a bit simpler to implement.
+
+In order to use this solver for optimization, see
+examples/MMI_splitter_3D/mmi_1x2_splitter_3D_fdtd.py. The key things to note are that
+square grid cells MUST be used (i.e. dx=dy=dz) and symmetry planes can lead to
+increased gradient error (in particular, it seems as if fdtd+adjoint method+z
+symmetry really struggles to produce accurate results). Depending on your problem,
+these constraints may not be a significant issue.
+
+In addition to these optimization constraints, the current CW-FDTD solver does not
+support complex materials. This functionality should be added soon, however.
+
+Finally, it is worth noting that this new CW-FDTD solver is not yet totally
+optimized. As such, it may run noticeably slower than available commercial solvers.
+This is an ongoing effort.
+
+2. Small changes to power normalization in FDFD to make it consistent with new
+CW-FDTD solver.
+
+3. Documentation Updates
+
+4. Makefile improvements
+
 Released on May 21, 2018
 ------------------------
 

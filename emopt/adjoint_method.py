@@ -186,9 +186,10 @@ References
 .. [1] A. Michaels, E. Yablonovitch, "Gradient-Based Inverse Electromagnetic Design Using Continuously-Smoothed Boundaries", arXiv:1705.07188, 2017
 """
 
-import fdfd # this needs to come first
+import fdfd
+import fdtd
 from misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master
+NOT_PARALLEL, run_on_master, N_PROC, COMM
 import fomutils
 
 import numpy as np
@@ -441,6 +442,12 @@ class AdjointMethod(object):
             Nz = sim.Nz
             lenp = len(params)
             return [(0, Nx, 0, Ny, 0, Nz) for i in range(lenp)]
+        elif(type(sim) == fdtd.FDTD):
+            X = sim.X
+            Y = sim.Y
+            Z = sim.Z
+            lenp = len(params)
+            return [(0,X,0,Y,0,Z) for i in range(lenp)]
 
     def fom(self, params):
         """Run a forward simulation and calculate the figure of merit.
@@ -517,12 +524,7 @@ class AdjointMethod(object):
         """
         # get the current diagonal elements of A.
         # only these elements change when the design variables change.
-        Ai = PETSc.Vec()
-        Af = PETSc.Vec()
-        Ai = sim.get_A_diag(Ai)
-
-        x = sim.x.copy()
-        x_adj = sim.x_adj.copy()
+        Ai = sim.get_A_diag()
 
         step = self._step
         update_boxes = self.get_update_boxes(sim, params)
@@ -530,7 +532,7 @@ class AdjointMethod(object):
 
         grad_full = None
         if(RANK == 0):
-            grad_full = np.zeros(sim.nunks, dtype=np.double)
+            grad_full = np.zeros(N_PROC, dtype=np.double)
 
         gradient = np.zeros(lenp)
         for i in xrange(lenp):
@@ -542,18 +544,13 @@ class AdjointMethod(object):
             self.update_system(params)
             self.sim.update(ub)
 
-            # get the updated diagonal elements of A
-            Af = sim.get_A_diag(Af)
-
             # calculate dAdp and assemble the full result on the master node
-            dAdp = (Af-Ai)/step
-            if(type(sim) == fdfd.FDFD_3D): product = np.conj(x_adj) * dAdp * x
-            else: product = x_adj * dAdp * x
-            grad_part = -2*np.real( np.sum(product[...]) )
+            product = sim.calc_ydAx(Ai)
+            grad_part = -2*np.real( product/step )
 
             # send the partially computed gradient to the master node to finish
             # up the calculation
-            MPI.COMM_WORLD.Gatherv(grad_part, grad_full, root=0)
+            COMM.Gatherv(grad_part, grad_full, root=0)
 
             # finish calculating the gradient
             if(NOT_PARALLEL):
@@ -765,9 +762,10 @@ class AdjointMethodMO(AdjointMethod):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, ams):
+    def __init__(self, ams, step=1e-6):
         self._ams = ams
         self._foms_current = np.zeros(len(ams))
+        self._step = step
 
     @property
     def adjoint_methods(self):
@@ -915,7 +913,8 @@ class AdjointMethodMO(AdjointMethod):
             return None
 
 
-    def check_gradient(self, params, indices=[]):
+    def check_gradient(self, params, indices=[], plot=True, verbose=True,
+                       return_gradients=False):
         """Check the gradient of an multi-objective AdjointMethod.
 
         Parameters
@@ -939,7 +938,8 @@ class AdjointMethodMO(AdjointMethod):
             am.update_system(params)
             am.sim.update()
 
-        super(AdjointMethodMO, self).check_gradient(params, indices)
+        return super(AdjointMethodMO, self).check_gradient(params, indices, plot,
+                                                           verbose, return_gradients)
 
 class AdjointMethodFM(AdjointMethod):
     """Define an :class:`.AdjointMethod` which simplifies the calculation of
@@ -1017,16 +1017,12 @@ class AdjointMethodFM(AdjointMethod):
 
         # get the current diagonal elements of A.
         # only these elements change when the design variables change.
-        Ai = PETSc.Vec()
         Af = PETSc.Vec()
-        Ai = sim.get_A_diag(Ai)
+        Ai = sim.get_A_diag()
 
         # Get the derivatives w.r.t. eps, mu
         if(NOT_PARALLEL):
             dFdeps, dFdeps_conj, dFdmu, dFdmu_conj = self.calc_dFdm(sim, params)
-
-        x = sim.x.copy()
-        x_adj = sim.x_adj.copy()
 
         step = self._step
         update_boxes = self.get_update_boxes(sim, params)
@@ -1048,19 +1044,18 @@ class AdjointMethodFM(AdjointMethod):
             self.update_system(params)
             self.sim.update(ub)
 
-            # get the updated diagonal elements of A
-            Af = sim.get_A_diag(Af)
-
-            # calculate dAdp and assemble the full result on the master node
-            dAdp = (Af-Ai)/step
-            product = x_adj * dAdp * x
-            grad_part = -2*np.real( np.sum(product[...]) )
+            # calculate derivative via y^T*dA/dp*x
+            product = sim.calc_ydAx(Ai)
+            grad_part = -2*np.real( product/step )
 
             # send the partially computed gradient to the master node to finish
             # up the calculation
             MPI.COMM_WORLD.Gatherv(grad_part, grad_full, root=0)
 
             # We also need dAdp to account for the derivative of eps and mu
+            # get the updated diagonal elements of A
+            Af = sim.get_A_diag(Af)
+            dAdp = (Af-Ai)/step
             gatherer, dAdp_full = PETSc.Scatter().toZero(dAdp)
             gatherer.scatter(dAdp, dAdp_full, False, PETSc.Scatter.Mode.FORWARD)
 
