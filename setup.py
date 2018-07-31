@@ -17,7 +17,7 @@ class MakeInstall(SetuptoolsInstall):
         SetuptoolsInstall.do_egg_install(self)
 
 setup(name='emopt',
-      version='0.2.3.1',
+      version='0.4',
       description='A suite of tools for optimizing the shape and topology of ' \
       'electromagnetic structures.',
       url='https://github.com/anstmichaels/emopt',

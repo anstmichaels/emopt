@@ -3,7 +3,8 @@ import scipy
 from math import pi
 from misc import warning_message, NOT_PARALLEL
 
-def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8):
+def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
+           ignore_roc_lim=False):
     """Round corners of a polygon.
 
     This function replaces sharp corners with circular arcs. The radius of
@@ -104,7 +105,7 @@ def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8):
                 if(iprev < 0): iprev = N0-1
                 if(inext > N0-1): inext = 0
 
-                if(d10 < 2*R or d12 < 2*R):
+                if(d10 < 2*R or d12 < 2*R and not ignore_roc_lim):
                     Ri = np.min([d12, d10])/2.0
                     if(NOT_PARALLEL):
                         warning_message('Warning: Desired radius of curvature too large at ' \
