@@ -1,3 +1,71 @@
+Released on July 30, 2018
+-------------------------
+
+1. Minor bug fixes
+
+2. "improved" setup.py which helps ease the installation process.
+
+The setup file now looks for a file called '.emopt_deps' in your home directory. This
+file defines environment variables which point to the install paths of eigen, boost,
+petsc, and slepc. The file has the following format:
+
+    EIGEN_DIR=/path/to/eigen/includes
+    BOOST_DIR=/path/to/boost/includes
+    PETSC_DIR=/path/to/petsc/installation
+    SLEPC_DIR=/path/to/slepc/installation
+
+If you already have emopt installed, simply create the .emopt_deps file in your home
+directory:
+
+    $ touch ~/.emopt_deps
+
+And populate the file with the appropriate paths. For example:
+
+    $ echo 'EIGEN_DIR=/opt/include' >> ~/.emopt_deps
+    $ echo 'BOOST_DIR=/opt/include' >> ~/.emopt_deps
+    $ echo 'PETSC_DIR=/opt/petsc/petsc-3.8.0' >> ~/.emopt_deps
+    $ echo 'SLEPC_DIR=/opt/slepc/slepc-3.8.1' >> ~/.emopt_deps
+
+After creating this file, running setup.py should run as it did previously.
+
+The reason for this change is that it has allowed us to introduce an "easy"
+installation script which downloads, compiles, and installs the emopt dependencies.
+This new script is discussed in the next changelog entry!
+
+3. Added installation script for retrieving and installing the emopt dependencies.
+
+Until now, installing emopt has been a bit of a pain, especially if you are not very
+linux savvy. In order to reduce the difficulty of installing emopt, we have
+introduced an install.py script which downloads, compiles, and installs the
+non-python dependencies.
+
+In order to use this script, a few things may need to be installed first using your
+package manager. Once these prerequisites are satisfied, the installation script may
+be run:
+
+    $ python install.py
+
+By default, this creates a directory ~/.emopt which contains all of the compiled and
+installed dependencies as well as a filed ~/.emopt_deps which tells the emopt
+setup.py where to find the installation. Optionally, this script can be run with an
+alternative directory in which the dependencies are installed. For example:
+
+    $ python install.py --prefix=~/local/
+
+In this case, the dependencies will be installed to ~/local instead of ~/.emopt. In
+either case, the ~/.emopt_deps file will be created (this is currently not something
+that can be changed).
+
+The installation documentation has been updated to match this new process. Note that
+this is still somewhat experimental, so post an issue if you encounter any errors.
+
+4. Added emopt.geometry which will (hopefully) evolve into a useful library of
+subroutines for creating and manipulating geometry. Consider also looking into the
+shapely module for additional geometry tools.
+
+Currently, emopt.geometry contains a simple fillet function and a function which
+populates existing line segments with more points.
+
 Released on June 15, 2018
 -------------------------
 

@@ -112,8 +112,19 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
         struct_cmap = 'Blues'
 
     extent = [0, W, 0, H]
-    fmin = -1*np.max(np.abs(field))
-    fmax = -1*fmin
+
+    fmax = np.max(field)
+    fmin = np.min(field)
+
+    if(fmax > 0 and fmin < 0):
+        fmin = -1*fmax # symmetrize
+    if(fmax < 0 and fmin < 0):
+        fmax = 0
+        field_cmap = 'hot_r'
+    if(fmax > 0 and fmin > 0):
+        fmin = 0
+        field_cmap = 'hot'
+
     ax_field.imshow(field, extent=extent, vmin=fmin, vmax=fmax, cmap=field_cmap)
 
 
@@ -268,10 +279,18 @@ def save_results(fname, data, additional=None):
             group_sim.attrs['W'] = data['W']
         if 'H' in data:
             group_sim.attrs['H'] = data['H']
+        if 'X' in data:
+            group_sim.attrs['X'] = data['X']
+        if 'Y' in data:
+            group_sim.attrs['Y'] = data['Y']
+        if 'Z' in data:
+            group_sim.attrs['Z'] = data['Z']
         if 'dx' in data:
             group_sim.attrs['dx'] = data['dx']
         if 'dy' in data:
             group_sim.attrs['dy'] = data['dy']
+        if 'dz' in data:
+            group_sim.attrs['dz'] = data['dz']
         if 'M' in data:
             group_sim.attrs['M'] = data['M']
         if 'N' in data:

@@ -1,7 +1,15 @@
+"""Provides a ctypes interface between C++ FDTD library and python."""
+
 from ctypes import *
 import os
 import numpy as np
 from numpy.ctypeslib import ndpointer
+
+__author__ = "Andrew Michaels"
+__license__ = "GPL License, Version 3.0"
+__version__ = "0.2"
+__maintainer__ = "Andrew Michaels"
+__status__ = "development"
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 

@@ -74,7 +74,8 @@ void GridCell::set_vertices(double xmin, double xmax, double ymin, double ymax)
 double GridCell::intersect(const Polygon_2D poly)
 {
 	double area = 0.0,
-		   intersected_area;
+		   intersected_area,
+           geo_area;
 
 	_diffs.clear();
 	
@@ -88,7 +89,8 @@ double GridCell::intersect(const Polygon_2D poly)
 	
 	for(i = _diffs.begin(); i != _diffs.end(); i++) {
 		_verts.push_back(*i);
-		area += fabs(boost::geometry::area(*i));
+        geo_area = boost::geometry::area(*i);
+		area += fabs(geo_area);
 	}
 
 

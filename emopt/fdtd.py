@@ -35,6 +35,12 @@ from math import pi
 from mpi4py import MPI
 import sys
 
+__author__ = "Andrew Michaels"
+__license__ = "GPL License, Version 3.0"
+__version__ = "0.2"
+__maintainer__ = "Andrew Michaels"
+__status__ = "development"
+
 class SourceArray(object):
     """A container for source arrays and its associated parameters.
 
@@ -168,6 +174,10 @@ class FDTD(MaxwellSolver):
         unless you simulations appear to diverge for some reason.
     wavelength : float
         The wavelength of the source (and fields)
+    eps : emopt.grid.Material3D
+        The permittivity distribution.
+    mu : emopt.grid.Material3D
+        The permeability distribution.
     rtol : float (optional)
         The relative tolerance used to terminate the simulation.
         (default = 1e-6)
@@ -202,6 +212,10 @@ class FDTD(MaxwellSolver):
         The number of grid cells making up with PML at the minimum z boundary.
     w_pml_zmax : int
         The number of grid cells making up with PML at the maximum z boundary.
+    X_real : float
+        The width of the simulation excluding PMLs.
+    Y_real : float
+        The height of the simulation excluding PMLs.
     """
 
     def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=100,
@@ -350,6 +364,10 @@ class FDTD(MaxwellSolver):
         self._bc = ['0', '0', '0']
         libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc))
 
+        # make room for eps and mu
+        self._eps = None
+        self._mu = None
+
     @property
     def wavelength(self):
         self._wavelength = wavelength
@@ -403,6 +421,14 @@ class FDTD(MaxwellSolver):
     @property
     def Nz(self):
         return self._Nz
+
+    @property
+    def eps(self):
+        return self._eps
+
+    @property
+    def mu(self):
+        return self._mu
 
     @property
     def courant_num(self):
@@ -537,6 +563,18 @@ class FDTD(MaxwellSolver):
     @property
     def w_pml_zmax(self):
         return self._w_pml_zmax
+
+    @property
+    def X_real(self):
+        return self._X-self._w_pml[0]-self._w_pml[1]
+
+    @property
+    def Y_real(self):
+        return self._Y-self._w_pml[2]-self._w_pml[3]
+
+    @property
+    def Z_real(self):
+        return self._Z-self._w_pml[4]-self._w_pml[5]
 
     def set_materials(self, eps, mu):
         self._eps = eps
@@ -792,9 +830,6 @@ class FDTD(MaxwellSolver):
             the whole region is updated. Format: [xmin, xmax, ymin, ymax, zmin,
             zmax]
         """
-        if(self.verbose > 0 and NOT_PARALLEL):
-            info_message('Updating system...')
-
         if(bbox == None):
             verbose = self.verbose
             self.verbose = 0

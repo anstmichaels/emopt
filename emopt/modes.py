@@ -334,7 +334,12 @@ class ModeTE(ModeSolver):
         ksp.setType('preonly')
         pc = ksp.getPC()
         pc.setType('lu')
-        pc.setFactorSolverPackage('mumps')
+
+        # backwards compatibility
+        try:
+            pc.setFactorSolverPackage('mumps')
+        except AttributeError as ae:
+            pc.setFactorSolverType('mumps')
 
         # setup vectors for the solution
         self._x = []
@@ -1215,7 +1220,12 @@ class ModeFullVector(ModeSolver):
         ksp.setType('preonly')
         pc = ksp.getPC()
         pc.setType('lu')
-        pc.setFactorSolverPackage('mumps')
+
+        # backwards compatibility
+        try:
+            pc.setFactorSolverPackage('mumps')
+        except AttributeError as ae:
+            pc.setFactorSolverType('mumps')
 
         # setup vectors for the solution
         self._x = []

@@ -5,7 +5,6 @@ import fdfd, misc
 from misc import NOT_PARALLEL
 from defs import FieldComponent
 import numpy as np
-import matplotlib.pyplot as plt
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
@@ -13,9 +12,9 @@ __version__ = "0.2"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-#===================================================================================
+#####################################################################################
 # Miscellanious FOM helper functions
-#===================================================================================
+#####################################################################################
 
 def radius_of_curvature(x1, x2, x3, y1, y2, y3):
     """Compute the approximate radius of curvature of three points.
@@ -47,36 +46,25 @@ def radius_of_curvature(x1, x2, x3, y1, y2, y3):
     float
         The approximate radius of curvature of the set of points
     """
-    # speed things up by detecting the special case of three points in a line
-    #if((x1 == x2 and x2 == x3) or (y1 == y2 and y2 == y3)):
-    #   return np.inf
-
-    t0 = 0;
+    t0 = 0
     t1 = np.sqrt((x2-x1)**2 + (y2-y1)**2)
     t2 = np.sqrt((x3-x2)**2 + (y3-y2)**2) + t1
+    t1 = t1/t2
+    t2 = 1.0
 
-    A = np.matrix([[0, 0, 1], [t1**2, t1, 1], [t2**2, t2, 1]])
+    c = x1
+    a = (x2 - (x3-x1)*t1 - x1)/(t1**2-t1)
+    b = x3-x1-a
 
-    Ainv = np.matrix([[A[1,1]*1.0 -A[1,2]*A[2,1], 1.0*A[2,1], - 1.0*A[1,1]],\
-                     [1.0*A[2,0]-A[1,0]*1.0,-1.0*A[2,0], 1.0*A[1,0]],\
-                     [A[1,0]*A[2,1]-A[1,1]*A[2,0], 0.0,0.0]])
-    Adet = A[0,0]*(A[1,1]*A[2,2] - A[1,2]*A[2,1]) - A[0,1]*(A[1,0]*A[2,2] - \
-                   A[1,2]*A[2,0]) + A[0,2]*(A[1,0]*A[2,1] - A[1,1]*A[2,0])
-    Ainv = Ainv/Adet
-
-    b1 = np.matrix([x1,x2,x3]).T
-    b2 = np.matrix([y1,y2,y3]).T
-
-    x1 = Ainv*b1 #np.linalg.solve(A,b1) 
-    x2 = Ainv*b2 #np.linalg.solve(A,b2)
-
-    a = x1[0]; b = x1[1]; c = x1[2]
-    d = x2[0]; e = x2[1]; f = x2[2]
+    f = y1
+    d = (y2 - (y3-y1)*t1 - y1)/(t1**2-t1)
+    e = y3-y1-d
 
     # We calculate the radius of curvature at point x2
     R = np.power((2*a*t1+b)**2 + (2*d*t1+e)**2, 1.5) / np.abs((2*a*t1+b)*2*d - (2*d*t1+e)*2*a)
 
     return float(R)
+
 
 def step(x, k, y0=0, A=1.0):
     """Compute the value of a smooth and analytic step function.

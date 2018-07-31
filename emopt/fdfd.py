@@ -387,6 +387,8 @@ class FDFD_TE(FDFD):
         pc = self.ksp_iter.getPC()
         if(solver == 'iterative_lu'):
             pc.setType('lu')
+
+            # setFactorSolverPackage was renamed recently
             try:
                 pc.setFactorSolverPackage('mumps')
             except AttributeError as ae:

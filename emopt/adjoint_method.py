@@ -428,8 +428,10 @@ class AdjointMethod(object):
 
         Returns
         -------
-            List of tuples containing (x_min, x_max, y_min, y_max) where x_min,
-            etc are the minimum and maximum x and y spatial indices.
+            Either a list of tuples or a list of lists of tuples containing
+            (xmin, xmax, ymin, ymax) in 2D and (xmin, xmax, ymin, ymax, zmin,
+            zmax) in 3D which describes which portion of the system should be
+            update during gradient calculations.
         """
         if(type(sim) == fdfd.FDFD_TE or type(sim) == fdfd.FDFD_TM):
             M = sim.M
@@ -542,7 +544,12 @@ class AdjointMethod(object):
             # perturb the system
             params[i] += step
             self.update_system(params)
-            self.sim.update(ub)
+            if(type(ub[0]) == list or type(ub[0]) == np.ndarray or \
+               type(ub[0]) == tuple):
+                for box in ub:
+                    self.sim.update(box)
+            else:
+                self.sim.update(ub)
 
             # calculate dAdp and assemble the full result on the master node
             product = sim.calc_ydAx(Ai)
@@ -559,7 +566,12 @@ class AdjointMethod(object):
             # revert the system to its original state
             params[i] = p0
             self.update_system(params)
-            self.sim.update(ub)
+            if(type(ub[0]) == list or type(ub[0]) == np.ndarray or \
+               type(ub[0]) == tuple):
+                for box in ub:
+                    self.sim.update(box)
+            else:
+                self.sim.update(ub)
 
         if(NOT_PARALLEL):
             return gradient
@@ -1042,7 +1054,12 @@ class AdjointMethodFM(AdjointMethod):
             # perturb the system
             params[i] += step
             self.update_system(params)
-            self.sim.update(ub)
+            if(type(ub[0]) == list or type(ub[0]) == np.ndarray or \
+               type(ub[0]) == tuple):
+                for box in ub:
+                    self.sim.update(box)
+            else:
+                self.sim.update(ub)
 
             # calculate derivative via y^T*dA/dp*x
             product = sim.calc_ydAx(Ai)
@@ -1100,7 +1117,12 @@ class AdjointMethodFM(AdjointMethod):
             # revert the system to its original state
             params[i] = p0
             self.update_system(params)
-            self.sim.update(ub)
+            if(type(ub[0]) == list or type(ub[0]) == np.ndarray or \
+               type(ub[0]) == tuple):
+                for box in ub:
+                    self.sim.update(box)
+            else:
+                self.sim.update(ub)
 
         if(NOT_PARALLEL):
             return gradient

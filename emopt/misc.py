@@ -77,7 +77,7 @@ class EMOptWarning(RuntimeWarning):
 def _warning_message(message, category=UserWarning, filename='', lineno=-1):
     # Override python's warning message by adding a colored [WARNING] flag in
     # front to make it more noticeable.
-    if(type(category) == EMOptWarning):
+    if(category == EMOptWarning):
         print(u'\u001b[43;1m[WARNING]\u001b[0m %s' % (message))
     else:
         print(u'\u001b[43;1m[WARNING]\u001b[0m in %s at line %d: %s' % \
@@ -295,7 +295,7 @@ class DomainCoordinates(object):
 
     @property
     def yspan(self):
-        return self._xspan
+        return self._yspan
 
     @property
     def zspan(self):
