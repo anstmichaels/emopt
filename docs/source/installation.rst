@@ -91,7 +91,7 @@ packages as well as openmpi, python, and tkinter::
 
 Once OpenMPI is installed, we need to load the appropriate module::
 
-    $ module load openmpi-x86_64
+    $ module load mpi/openmpi-x86_64
 
 If you use mpich instead, then you will need to choose the appropriate module name.
 If you reboot, you will need to load it again unless you add this line to your
@@ -114,7 +114,7 @@ required packages as well as openmpi, python, and tkinter::
 
 In order to use OpenMPI, we need to load the corresponding module::
 
-    $ module load openmpi-x86_64   
+    $ module load mpi/openmpi-x86_64   
 
 If you use mpich instead, then you will need to choose the appropriate module name.
 If you reboot, you will need to load it again unless you add this line to your

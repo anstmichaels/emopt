@@ -249,7 +249,7 @@ def install_deps():
         install_end(current_dir, build_dir)
         write_deps_file(home_dir, include_dir, install_dir)
     except Exception as e:
-        print e
+        print(e)
         install_end(current_dir, build_dir)
 
     print_message('Finished installing EMOpt dependencies!')
