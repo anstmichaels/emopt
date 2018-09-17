@@ -1814,6 +1814,158 @@ class ModeFullVector(ModeSolver):
             (Master node only) an array containing the desired component of the
             interpolated mode field.
         """
+        if(self.ndir == 'x'):
+            return self.__get_field_interp_x(i, component)
+        elif(self.ndir == 'y'):
+            return self.__get_field_interp_y(i, component)
+        elif(self.ndir == 'z'):
+            return self.__get_field_interp_z(i, component)
+
+    def __get_field_interp_x(self, i, component):
+        ## Interpolate the fields assuming the mode propagates in the +z
+        ## direction.
+        ##
+        ## The fields have to be interpolated in order to calculate quantities
+        ## like power and energy properly. Because this mode solver has been
+        ## designed in order to be compatible with the emopt.fdfd.FDFD_3D and
+        ## emopt.fdtd.FDTD classes, interpolation has to be handled carefully
+        ## depending on the direction that the mode propagates. In this case, we
+        ## interpolate the fields about Ey, which corresponds to Ez in FDFD/FDTD.
+        f_raw = self.get_field(i, component)
+
+        # zero padding is equivalent to including boundary values outside of
+        # the metal boundaries. This is needed to compute the interpolated
+        # values.
+        f_raw = np.pad(f_raw, 1, 'constant', constant_values=0)
+
+        # Permute components
+        component = self.__permute_field_component(component)
+
+        bc = self._bc
+
+        # interpolate and return the fields on the rank 0 nodes. Consult the
+        # All field components are interpolated onto the Ez grid.
+        if(NOT_PARALLEL):
+            if(component == FieldComponent.Ex): # Ex --> average along x & y
+                Ex = np.copy(f_raw)
+                if(bc[0] == 'E'): f_raw[:,0] = -1*f_raw[:,1]
+                elif(bc[0] == 'H'): f_raw[:,0] = f_raw[:,1]
+
+                Ex[:,1:] += f_raw[:,0:-1]
+                Ex[0:-1,1:] += f_raw[1:,0:-1]
+                Ex[0:-1,:] += f_raw[1:,:]
+                return Ex[1:-1, 1:-1]/4.0
+
+            elif(component == FieldComponent.Ey): # Ey --> don't average
+                return f_raw[1:-1, 1:-1]
+
+            elif(component == FieldComponent.Ez): # Ez --> average along y
+                Ez = np.copy(f_raw)
+
+                Ez[0:-1, :] += Ez[1:, :]
+                return Ez[1:-1, 1:-1]/2.0
+
+            elif(component == FieldComponent.Hx): # Hx --> don't average
+                return f_raw[1:-1, 1:-1]
+
+            elif(component == FieldComponent.Hy): # Hy --> average along x & y
+                Hy = np.copy(f_raw)
+                if(bc[0] == 'E'): f_raw[:,0] = -1*f_raw[:,1]
+                elif(bc[0] == 'H'): f_raw[:,0] = f_raw[:,1]
+
+                Hy[:,1:] += f_raw[:,0:-1]
+                Hy[0:-1,1:] += f_raw[1:,0:-1]
+                Hy[0:-1,:] += f_raw[1:,:]
+                return Hy[1:-1, 1:-1]/4.0
+
+            elif(component == FieldComponent.Hz): # Hz --> average along x
+                Hz = np.copy(f_raw)
+                if(bc[0] == 'E'): f_raw[:,0] = -1*f_raw[:,1]
+                elif(bc[0] == 'H'): f_raw[:,0] = f_raw[:,1]
+
+                Hz[:,1:] += f_raw[:,0:-1]
+                return Hz[1:-1, 1:-1]/2.0
+        else:
+            return MathDummy()
+
+    def __get_field_interp_y(self, i, component):
+        ## Interpolate the fields assuming the mode propagates in the +z
+        ## direction.
+        ##
+        ## The fields have to be interpolated in order to calculate quantities
+        ## like power and energy properly. Because this mode solver has been
+        ## designed in order to be compatible with the emopt.fdfd.FDFD_3D and
+        ## emopt.fdtd.FDTD classes, interpolation has to be handled carefully
+        ## depending on the direction that the mode propagates. In this case, we
+        ## interpolate the fields about Ex, which corresponds to Ez in FDFD/FDTD.
+        f_raw = self.get_field(i, component)
+
+        # zero padding is equivalent to including boundary values outside of
+        # the metal boundaries. This is needed to compute the interpolated
+        # values.
+        f_raw = np.pad(f_raw, 1, 'constant', constant_values=0)
+
+        # Permute components
+        component = self.__permute_field_component(component)
+
+        bc = self._bc
+
+        # interpolate and return the fields on the rank 0 nodes. Consult the
+        # All field components are interpolated onto the Ez grid.
+        if(NOT_PARALLEL):
+            if(component == FieldComponent.Ex): # Ex --> don't average
+                return fraw[1:-1, 1:-1]
+
+            elif(component == FieldComponent.Ey): # Ey --> average x & y
+                Ey = np.copy(f_raw)
+                if(bc[1] == 'E'): f_raw[0,:] = -1*f_raw[1,:]
+                elif(bc[1] == 'H'): f_raw[0,:] = f_raw[1,:]
+
+                Ey[:, 0:-1] += Ey[:, 1:]
+                Ey[1:, :] += Ey[0:-1, :]
+                Ey[1:, 0:-1] += Ey[0:-1, 1:]
+                return Ey[1:-1, 1:-1]/4.0
+
+            elif(component == FieldComponent.Ez): # Ez --> average along x
+                Ez = np.copy(f_raw)
+
+                Ez[:, 0:-1] += Ez[:, 1:]
+                return Ez[1:-1, 1:-1]/2.0
+
+            elif(component == FieldComponent.Hx): # Hx --> average along x & y
+                Hx = np.copy(f_raw)
+                if(bc[1] == 'E'): f_raw[0,:] = -1*f_raw[1,:]
+                elif(bc[1] == 'H'): f_raw[0,:] = f_raw[1,:]
+
+                Hx[:, 0:-1]  += Hx[:, 1:]
+                Hx[1:, :]    += Hx[0:-1, :]
+                Hx[1:, 0:-1] += Hx[0:-1, 1:]
+                return Hx[1:-1, 1:-1]/4.0
+
+            elif(component == FieldComponent.Hy): # Hy --> don't average
+                return f_raw
+
+            elif(component == FieldComponent.Hz): # Hz --> average along x
+                Hz = np.copy(f_raw)
+                if(bc[1] == 'E'): f_raw[0,:] = -1*f_raw[1,:]
+                elif(bc[1] == 'H'): f_raw[0,:] = f_raw[1,:]
+
+                Hz[1:,:] += f_raw[0:-1, :]
+                return Hz[1:-1, 1:-1]/2.0
+        else:
+            return MathDummy()
+
+
+    def __get_field_interp_z(self, i, component):
+        ## Interpolate the fields assuming the mode propagates in the +z
+        ## direction.
+        ##
+        ## The fields have to be interpolated in order to calculate quantities
+        ## like power and energy properly. Because this mode solver has been
+        ## designed in order to be compatible with the emopt.fdfd.FDFD_3D and
+        ## emopt.fdtd.FDTD classes, interpolation has to be handled carefully
+        ## depending on the direction that the mode propagates. In this case, we
+        ## interpolate the fields about Ez, which corresponds to Ez in FDFD/FDTD.
         f_raw = self.get_field(i, component)
 
         # zero padding is equivalent to including boundary values outside of
@@ -2034,7 +2186,7 @@ class ModeFullVector(ModeSolver):
             get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sy=sx, sz=sy, squeeze=True)
             mydx = dy
             mydy = dz
-            mydz = dz
+            mydz = dx
         elif(self.ndir == 'y'):
             get_mu = lambda sx,sy : self.mu.get_values_in(self.domain, sx=sx, sz=sy, squeeze=True)
             mydx = dz

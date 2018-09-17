@@ -19,7 +19,7 @@ CXXFLAGS = -Wall -fopenmp -O3 -march=native -DNDEBUG -std=c++11
 INCLUDES = -I${EIGEN_DIR} -I${BOOST_DIR}
 LDFLAGS = -lpthread
 
-all: Grid.o Grid_ctypes.o FDTD.o
+all: Grid.o Grid_ctypes.o FDTD.o Grid.cpp Grid.hpp Grid_ctypes.cpp Grid_ctypes.hpp fdtd.cpp fdtd.hpp
 	${CC} ${SHARED_FLAG} -fopenmp -fPIC -o Grid.so Grid.o Grid_ctypes.o ${LDFLAGS}
 	${CC} ${SHARED_FLAG} -fopenmp -fPIC -o FDTD.so FDTD.o ${LDFLAGS}
 	cp Grid.so ../emopt

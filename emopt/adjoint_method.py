@@ -242,13 +242,15 @@ class AdjointMethod(object):
 
     Parameters
     ----------
-    sim : emopt.fdfd.FDFD
+    sim : emopt.simulation.MaxwellSolver
         Simulation object
     step : float
         Step sized used in the calculation of :math:`\partial A / \partial p_i`
 
     Attributes
     ----------
+    sim : emopt.simulation.MaxwellSolver
+        Simulation object
     step : float
         Step sized used in the calculation of :math:`\partial A / \partial p_i`
 
@@ -915,8 +917,8 @@ class AdjointMethodMO(AdjointMethod):
         grads = []
 
         for am in self._ams:
-            foms.append( am.fom(params) )
             grads.append( am.gradient(params) )
+            foms.append( am.calc_fom(am.sim, params) )
 
         if(NOT_PARALLEL):
             grad_total = self.calc_total_gradient(foms, grads)

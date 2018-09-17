@@ -334,7 +334,7 @@ class FDFD_TE(FDFD):
         self._bc = ['0', '0']
 
         # PML parameters -- these can be changed
-        self.pml_sigma = 2.0 * wavelength
+        self.pml_sigma = 3.0
         self.pml_power = 3.0
 
         # dx and dy are the only dimension rigorously enforced
@@ -1952,7 +1952,7 @@ class FDFD_3D(FDFD):
         self._bc = ['0', '0', '0']
 
         # PML parameters -- these can be changed
-        self.pml_sigma = 1.0*wavelength
+        self.pml_sigma = 2.0
         self.pml_power = 1.5
 
         # dx and dy are the only dimension rigorously enforced

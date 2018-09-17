@@ -89,7 +89,7 @@ if(NOT_PARALLEL):
 
     f, axes = plt.subplots(3,1)
     for j in range(3):
-        i = modes.find_mode_index(j*2)
+        i = modes.find_mode_index(j*2) # 2x factor because we want even modes
         Ez = modes.get_field_interp(i, 'Ez')
         x = np.linspace(0, H, N)
         eps_arr = eps.get_values_in(mode_line, squeeze=True)

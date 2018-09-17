@@ -10,8 +10,8 @@ from petsc4py import PETSc
 # Simulation parameters
 ####################################################################################
 X = 5.0
-Y = 3.0
-Z = 2.0
+Y = 5.0
+Z = 2.5
 dx = 0.04
 dy = dx
 dz = dx
@@ -21,7 +21,7 @@ wavelength = 1.55
 #####################################################################################
 # Setup simulation
 #####################################################################################
-sim = emopt.fdfd.FDFD_3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5)
+sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44)
 w_pml = sim.w_pml[0]
 
 X = sim.X

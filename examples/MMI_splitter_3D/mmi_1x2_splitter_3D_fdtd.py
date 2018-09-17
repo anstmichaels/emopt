@@ -150,10 +150,10 @@ wavelength = 1.55
 #####################################################################################
 # Setup the simulation--rtol tells the iterative solver when to stop. 5e-5
 # yields reasonably accurate results/gradients
-sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-6, min_rindex=1.44)
+sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-6, min_rindex=1.44,
+                      nconv=200)
+sim.Nmax = 1000*sim.Ncycle
 w_pml = dx * 15 # set the PML width
-sim.src_ramp_time = sim.Nlambda * 20
-sim.Nmax = sim.Nlambda * 250
 
 # we use symmetry boundary conditions at y=0 to speed things up. We
 # need to make sure to set the PML width at the minimum y boundary is set to
@@ -182,7 +182,7 @@ h_si = 0.22
 wg_in = emopt.grid.Rectangle(X/4, 0, L_in, w_wg); wg_in.layer = 1
 mmi = emopt.grid.Rectangle(X/2, 0, L_mmi, w_mmi); mmi.layer = 1
 wg_out = emopt.grid.Rectangle(3*X/4, w_wg, L_out, w_wg); wg_out.layer = 1
-rbg = emopt.grid.Rectangle(X/2, 0, 2*X, 2*Y); rbg.layer = 2
+rbg = emopt.grid.Rectangle(X/2, Y/2, 2*X, 2*Y); rbg.layer = 2
 
 wg_in.material_value = 3.45**2
 mmi.material_value = 3.45**2
@@ -193,7 +193,7 @@ eps = emopt.grid.StructuredMaterial3D(X, Y, Z, dx, dy, dz)
 eps.add_primitive(wg_in,  Z/2-h_si/2, Z/2+h_si/2)
 eps.add_primitive(mmi,    Z/2-h_si/2, Z/2+h_si/2)
 eps.add_primitive(wg_out, Z/2-h_si/2, Z/2+h_si/2)
-eps.add_primitive(rbg,    -Z, Z)
+eps.add_primitive(rbg,   -Z, 2*Z)
 
 mu = emopt.grid.ConstantMaterial3D(1.0)
 
@@ -264,6 +264,7 @@ sim.field_domains = [fom_slice]
 
 am = MMISplitterAdjointMethod(sim, mmi, fom_slice, mode_match)
 params = np.array([w_mmi, L_mmi])
+
 am.check_gradient(params)
 
 #####################################################################################
@@ -288,9 +289,9 @@ if(NOT_PARALLEL):
     Ey = np.concatenate([Ey[::-1], Ey], axis=0)
 
     eps_arr = eps.get_values_in(field_monitor, squeeze=True)
-    vmax = np.max(np.real(Ey))
+    vmax = np.max(np.abs(Ey))
     f = plt.figure()
     ax1 = f.add_subplot(111)
-    ax1.imshow(np.real(Ey), extent=[0,X-2*w_pml,0,2*Y-2*w_pml], vmin=-vmax, vmax=vmax, cmap='seismic')
+    ax1.imshow(np.abs(Ey), extent=[0,X-2*w_pml,0,2*Y-2*w_pml], vmin=0, vmax=vmax, cmap='seismic')
     plt.show()
 

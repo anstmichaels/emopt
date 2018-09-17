@@ -1,3 +1,21 @@
+Released on September 17, 2018
+------------------------------
+
+1. Minor bug fixes.
+
+2. Significant speed improvements in 3D FDTD solver.
+
+A number of PML parameters are now precomputed which significantly speeds up the 3D
+FDTD solver. You should expect to see an improvement of 2-3x in runtime depending on
+the number of cores you use. Currently, this puts EMopt within about a factor of two
+or so of certain popular commercial FDTD solvers.
+
+3. Changes to how edge values are shared between processes in the 3D solver. This
+change should enable the implementation of periodic/Bloch periodic boundary
+conditions in the future. In fact, periodic boundary conditions might already work.
+
+4. Minor documentation improvements to the C++ FDTD code.
+
 Released on July 30, 2018
 -------------------------
 

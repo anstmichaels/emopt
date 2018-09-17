@@ -88,7 +88,7 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
         ax_struct = f.add_subplot(gs[:,1])
         ax_foms = f.add_subplot(gs[:,2])
     elif(layout == 'vertical'):
-        f = plt.figure(figsize=(Wplot, Wplot/aspect*3))
+        f = plt.figure(figsize=(Wplot, Wplot/aspect*4))
         gs = gridspec.GridSpec(3,1, height_ratios=[1,1,1])
         ax_field = f.add_subplot(gs[0,:])
         ax_struct = f.add_subplot(gs[1,:])
