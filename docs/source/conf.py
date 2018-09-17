@@ -24,7 +24,8 @@ import mock
 MOCK_MODULES = ['numpy', 'scipy', 'petsc4py', 'mpi4py', 'matplotlib',
                 'matplotlib.pyplot', 'h5py', 'shapely', 'shapely.geometry',
                 'shapely.ops', 'numpy.ctypeslib', 'scipy.optimize', 'slepc4py',
-               'grid_ctypes', 'grid_ctypes.libGrid']
+               'grid_ctypes', 'grid_ctypes.libGrid', 'fdtd_ctypes',
+               'fdtd_ctypes.libFDTD']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 
