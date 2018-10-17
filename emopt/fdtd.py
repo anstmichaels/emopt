@@ -220,9 +220,17 @@ class FDTD(MaxwellSolver):
         The height of the simulation excluding PMLs.
     """
 
-    def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=100,
+    def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=None,
                  min_rindex=1.0):
         super(FDTD, self).__init__(3)
+
+        if(nconv is None):
+            nconv = N_PROC*10
+        elif(nconv < N_PROC*2):
+            warning_message('Number of convergence test points (nconv) is ' \
+                            'likely too low. If the simulation does not ' \
+                            'converge, increase nconv to > 2 * # processors',
+                            'emopt.fdtd')
 
         self._dx = dx
         self._dy = dy
@@ -240,7 +248,7 @@ class FDTD(MaxwellSolver):
         self._R = wavelength/(2*pi)
 
         ## Courant number < 1
-        self._Sc = 0.99
+        self._Sc = 0.95
         self._min_rindex = min_rindex
         dt = self._Sc * np.min([dx, dy, dz])/self._R / np.sqrt(3) * min_rindex
         self._dt = dt

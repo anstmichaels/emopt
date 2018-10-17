@@ -641,22 +641,27 @@ class FDFD_TE(FDFD):
         y = np.arange(0,M)
         X,Y = np.meshgrid(x,y)
 
-        pml_x = np.ones([M,N], dtype=np.complex128)
+        pml_x_Ez = np.ones([M,N], dtype=np.complex128)
+        pml_x_Hy = np.ones([M,N], dtype=np.complex128)
 
 
         # define the left PML
         w_pml = self._w_pml_left
         x = X[:, 0:w_pml]
-        pml_x[:, 0:w_pml] = 1.0 / (1.0 + 1j*self.pml_sigma *
-                                              ((w_pml - x)*1.0/w_pml)**self.pml_power)
+        pml_x_Ez[:, 0:w_pml] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                     ((w_pml - x)*1.0/w_pml)**self.pml_power)
+        pml_x_Hy[:, 0:w_pml] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                     ((w_pml - x + 0.5)*1.0/w_pml)**self.pml_power)
 
         # define the right PML
         w_pml = self._w_pml_right
         x = X[:, N-w_pml:]
-        pml_x[:, N-w_pml:] = 1.0 / (1.0 + 1j*self.pml_sigma *
-                                              ((x-N+w_pml)*1.0/w_pml)**self.pml_power)
+        pml_x_Ez[:, N-w_pml:] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                      ((x-N+w_pml)*1.0/w_pml)**self.pml_power)
+        pml_x_Hy[:, N-w_pml:] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                      ((x-N+w_pml-0.5)*1.0/w_pml)**self.pml_power)
 
-        return pml_x
+        return pml_x_Ez, pml_x_Hy
 
     def __get_pml_y(self):
         ## Generate the PML values for the top and bottom boundaries.
@@ -670,20 +675,25 @@ class FDFD_TE(FDFD):
         y = np.arange(0,M)
         X,Y = np.meshgrid(x,y)
 
-        pml_y = np.ones([M,N], dtype=np.complex128)
+        pml_y_Ez = np.ones([M,N], dtype=np.complex128)
+        pml_y_Hx = np.ones([M,N], dtype=np.complex128)
 
         # PML for bottom
         w_pml = self._w_pml_bottom
         y = Y[0:w_pml, :]
-        pml_y[0:w_pml, :] = 1.0 / (1.0 + 1j*self.pml_sigma *
-                                              ((w_pml - y)*1.0/w_pml)**self.pml_power)
+        pml_y_Ez[0:w_pml, :] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                     ((w_pml - y)*1.0/w_pml)**self.pml_power)
+        pml_y_Hx[0:w_pml, :] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                     ((w_pml - y - 0.5)*1.0/w_pml)**self.pml_power)
         # PML for top
         w_pml = self._w_pml_top
         y = Y[M-w_pml:, :]
-        pml_y[M-w_pml:, :] = 1.0 / (1.0 + 1j*self.pml_sigma *
-                                              ((y-M+w_pml)*1.0/w_pml)**self.pml_power)
+        pml_y_Ez[M-w_pml:, :] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                      ((y-M+w_pml)*1.0/w_pml)**self.pml_power)
+        pml_y_Hx[M-w_pml:, :] = 1.0 / (1.0 + 1j*self.pml_sigma *
+                                      ((y-M+w_pml+0.5)*1.0/w_pml)**self.pml_power)
 
-        return pml_y
+        return pml_y_Ez, pml_y_Hx
 
     def build(self):
         """(Re)Build the system matrix.
@@ -728,11 +738,13 @@ class FDFD_TE(FDFD):
         odx = self._R / self._dx
         ody = self._R / self._dy
 
-        pml_x = self.__get_pml_x()
-        pml_y = self.__get_pml_y()
+        pml_x_Ez, pml_x_Hy = self.__get_pml_x()
+        pml_y_Ez, pml_y_Hx = self.__get_pml_y()
 
-        odx = odx * pml_x
-        ody = ody * pml_y
+        odx_Ez = odx * pml_x_Ez
+        odx_Hy = odx * pml_x_Hy
+        ody_Ez = ody * pml_y_Ez
+        ody_Hx = ody * pml_y_Hx
         Nc = self.Nc
 
         if(self._eps == None or self._mu == None):
@@ -763,14 +775,14 @@ class FDFD_TE(FDFD):
                 # Diagonal element is the permittivity at (x,y)
                 A[i,jEz] = 1j * eps.get_value(x,y)
 
-                A[i,jHx1] = -ody[y,x]
-                A[i,jHy0] = -odx[y,x]
+                A[i,jHx1] = -ody_Ez[y,x]
+                A[i,jHy0] = -odx_Ez[y,x]
 
                 if(y > 0):
-                    A[i,jHx0] = ody[y,x]
+                    A[i,jHx0] = ody_Ez[y,x]
 
                 if(x < N-1):
-                    A[i,jHy1] = odx[y,x]
+                    A[i,jHy1] = odx_Ez[y,x]
 
                 #############################
                 # enforce boundary conditions
@@ -780,12 +792,12 @@ class FDFD_TE(FDFD):
                         A[i,jHy0] = 0
                         if(x < N-1): A[i,jHy1] = 0
                     elif(bc[1] == 'E'):
-                        A[i,jHx1] = -2*ody[y,x]
+                        A[i,jHx1] = -2*ody_Ez[y,x]
                     elif(bc[1] == 'H'):
                         A[i,jHx1] = 0
                     elif(bc[1] == 'P'):
                         jHx2 = (x + (M-1)*N)*Nc+1
-                        A[i,jHx2] = ody[y,x]
+                        A[i,jHx2] = ody_Ez[y,x]
 
                 elif(y == M-1):
                     if(bc[1] == 'M'):
@@ -797,7 +809,7 @@ class FDFD_TE(FDFD):
                         if(y > 0): A[i,jHx0] = 0
                     elif(bc[0] == 'P'):
                         jHy2 = (ig-N-1)*Nc + 2
-                        A[i,jHy2] = odx[y,x]
+                        A[i,jHy2] = odx_Ez[y,x]
                 elif(x == 0):
                     if(bc[0] == 'M'):
                         A[i,jHy0] = 0
@@ -815,10 +827,10 @@ class FDFD_TE(FDFD):
                 # if(simple_mu): A[i, j0] = -1j
                 A[i,jHx] = -1j * mu.get_value(x,y+0.5)
 
-                A[i, jEz0] = -ody[y,x]
+                A[i, jEz0] = -ody_Hx[y,x]
 
                 if(y < M-1):
-                    A[i,jEz1] = ody[y,x]
+                    A[i,jEz1] = ody_Hx[y,x]
 
                 #############################
                 # enforce boundary conditions
@@ -829,7 +841,7 @@ class FDFD_TE(FDFD):
                 elif(y == M-1):
                     if(bc[1] == 'P'):
                         jEz2 = x*Nc
-                        A[i,jEz2] = ody[y,x]
+                        A[i,jEz2] = ody_Hx[y,x]
 
                 if(x == N-1):
                     if(bc[0] == '0'):
@@ -849,10 +861,10 @@ class FDFD_TE(FDFD):
 
                 # diagonal is permeability at (x,y)
                 A[i,jHy] = -1j * mu.get_value(x-0.5,y)
-                A[i,jEz1] = -odx[y,x]
+                A[i,jEz1] = -odx_Hy[y,x]
 
                 if(x > 0):
-                    A[i,jEz0] = odx[y,x]
+                    A[i,jEz0] = odx_Hy[y,x]
 
                 #############################
                 # enforce boundary conditions
@@ -871,10 +883,10 @@ class FDFD_TE(FDFD):
                     if(bc[0] == 'E'):
                         A[i,jEz1] = 0
                     elif(bc[0] == 'H'):
-                        A[i,jEz1] = -2*odx[y,x]
+                        A[i,jEz1] = -2*odx_Hy[y,x]
                     elif(bc[0] == 'P'):
                         jEz2 = (ig + N-1)*Nc
-                        A[i,jEz2] = odx[y,x]
+                        A[i,jEz2] = odx_Hy[y,x]
 
         # communicate off-processor values and setup internal data structures for
         # performing parallel operations

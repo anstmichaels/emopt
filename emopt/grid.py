@@ -76,7 +76,7 @@ class Material2D(object):
 
         return value
 
-    def get_values(self, k1, k2, j1, j2, arr=None):
+    def get_values(self, k1, k2, j1, j2, sx=0, sy=0, arr=None):
         """Get the values of the material distribution within a set of array
         indicesa set of array indices.
 
@@ -115,7 +115,7 @@ class Material2D(object):
 
         return arr
 
-    def get_values_in(self, domain, squeeze=False, arr=None):
+    def get_values_in(self, domain, sx=0, sy=0, squeeze=False, arr=None):
         """Get the values of the material distribution within a domain.
 
         Parameters

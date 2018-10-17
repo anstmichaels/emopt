@@ -40,7 +40,7 @@ emopt_dep_file = ".emopt_deps"
 # Package Parameters
 EIGEN_VERSION = "3.3.4"
 BOOST_VERSION = "boost-1.67.0"
-SLEPC_VERSION = "3.9.1"
+SLEPC_VERSION = "3.10.0"
 
 
 class Logger(object):

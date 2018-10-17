@@ -268,8 +268,8 @@ if __name__ == '__main__':
     wlen = 1.55
     W = w_in*2.0 + L_crossing + L_taper*2
     H = 8.0
-    dx = 0.02
-    dy = 0.02
+    dx = 0.04
+    dy = 0.03
     sim = emopt.fdfd.FDFD_TM(W, H, dx, dy, wlen)
     pmls = [0.5,0.5,0.5,0.5]
     sim.w_pml = pmls
