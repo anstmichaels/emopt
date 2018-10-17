@@ -30,6 +30,7 @@ of what went wrong. In most cases, the issue will be related to not having the
 appropriate prerequisite software packages installed.
 """
 
+from __future__ import division, print_function, absolute_import
 import os, sys, shutil, glob, requests
 from subprocess import call
 from argparse import ArgumentParser
@@ -86,7 +87,7 @@ def write_deps_file(home_dir, include_dir, install_dir):
     to install EMopt.
     """
     dep_fname = home_dir + '/' + emopt_dep_file
-    with open(dep_fname, 'wb') as fdep:
+    with open(dep_fname, 'w') as fdep:
         fdep.write('EIGEN_DIR=' + include_dir + '\n')
         fdep.write('BOOST_DIR=' + include_dir + '\n')
         fdep.write('PETSC_DIR=' + install_dir + '\n')

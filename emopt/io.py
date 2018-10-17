@@ -1,8 +1,9 @@
 """Various functions associated loading and saving files.
 """
 
-from misc import run_on_master, warning_message
-from grid import Polygon
+from __future__ import division, print_function, absolute_import
+from .misc import run_on_master, warning_message
+from .grid import Polygon
 import numpy as np
 
 __author__ = "Andrew Michaels"

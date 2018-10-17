@@ -18,13 +18,13 @@ considerably less RAM, making it useful for optimizing much larger devices at mu
 higher resolutions.
 
 """
-
-from simulation import MaxwellSolver
-from defs import FieldComponent
-from misc import DomainCoordinates, RANK, MathDummy, NOT_PARALLEL, COMM, \
+from __future__ import division, print_function, absolute_import
+from .simulation import MaxwellSolver
+from .defs import FieldComponent
+from .misc import DomainCoordinates, RANK, MathDummy, NOT_PARALLEL, COMM, \
 info_message, warning_message, N_PROC, run_on_master
-from fdtd_ctypes import libFDTD
-from modes import ModeFullVector
+from .fdtd_ctypes import libFDTD
+from .modes import ModeFullVector
 import petsc4py
 import sys
 petsc4py.init(sys.argv)
@@ -1123,7 +1123,7 @@ class FDTD(MaxwellSolver):
 
         # perform a couple more iterations to get a second time point
         n0 = n
-        for n in xrange(Tn):
+        for n in range(Tn):
             libFDTD.FDTD_update_H(self._libfdtd, n+n0, (n+n0)*dt)
 
             # Note: da.localToLocal seems to have the same performance?
@@ -1140,7 +1140,7 @@ class FDTD(MaxwellSolver):
 
         libFDTD.FDTD_capture_t1_fields(self._libfdtd)
 
-        for n in xrange(Tn):
+        for n in range(Tn):
             libFDTD.FDTD_update_H(self._libfdtd, n+n0+Tn, (n+n0+Tn)*dt)
 
             # Note: da.localToLocal seems to have the same performance?
@@ -1560,7 +1560,7 @@ class FDTD(MaxwellSolver):
 
         if(NOT_PARALLEL and self._bc[0] != 'E' and self._bc[0] != 'H'):
             Px = -0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-            #print Px
+            #print(Px)
             Psrc += Px
         del Ey; del Ez; del Hy; del Hz
 
@@ -1572,7 +1572,7 @@ class FDTD(MaxwellSolver):
 
         if(NOT_PARALLEL):
             Px = 0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-            #print Px
+            #print(Px)
             Psrc += Px
         del Ey; del Ez; del Hy; del Hz
 
@@ -1584,7 +1584,7 @@ class FDTD(MaxwellSolver):
 
         if(NOT_PARALLEL and self._bc[1] != 'E' and self._bc[1] != 'H'):
             Py = 0.5*dx*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
-            #print Py
+            #print(Py)
             Psrc += Py
         del Ex; del Ez; del Hx; del Hz
 
@@ -1596,7 +1596,7 @@ class FDTD(MaxwellSolver):
 
         if(NOT_PARALLEL):
             Py = -0.5*dx*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
-            #print Py
+            #print(Py)
             Psrc += Py
         del Ex; del Ez; del Hx; del Hz
 
@@ -1608,7 +1608,7 @@ class FDTD(MaxwellSolver):
 
         if(NOT_PARALLEL and self._bc[2] != 'E' and self._bc[2] != 'H'):
             Pz = -0.5*dx*dy*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
-            #print Pz
+            #print(Pz)
             Psrc += Pz
         del Ex; del Ey; del Hx; del Hy
 
@@ -1620,7 +1620,7 @@ class FDTD(MaxwellSolver):
 
         if(NOT_PARALLEL):
             Pz = 0.5*dx*dy*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
-            #print Pz
+            #print(Pz)
             Psrc += Pz
         del Ex; del Ey; del Hx; del Hy
 

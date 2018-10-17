@@ -186,11 +186,12 @@ References
 .. [1] A. Michaels, E. Yablonovitch, "Gradient-Based Inverse Electromagnetic Design Using Continuously-Smoothed Boundaries", arXiv:1705.07188, 2017
 """
 
-import fdfd
-import fdtd
-from misc import info_message, warning_message, error_message, RANK, \
+from __future__ import division, print_function, absolute_import
+from . import fdfd
+from . import fdtd
+from .misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, N_PROC, COMM
-import fomutils
+from . import fomutils
 
 import numpy as np
 from math import pi
@@ -539,7 +540,7 @@ class AdjointMethod(object):
             grad_full = np.zeros(N_PROC, dtype=np.double)
 
         gradient = np.zeros(lenp)
-        for i in xrange(lenp):
+        for i in range(lenp):
             p0 = params[i]
             ub = update_boxes[i]
 
@@ -1047,9 +1048,9 @@ class AdjointMethodFM(AdjointMethod):
             grad_full = np.zeros(sim.nunks, dtype=np.double)
 
         gradient = np.zeros(lenp)
-        for i in xrange(lenp):
+        for i in range(lenp):
             #if(NOT_PARALLEL):
-            #    print i
+            #    print(i)
             p0 = params[i]
             ub = update_boxes[i]
 

@@ -10,6 +10,7 @@ If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
 
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL
 
@@ -69,7 +70,7 @@ sim.set_materials(eps, mu)
 Jz = np.zeros([M,N], dtype=np.complex128)
 Mx = np.zeros([M,N], dtype=np.complex128)
 My = np.zeros([M,N], dtype=np.complex128)
-Jz[M/2, N/2] = 1.0
+Jz[int(M/2), int(N/2)] = 1.0
 
 sim.set_sources((Jz, Mx, My))
 

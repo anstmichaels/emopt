@@ -1,5 +1,6 @@
 """Define some useful definitions for emopt.
 """
+from __future__ import division, print_function, absolute_import
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"

@@ -7,6 +7,7 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL
 
@@ -73,7 +74,7 @@ if(NOT_PARALLEL):
     eps_arr = np.concatenate([eps_arr[::-1,:], eps_arr], axis=0)
     H *= 2
 
-    print modes.neff[0]
+    print(modes.neff[0])
 
     #Ex = fields[0:M,:]
     vmin = np.min(np.abs(Ex))

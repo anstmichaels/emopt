@@ -7,6 +7,7 @@
     Generate electric and magnetic field for Gaussian beam.
 """
 
+from __future__ import division, print_function, absolute_import
 import numpy as np
 from math import pi
 import scipy

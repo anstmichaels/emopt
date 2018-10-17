@@ -20,6 +20,7 @@ terminates when this value drops below the specified rtol (which defaults to
 1e-6)
 """
 
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL
 

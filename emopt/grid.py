@@ -21,13 +21,14 @@ boundaries using polygons and then computing the smoothed grid by applying a
 series of boolean subtraction operations (in c++).
 """
 
-from grid_ctypes import libGrid
+from __future__ import division, print_function, absolute_import
+from .grid_ctypes import libGrid
 import numpy as np
 import scipy
 from ctypes import c_int, c_double
 
-from misc import DomainCoordinates
-from misc import warning_message
+from .misc import DomainCoordinates
+from .misc import warning_message
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"

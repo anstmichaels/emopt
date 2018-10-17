@@ -7,6 +7,7 @@ all Maxwell solvers must implement. This allows us to standard functionality
 and ensure compatibility between modules.
 """
 
+from __future__ import division, print_function, absolute_import
 from abc import ABCMeta, abstractmethod
 
 __author__ = "Andrew Michaels"

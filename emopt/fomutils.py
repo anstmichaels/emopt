@@ -1,9 +1,10 @@
 """
 Common functions useful for calculating figures of merit and their derivatives.
 """
-import fdfd, misc
-from misc import NOT_PARALLEL
-from defs import FieldComponent
+from __future__ import division, print_function, absolute_import
+from . import fdfd, misc
+from .misc import NOT_PARALLEL
+from .defs import FieldComponent
 import numpy as np
 
 __author__ = "Andrew Michaels"

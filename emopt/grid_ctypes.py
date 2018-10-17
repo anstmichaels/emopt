@@ -1,5 +1,6 @@
 """Define an interface for accessing the grid library written in c++."""
 
+from __future__ import division, print_function, absolute_import
 from ctypes import *
 import os
 import numpy as np

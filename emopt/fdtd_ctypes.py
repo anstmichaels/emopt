@@ -1,5 +1,6 @@
 """Provides a ctypes interface between C++ FDTD library and python."""
 
+from __future__ import division, print_function, absolute_import
 from ctypes import *
 import os
 import numpy as np

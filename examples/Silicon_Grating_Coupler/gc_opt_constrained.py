@@ -43,6 +43,7 @@ in the command line which will run the optimization using 16 cores on the curren
 machine.
 
 """
+from __future__ import division, print_function, absolute_import
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL
@@ -132,7 +133,7 @@ class SiliconGratingAM(AdjointMethodPNF):
         This generally works pretty well, as well.
         """
         coeffs = params
-        N_coeffs = (len(coeffs) - 3) / 4
+        N_coeffs = int((len(coeffs) - 3) / 4)
 
         h_etch = params[-3]
         x0 = self.w_in + params[-2]

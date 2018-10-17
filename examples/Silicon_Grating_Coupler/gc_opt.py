@@ -33,6 +33,7 @@ in the command line which will run the optimization using 16 cores on the curren
 machine.
 
 """
+from __future__ import division, print_function, absolute_import
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL

@@ -56,19 +56,20 @@ correctly-sized zeroed numpy array on the non-master nodes.
 2. Reimplement the set_source function with Domain support.  This will be
 necessary in 3D when the total grid size is very large.
 """
+from __future__ import division, print_function, absolute_import
 
 # Initialize petsc first
 import petsc4py
 import sys
 petsc4py.init(sys.argv)
 
-from misc import info_message, warning_message, error_message, RANK, \
+from .misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, MathDummy, DomainCoordinates, COMM
-from defs import FieldComponent, SourceComponent
-import modes
-from simulation import MaxwellSolver
+from .defs import FieldComponent, SourceComponent
+from . import modes
+from .simulation import MaxwellSolver
 
-from grid import row_wise_A_update
+from .grid import row_wise_A_update
 
 import numpy as np
 from math import pi
@@ -742,7 +743,7 @@ class FDFD_TE(FDFD):
         if(self.verbose and NOT_PARALLEL):
             info_message('Building system matrix...')
 
-        for i in xrange(self.ib, self.ie):
+        for i in range(self.ib, self.ie):
 
             ig = int(i/Nc)
             component = int(i - Nc*ig)
@@ -934,7 +935,7 @@ class FDFD_TE(FDFD):
         A_update = self.A_diag_update
 
         #TODO: Use setDiagonal
-        for i in xrange(self.ib, self.ie):
+        for i in range(self.ib, self.ie):
             A[i,i] = A_update[i-self.ib]
 
         # communicate off-processor values and setup internal data structures for
@@ -2342,7 +2343,7 @@ class FDFD_3D(FDFD):
         component = 0
         x = 0; y = 0; z = 0
         Nc = 6 # 6 field components
-        for i in xrange(ib, ie):
+        for i in range(ib, ie):
 
             ig = int(i/Nc)
             component = int(i - 6*ig)
@@ -2683,7 +2684,7 @@ class FDFD_3D(FDFD):
 
         alpha = 1.0/7.0
 
-        for i in xrange(ib,ie):
+        for i in range(ib,ie):
             ig = int(i/bsize)
             comp = int(i - bsize*ig)
 
@@ -2854,7 +2855,7 @@ class FDFD_3D(FDFD):
         component = 0
         x = 0; y = 0; z = 0
         Nc = 6 # 6 field components
-        for i in xrange(ib, ie):
+        for i in range(ib, ie):
 
             ig = int(i/Nc)
             component = int(i - 6*ig)
@@ -3081,9 +3082,9 @@ class FDFD_3D(FDFD):
         elif(component == FieldComponent.Hy): c = 4
         elif(component == FieldComponent.Hz): c = 5
 
-        for z in xrange(i1, i2):
-            for y in xrange(j1, j2):
-                for x in xrange(k1, k2):
+        for z in range(i1, i2):
+            for y in range(j1, j2):
+                for x in range(k1, k2):
                     index = Nc*(z*NxNy+y*Nx+x)+c
 
                     if(index >= ib and index < ie):
@@ -3339,9 +3340,9 @@ class FDFD_3D(FDFD):
         elif(component == FieldComponent.Hy): c = 4
         elif(component == FieldComponent.Hz): c = 5
 
-        for z in xrange(i1, i2):
-            for y in xrange(j1, j2):
-                for x in xrange(k1, k2):
+        for z in range(i1, i2):
+            for y in range(j1, j2):
+                for x in range(k1, k2):
                     index = Nc*(z*NxNy+y*Nx+x)+c
 
                     if(index >= ib and index < ie):
@@ -3549,7 +3550,7 @@ class FDFD_3D(FDFD):
         if(ymax > Ny-1): ymax = Ny-1
         if(zmax > Nz-1): zmax = Nz-1
 
-        #print xmin, xmin-k1, ymin, ymin-j1, zmin, zmin-i1
+        #print(xmin, xmin-k1, ymin, ymin-j1, zmin, zmin-i1)
 
         Jx = src[0]
         Jy = src[1]
@@ -3665,7 +3666,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL and self._bc[0] != 'E' and self._bc[0] != 'H'):
             Px = -0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-            #print Px
+            #print(Px)
             Psrc += Px
         del Ey; del Ez; del Hy; del Hz
 
@@ -3677,7 +3678,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Px = 0.5*dy*dz*np.sum(np.real(Ey*np.conj(Hz)-Ez*np.conj(Hy)))
-            #print Px
+            #print(Px)
             Psrc += Px
         del Ey; del Ez; del Hy; del Hz
 
@@ -3689,7 +3690,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL and self._bc[1] != 'E' and self._bc[1] != 'H'):
             Py = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
-            #print Py
+            #print(Py)
             Psrc += Py
         del Ex; del Ez; del Hx; del Hz
 
@@ -3701,7 +3702,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Py = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hz)-Ez*np.conj(Hx)))
-            #print Py
+            #print(Py)
             Psrc += Py
         del Ex; del Ez; del Hx; del Hz
 
@@ -3713,7 +3714,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL and self._bc[2] != 'E' and self._bc[2] != 'H'):
             Pz = -0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
-            #print Pz
+            #print(Pz)
             Psrc += Pz
         del Ex; del Ey; del Hx; del Hy
 
@@ -3725,7 +3726,7 @@ class FDFD_3D(FDFD):
 
         if(NOT_PARALLEL):
             Pz = 0.5*dy*dz*np.sum(np.real(Ex*np.conj(Hy)-Ey*np.conj(Hx)))
-            #print Pz
+            #print(Pz)
             Psrc += Pz
         del Ex; del Ey; del Hx; del Hy
 

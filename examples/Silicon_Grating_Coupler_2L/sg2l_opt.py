@@ -33,6 +33,7 @@ in the command line which will run the optimization using 16 cores on the curren
 machine.
 
 """
+from __future__ import division, print_function, absolute_import
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL
@@ -118,7 +119,7 @@ class SiliconGrating2LAM(AdjointMethodPNF):
         x0_top = self.w_in + params[-2]
         x0_bot = self.w_in + params[-1]
         coeffs = params
-        N_coeffs = (len(coeffs) - 2) / 8
+        N_coeffs = int((len(coeffs) - 2) / 8)
 
         # compute the periods and duty factors using a Fourier series
         fseries = lambda coeffs : coeffs[0] + np.sum([coeffs[j] *np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) \

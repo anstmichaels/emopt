@@ -8,6 +8,7 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL
 
@@ -76,7 +77,7 @@ if(NOT_PARALLEL):
     H *= 2
     W *= 2
 
-    print modes.neff[0]
+    print(modes.neff[0])
 
     vmin = np.min(np.abs(Ex))
     vmax = np.max(np.abs(Ex))

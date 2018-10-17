@@ -9,6 +9,7 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL
 

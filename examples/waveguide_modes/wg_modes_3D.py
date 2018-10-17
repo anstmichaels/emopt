@@ -7,6 +7,7 @@ On most *nix-based machines, run the script with:
 If you wish to increase the number of cores that the example is executed on,
 change 8 to the desired number of cores.
 """
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL
 
@@ -64,7 +65,7 @@ Ex = modes.get_field_interp(0, 'Ex')
 if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
-    print modes.neff[0]
+    print(modes.neff[0])
 
     eps_arr = eps.get_values_in(domain)
 

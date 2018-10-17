@@ -38,15 +38,16 @@ References
 Modesolver for Anisotropic Dielectric Waveguides", J. Lightwave Technol. 26(11),
 1423-1431, (2008).
 """
+from __future__ import division, print_function, absolute_import
 # Initialize petsc first
 import sys, slepc4py
 slepc4py.init(sys.argv)
 
-from defs import FieldComponent
-from misc import info_message, warning_message, error_message, \
+from .defs import FieldComponent
+from .misc import info_message, warning_message, error_message, \
 NOT_PARALLEL, run_on_master, MathDummy
 
-import grid
+from . import grid
 
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
@@ -406,7 +407,7 @@ class ModeTE(ModeSolver):
         eps = self.eps
         N = self._N
 
-        for I in xrange(self.ib, self.ie):
+        for I in range(self.ib, self.ie):
 
             # (stuff) = n_x B H_y
             if(I < N):
@@ -485,7 +486,7 @@ class ModeTE(ModeSolver):
 
         # Define B. It contains ones on the first and last third of the
         # diagonals
-        for i in xrange(self.ib, self.ie):
+        for i in range(self.ib, self.ie):
             if(i < N):
                 B[i,i+2*N] = -1j*self._dir # _dir=1 corresponds to exp(-ikx)
             elif(i < 2*N):
@@ -1336,7 +1337,7 @@ class ModeFullVector(ModeSolver):
                 get_mu_y = lambda x,y : mu.get_value(k0+x,j0+y,i0)
                 get_mu_z = lambda x,y : mu.get_value(k0+x,j0+y,i0)
 
-        for I in xrange(self.ib, self.ie):
+        for I in range(self.ib, self.ie):
             A[I,I] = 0.0
             B[I,I] = 0.0
 

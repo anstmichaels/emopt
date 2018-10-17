@@ -34,6 +34,7 @@ much larger/higher resolution problems. In this example, we use a finer grid
 spacing than the FDFD example.
 """
 
+from __future__ import division, print_function, absolute_import
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
 from emopt.adjoint_method import AdjointMethod

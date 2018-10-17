@@ -1,7 +1,8 @@
+from __future__ import division, print_function, absolute_import
 import numpy as np
 import scipy
 from math import pi
-from misc import warning_message, NOT_PARALLEL
+from .misc import warning_message, NOT_PARALLEL
 
 def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
            ignore_roc_lim=False):

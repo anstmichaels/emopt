@@ -1,6 +1,7 @@
 """Miscellanious functions useful for simulation and optimization.
 """
 
+from __future__ import division, print_function, absolute_import
 import numpy as np
 from scipy import interpolate
 import os
