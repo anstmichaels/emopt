@@ -41,6 +41,13 @@ __version__ = "0.4"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
+def to_bytes(s):
+    """Convert a string s to bytes, if it isn't already.
+    (So this does nothing in Python 2.)""" 
+    if type(s) is bytes:
+        return s
+    return s.encode()
+
 class SourceArray(object):
     """A container for source arrays and its associated parameters.
 
@@ -384,7 +391,7 @@ class FDTD(MaxwellSolver):
 
         # default boundary conditions = PEC
         self._bc = ['0', '0', '0']
-        libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc))
+        libFDTD.FDTD_set_bc(self._libfdtd, to_bytes(''.join(self._bc)))
 
         # make room for eps and mu
         self._eps = None
@@ -538,7 +545,7 @@ class FDTD(MaxwellSolver):
                                           'implemented')
 
         self._bc = list(newbc)
-        libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc))
+        libFDTD.FDTD_set_bc(self._libfdtd, to_bytes(''.join(self._bc)))
 
     @property
     def w_pml(self):
