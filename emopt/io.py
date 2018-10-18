@@ -173,7 +173,7 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
 
     ax_foms.set_xlabel('Iteration', fontsize=12)
     ax_foms.set_ylabel('Figure of Merit', fontsize=12)
-    ax_foms.legend(foms.keys(), loc=4)
+    ax_foms.legend(list(foms.keys()), loc=4)
     ax_foms.grid(True, linewidth=0.5)
 
     # general tick properties
