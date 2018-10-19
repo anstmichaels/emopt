@@ -75,9 +75,12 @@ class EMOptWarning(RuntimeWarning):
     pass
 
 @run_on_master
-def _warning_message(message, category=UserWarning, filename='', lineno=-1):
+def _warning_message(message, category=UserWarning, filename='', lineno=-1,
+                     file=None, line=None):
     # Override python's warning message by adding a colored [WARNING] flag in
     # front to make it more noticeable.
+    # file & line arguments are ignored, but are needed to match the
+    # signature of warnings.showwarning.
     if(category == EMOptWarning):
         print(u'\u001b[43;1m[WARNING]\u001b[0m %s' % (message))
     else:
