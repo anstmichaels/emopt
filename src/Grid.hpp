@@ -26,6 +26,8 @@ typedef boost::geometry::model::polygon<Point_2D> Polygon_2D;
 typedef boost::geometry::model::box<Point_2D> BBox;
 using namespace Eigen;
 
+typedef Array<bool, Dynamic, Dynamic> ArrayXXb;
+
 namespace Grid {
 
 /* Material class which provides the foundation for defining the system materials/structure.
@@ -615,6 +617,16 @@ class StructuredMaterial3D : public Material3D {
 			   _dy,
                _dz,
                _background;
+
+
+        // cache-related parameters
+        std::list<ArrayXXcd> _cached_values;
+        std::list<ArrayXXb> _cached_flags;
+
+        bool _use_cache, _cache_active;
+        
+        int _cache_j0, _cache_k0,
+            _cache_J,  _cache_K;
 
 	public:
 

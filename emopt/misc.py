@@ -74,7 +74,8 @@ class EMOptWarning(RuntimeWarning):
     pass
 
 @run_on_master
-def _warning_message(message, category=UserWarning, filename='', lineno=-1):
+def _warning_message(message, category=UserWarning, filename='', lineno=-1,
+                     file=None, line=None):
     # Override python's warning message by adding a colored [WARNING] flag in
     # front to make it more noticeable.
     if(category == EMOptWarning):
@@ -389,14 +390,39 @@ class DomainCoordinates(object):
             A new DomainCoordinates object with the exact same dimensions as
             this one.
         """
-        x = self._x
-        y = self._y
-        z = self._z
-        dx = self._dx
-        dy = self._dy
-        dz = self._dz
-        return DomainCoordinates(x[0], x[-1], y[0], y[-1], z[0], z[-1],
-                                 dx, dy, dz)
+        # useless values
+        domain = DomainCoordinates(0, 1, 0, 1, 0, 1, 1, 1, 1)
+
+        # copy all of the values of the instance variables
+        domain._z = self._z
+        domain._i = self._i
+
+        domain._y = self._y
+        domain._j = self._j
+
+        domain._x = self._x
+        domain._k = self._k
+
+        domain._Nx = self._Nx
+        domain._Ny = self._Ny
+        domain._Nz = self._Nz
+
+        domain._xspan = self._xspan
+        domain._yspan = self._yspan
+        domain._zspan = self._zspan
+
+        domain._dx = self._dx
+        domain._dy = self._dy
+        domain._dz = self._dz
+
+        domain.i1 = self.i1
+        domain.i2 = self.i2
+        domain.j1 = self.j1
+        domain.j2 = self.j2
+        domain.k1 = self.k1
+        domain.k2 = self.k2
+
+        return domain
 
 
 ####################################################################################

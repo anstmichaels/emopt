@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 from math import pi
-from misc import warning_message, NOT_PARALLEL
+from misc import warning_message, error_message, NOT_PARALLEL
 
 def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
            ignore_roc_lim=False):
@@ -294,6 +294,9 @@ class IndexSet(object):
 
         self._indices = inds
 
+    def clear(self):
+        self._indices = []
+
 class FourierDisplacer(object):
     """Displace a points which define a path using a radius-of-curvature-limited
     Fourier series.
@@ -395,3 +398,202 @@ class FourierDisplacer(object):
             ys = ys + Ay[i] * np.sin(pi*self._ts/self._P[i])
 
         return ys
+
+class NURBS:
+    """Create a NURBS curve.
+
+    This class wraps a NURBS-python NURBS object and provides some additional
+    useful functionality (like radius of curvature calculation).
+
+    Notes
+    -----
+    The underlying NURBS object can be accessed at any time using the curve
+    attribute.
+
+    Attributes
+    ----------
+    x : numpy.ndarray
+        The x coordinates of the control points (array of size N).
+    y : numpy.ndarray
+        The y coordinates of the control points (array of size N).
+    N : int
+        The number of control points.
+    w : numpy.ndarray
+        Weight values (array of size N).
+    curve : geomdl.NURBS.Curve
+        The wrapped NURBS object
+    knot_vec : list
+        The knot vector
+    degree : int
+        The degree of the NURBS curve
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        The x coordinates of the control points (array of size N).
+    y : numpy.ndarray
+        The y coordinates of the control points (array of size N).
+    w : numpy.ndarray (optional)
+        Weight values (array of size N). By default, uniform unity weights are used. (default = None)
+    degree : int (optional)
+        The degree of the curve. Recommended: degree >= 3 (default = 3)
+    """
+
+    def __init__(self, x, y, degree=3, w=None):
+        try:
+            from geomdl import NURBS, utilities
+            self.utilities = utilities
+        except ImportError:
+            error_message('The module `geomdl` is not installed, but it is required for NURBS!')
+
+        self._x = x
+        self._y = y
+        self._n = len(x)
+
+        if(w is None):
+            w = np.ones(x.shape)
+        self._w = w
+
+        # Create the curve
+        curve = NURBS.Curve()
+        curve.degree = degree
+        self._degree = degree
+
+        cpoints = np.zeros((self._n,2))
+        cpoints[:,0] = x
+        cpoints[:,1] = y
+        self._cpoints = cpoints
+
+        curve.ctrlpts = cpoints
+        curve.knotvector = utilities.generate_knot_vector(degree, len(cpoints))
+        curve.weights = w
+        self._curve = curve
+
+    @property
+    def x(self): return self._x
+
+    @property
+    def y(self): return self._y
+
+    @property
+    def N(self): return self._n
+
+    @property
+    def w(self): return self._w
+
+    @property
+    def curve(self): return self._curve
+
+    @property
+    def knot_vec(self): return self._curve.kotvector
+
+    @property
+    def degree(self): return self._degree
+
+    @property
+    def bbox(self): return [coordinate for xy in self._curve.bbox \
+                            for coordinate in xy]
+
+    @w.setter
+    def w(self, ww):
+        self._w = ww
+        self._curve.weights = ww
+
+    @degree.setter
+    def degree(self, d):
+        self._degree = d
+        self._curve.degree = d
+
+    def set_cpoints(self, x, y):
+        """Set new control points
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            The new x coordinates.
+        y : numpy.ndarray
+            The new y coordinates.
+        """
+        self._x = x
+        self._y = y
+        self._n = len(x)
+
+        cpoints = np.zeros((self._n,2))
+        cpoints[:,0] = x
+        cpoints[:,1] = y
+        self._cpoints = cpoints
+
+        self._curve.ctrlpts = cpoints
+        self._curve.knotvector = self.utilities.generate_knot_vector(self._degree, len(cpoints))
+
+    def evaluate(self, u=None, Neval=10):
+        """Evaluate the NURBS curve.
+
+        The NURBS curve can be evaluated either at a single specified value or at a
+        specified number of values which span the whole curve. If a single value
+        is provided, then the curve is evaluated at that single point. Otherwise,
+        the curve is evaluated at the specified Neval points.
+
+        Parameters
+        ----------
+        u : float (optional)
+            A value between 0 and 1 when the x,y coordinate of the curve is evaluated. (default = None)
+        Neval : int
+            The number of points along the full length of the curve to evaluate the x,y
+            coordinates of the curve. This is only evaluated if u=None. (default = 10)
+
+        Returns
+        -------
+        float, float or numpy.ndarray, numpy.ndarray
+            The x,y coordinate(s) of the evaluated curve
+        """
+        if(u is not None):
+            xy = self._curve.curvept(u)
+            return xy[0], xy[1]
+        else:
+            self._curve.sample_size = Neval
+            self._curve.evaluate()
+            points = np.array(self._curve.evalpts)
+            return points[:,0], points[:,1]
+
+    def radius_of_curvature(self, u=None, Neval=10):
+        """Evaluate the radius of curvature along the NURBS curve.
+
+        The ROC can be evaluated either at a single specified value or at a
+        specified number of values which span the whole curve. If a single value
+        is provided, then the ROC is evaluated at that single point. Otherwise,
+        the curve is evaluated at the specified Neval points.
+
+        Parameters
+        ----------
+        u : float (optional)
+            A value between 0 and 1 when the x,y coordinate of the curve is evaluated. (default = None)
+        Neval : int
+            The number of points along the full length of the curve to evaluate the x,y
+            coordinates of the curve. This is only evaluated if u=None. (default = 10)
+
+        Returns
+        -------
+        float or numpy.ndarray
+            The radius of curvature evaluated along the curve.
+        """
+        if(u is not None):
+            us = [u]
+            Neval = 1
+        else:
+            us = np.linspace(0,1,Neval)
+
+        # Calculate 1st and second derivative
+        xdot = np.zeros(Neval)
+        ydot = np.zeros(Neval)
+        xddot = np.zeros(Neval)
+        yddot = np.zeros(Neval)
+        for i in range(Neval):
+            xydots = self._curve.derivatives(us[i],order=2)
+            xdot[i] = xydots[1][0]
+            ydot[i] = xydots[1][1]
+            xddot[i] = xydots[2][0]
+            yddot[i] = xydots[2][1]
+
+        roc = (xdot**2 + ydot**2)**(3.0/2.0) / np.abs(xdot*yddot - xddot*ydot)
+        return roc

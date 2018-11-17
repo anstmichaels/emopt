@@ -1,3 +1,28 @@
+Released on November 16, 2018
+------------------------------
+
+1. Bug fixes
+   a. Fixed _showwarning definition
+   b. Fixed round-off error in DomainCoordinates.copy which led to errors when
+   setting the adjoint sources for very particular choices of grid spacing.
+   c. Tweaked 1D mode solvers such that build() function actually updates the
+   permittivity and permeability. Before this was only being done upon instantiation.
+
+2. Added NURBS class to emopt.geometry. This is a wrapper for the NURBS-python
+library which makes it quick and easy to use. NURBS are a good choice of spline for
+parameterizing boundaries. In order to use the NURBS class, NURBS-python must be
+installed (pip install geomdl).
+
+3. Minor performance increases to gradient calculation. In theory, it can leverage
+parallelism a bit better now, but speed improvements may not be significant.
+
+4. Significant performance increase to permittivity grid smoothing calculation in 3D.
+For 3D slab structures, a lot of redundant calculation was being performed.
+Permittivity values are now cached which can significantly improve speed when
+calculating permittivity inside of volumes. This also translates to speedups in
+gradient calculations (depending on the problem, speedups could range from ~3x to
+~20x).
+
 Released on September 17, 2018
 ------------------------------
 

@@ -751,6 +751,7 @@ class FDTD(MaxwellSolver):
             src_arrays = src
 
         self.__set_sources(src_arrays, domain, adjoint=False)
+        COMM.Barrier()
 
     def set_adjoint_sources(self, src):
         """Set the adjoint sources.
@@ -791,7 +792,6 @@ class FDTD(MaxwellSolver):
             The domain which specifies the location of the source arrays
         """
         self.__set_sources(src, domain, adjoint=True)
-
 
     def clear_sources(self):
         """Clear simulation sources."""
@@ -978,6 +978,8 @@ class FDTD(MaxwellSolver):
         ody = R/self._dy
         odz = R/self._dz
         Nx, Ny, Nz = self._Nx, self._Ny, self._Nz
+
+        COMM.Barrier()
 
         # define time step
         dt = self._dt

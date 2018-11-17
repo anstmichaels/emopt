@@ -535,6 +535,7 @@ class AdjointMethod(object):
         lenp = len(params)
 
         grad_full = None
+        grad_parts = []
         if(RANK == 0):
             grad_full = np.zeros(N_PROC, dtype=np.double)
 
@@ -556,14 +557,7 @@ class AdjointMethod(object):
             # calculate dAdp and assemble the full result on the master node
             product = sim.calc_ydAx(Ai)
             grad_part = -2*np.real( product/step )
-
-            # send the partially computed gradient to the master node to finish
-            # up the calculation
-            COMM.Gatherv(grad_part, grad_full, root=0)
-
-            # finish calculating the gradient
-            if(NOT_PARALLEL):
-                gradient[i] = np.sum(grad_full)
+            grad_parts.append(grad_part)
 
             # revert the system to its original state
             params[i] = p0
@@ -574,6 +568,17 @@ class AdjointMethod(object):
                     self.sim.update(box)
             else:
                 self.sim.update(ub)
+
+
+        COMM.Barrier()
+        for i in xrange(lenp):
+            # send the partially computed gradient to the master node to finish
+            # up the calculation
+            COMM.Gatherv(grad_parts[i], grad_full, root=0)
+
+            # finish calculating the gradient
+            if(NOT_PARALLEL):
+                gradient[i] = np.sum(grad_full)
 
         if(NOT_PARALLEL):
             return gradient

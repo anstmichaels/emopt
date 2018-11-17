@@ -400,6 +400,9 @@ class ModeTE(ModeSolver):
         """
         ds = self.ds/self.R # non-dimensionalize
 
+        self.eps = eps.get_values_in(self.domain, squeeze=True)
+        self.mu = mu.get_values_in(self.domain, squeeze=True)
+
         A = self._A
         B = self._B
         mu = self.mu
