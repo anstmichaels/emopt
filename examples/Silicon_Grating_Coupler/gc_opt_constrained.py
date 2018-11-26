@@ -520,7 +520,6 @@ if __name__ == '__main__':
     fom_list = []
     fom_unconstrained = []
     callback = lambda x : plot_update(x, fom_list, fom_unconstrained, sim, am)
-?!?jedi=0, ?!?                     (*_*param params*_*, param indices=[], param plot=True, param verbose=True, param return_gradients=False) ?!?jedi?!?
 
     # setup and run the optimization!
     # Note: For this optimization, it turns out that L-BFGS-B works a lot

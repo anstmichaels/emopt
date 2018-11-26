@@ -291,8 +291,8 @@ class ModeTE(ModeSolver):
                                  'calculations!')
         self.ndir = n
         self._fshape = [domain.Ny, domain.Nx]
-        self.eps = eps.get_values_in(domain, squeeze=True)
-        self.mu = mu.get_values_in(domain, squeeze=True)
+        self.eps = eps
+        self.mu = mu
 
         if(backwards):
             self._dir = -1.0
@@ -400,13 +400,11 @@ class ModeTE(ModeSolver):
         """
         ds = self.ds/self.R # non-dimensionalize
 
-        self.eps = eps.get_values_in(self.domain, squeeze=True)
-        self.mu = mu.get_values_in(self.domain, squeeze=True)
+        eps = self.eps.get_values_in(self.domain, squeeze=True)
+        mu = self.mu.get_values_in(self.domain, squeeze=True)
 
         A = self._A
         B = self._B
-        mu = self.mu
-        eps = self.eps
         N = self._N
 
         for I in xrange(self.ib, self.ie):
@@ -778,6 +776,8 @@ class ModeTE(ModeSolver):
         N = self._N
 
         if(NOT_PARALLEL):
+            eps = self.eps.get_values_in(self.domain, squeeze=True)
+            mu = self.mu.get_values_in(self.domain, squeeze=True)
             Jz = np.zeros(N, dtype=np.complex128)
             Mx = np.zeros(N, dtype=np.complex128)
             My = np.zeros(N, dtype=np.complex128)
@@ -814,8 +814,8 @@ class ModeTE(ModeSolver):
             dEzdy = np.diff(Ez)[1:] / dy
             dEzdx = Ez[1:-1] / dx
 
-            Jz = 1j*(self.eps*Ez[1:-1]) + dHydx - dHxdy
-            Mx = dEzdy - 1j*(self.mu*Hx[1:-1])
+            Jz = 1j*(eps*Ez[1:-1]) + dHydx - dHxdy
+            Mx = dEzdy - 1j*(mu*Hx[1:-1])
             My = -dEzdx
 
         else:
