@@ -32,5 +32,5 @@ EMOpt is currently released under the GPL license (see LICENSE.md for details)
 ## References
 The methods employed by EMOpt are described in:
 
-A. Michaels and E. Yablonovitch, “Gradient-Based Inverse Electromagnetic Design Using Continuously-Smoothed Boundaries,” Arxiv (2017).
+Andrew Michaels and Eli Yablonovitch, "Leveraging continuous material averaging for inverse electromagnetic design," Opt. Express 26, 31717-31737 (2018)
 
