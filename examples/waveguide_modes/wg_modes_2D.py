@@ -18,9 +18,7 @@ from math import pi
 # Set up the size of the problem
 ####################################################################################
 H = 6.0
-dy = 0.01
-N = int(np.ceil(H/dy)+1)
-H = (N-1)*dy
+dy = 0.02
 
 wavelength = 1.55
 
@@ -49,7 +47,7 @@ mu = emopt.grid.ConstantMaterial2D(1.0)
 
 # define a line along which a slice of the material distribution will be taken
 # The modes will be solved for the slice.
-mode_line = emopt.misc.DomainCoordinates(0.0, 0.0, 0, H, 0.0, 0.0, 1.0, dy, 1.0)
+mode_line = emopt.misc.DomainCoordinates(0.5, 0.5, 0, H, 0.0, 0.0, 1.0, dy, 1.0)
 
 ####################################################################################
 # setup the mode solver
@@ -73,22 +71,22 @@ modes.solve() # solve for the effective indices and mode profiles
 if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
+    # print out the effective indices
     print('          n_eff          ')
     print('-------------------------')
     for j in range(neigs):
         n = modes.neff[j]
         print('%d : %0.4f  +  %0.4f i' % (j, n.real, n.imag))
 
-
+    # plot the refractive index and mode profiles
     f, axes = plt.subplots(3,1)
     for j in range(3):
         i = modes.find_mode_index(j)
         Ez = modes.get_field_interp(i, 'Ez')
-        x = np.linspace(0, H, N)
+        x = np.linspace(0, H, mode_line.Ny)
         eps_arr = eps.get_values_in(mode_line, squeeze=True)
 
         ax = axes[j]
-        #ax = f.add_subplot(3,1,j+1)
         ax.plot(x, np.abs(Ez), linewidth=2)
         ax.set_ylabel('E$_z$ (TE$_%d$)' % j, fontsize=12)
         ax.set_xlim([x[0], x[-1]])

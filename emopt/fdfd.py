@@ -565,13 +565,12 @@ class FDFD_TE(FDFD):
         self._eps = eps
         self._mu = mu
 
-    def set_sources(self, src):
+    def set_sources(self, src, src_domain=None, mindex=0):
         """Set the sources of the system used in the forward solve.
 
-        Currently, sources are defined using 3 numpy.ndarrays.  The elements of
-        the array correspond to spatially-dependent electric or magnetic current
-        sources.  In the future, more structured source elements may be
-        implemented.
+        The sources can be defined either using three numpy arrays or using a
+        mode source. When using a mode source, the corresponding current
+        density arrays will be automatically generated and extracted.
 
         Notes
         -----
@@ -591,13 +590,50 @@ class FDFD_TE(FDFD):
 
         Parameters
         ----------
-        src : tuple of numpy.ndarray
-            The current sources in the form (Jz, Mx, My).  Each array in the
-            tiple should be a 2D numpy.ndarry with dimensions MxN.
+        src : tuple of numpy.ndarray or modes.ModeTE
+            (Option 1) The current sources in the form (Jz, Mx, My).  Each array in the
+            tuple should be a 2D numpy.ndarry with dimensions MxN.
+            (Option 2), a mode source which has been built and solved.
+        src_domain : emopt.misc.DomainCoordinates (optional)
+            Specifies the location of the provided current source distribution
+            or mode source. If None, it is assumed that source arrays have been
+            provided and those source arrays span the whole simulation region
+            (i.e. have size MxN)
+        mindx : int (optional)
+            Specifies the index of the mode source (only used if a mode source
+            is passed in as src)
         """
-        self.Jz = src[0]
-        self.Mx = src[1]
-        self.My = src[2]
+        if(isinstance(src, modes.ModeTE)):
+            Jz = np.zeros((self._M, self._N), dtype=np.complex128)
+            Mx = np.zeros((self._M, self._N), dtype=np.complex128)
+            My = np.zeros((self._M, self._N), dtype=np.complex128)
+
+            msrc = src.get_source(mindex, self._dx, self._dy)
+
+            Jz[src_domain.j, src_domain.k] = msrc[0]
+            Mx[src_domain.j, src_domain.k] = msrc[1]
+            My[src_domain.j, src_domain.k] = msrc[2]
+
+            self.Jz = Jz
+            self.Mx = Mx
+            self.My = My
+
+        elif(src_domain is not None):
+            Jz = np.zeros((self._M, self._N), dtype=np.complex128)
+            Mx = np.zeros((self._M, self._N), dtype=np.complex128)
+            My = np.zeros((self._M, self._N), dtype=np.complex128)
+
+            Jz[src_domain.j, src_domain.k] = src[0]
+            Mx[src_domain.j, src_domain.k] = src[1]
+            My[src_domain.j, src_domain.k] = src[2]
+
+            self.Jz = Jz
+            self.Mx = Mx
+            self.My = My
+        else:
+            self.Jz = src[0]
+            self.Mx = src[1]
+            self.My = src[2]
 
         src_arr = np.zeros(self.Nc*self._M*self._N, dtype=np.complex128)
         src_arr[0::self.Nc] = self.Jz.ravel()
@@ -1513,13 +1549,12 @@ class FDFD_TM(FDFD_TE):
         self._eps_actual = eps
         self._mu_actual = mu
 
-    def set_sources(self, src):
+    def set_sources(self, src, src_domain=None, mindex=0):
         """Set the sources of the system used in the forward solve.
 
-        Currently, sources are defined using 3 numpy.ndarrays.  The elements of
-        the array correspond to spatially-dependent electric or magnetic current
-        sources.  In the future, more structured source elements may be
-        implemented.
+        The sources can be defined either using three numpy arrays or using a
+        mode source. When using a mode source, the corresponding current
+        density arrays will be automatically generated and extracted.
 
         Notes
         -----
@@ -1530,20 +1565,51 @@ class FDFD_TM(FDFD_TE):
         shifted in the negative x direction by half of a grid cell.  It is
         important to take this into account when defining the current sources.
 
+        Notes
+        -----
+        Like the underlying fields, the current sources are represented on a
+        set of shifted grids.  In particular, :math:`J_z`'s are all located at
+        the center of a grid cell, the :math:`M_x`'s are shifted in the
+        positive y direction by half a grid cell, and the :math:`M_y`'s are
+        shifted in the negative x direction by half of a grid cell.  It is
+        important to take this into account when defining the current sources.
+
         Todo
         ----
-        Implement a more user-friendly version of these sources (so that you do
+        1. Implement a more user-friendly version of these sources (so that you do
         not need to deal with the Yee cell implementation).
+
+        2. Implement this in a better parallelized way
 
         Parameters
         ----------
-        src : tuple of numpy.ndarray
-            The current sources in the form (Mz, Jx, Jy).  Each array in the
-            tiple should be a 2D numpy.ndarry with dimensions MxN.
+        src : tuple of numpy.ndarray or modes.ModeTM
+            (Option 1) The current sources in the form (Mz, Jx, Jy).  Each array in the
+            tuple should be a 2D numpy.ndarry with dimensions MxN.
+            (Option 2), a mode source which has been built and solved.
+        src_domain : emopt.misc.DomainCoordinates (optional)
+            Specifies the location of the provided current source distribution
+            or mode source. If None, it is assumed that source arrays have been
+            provided and those source arrays span the whole simulation region
+            (i.e. have size MxN)
+        mindx : int (optional)
+            Specifies the index of the mode source (only used if a mode source
+            is passed in as src)
         """
+        if(isinstance(src, modes.ModeTM)):
+            msrc = src.get_source(mindex, self._dx, self._dy)
+
+            Mz = msrc[0]
+            Jx = msrc[1]
+            Jy = msrc[2]
+        else:
+            Mz = src[0]
+            Jx = src[1]
+            Jy = src[2]
         # In order to properly make use of the TE subclass, we need to flip the
         # sign of Jx and Jy
-        super(FDFD_TM, self).set_sources((src[0], -1*src[1], -1*src[2]))
+        super(FDFD_TM, self).set_sources((Mz, -1*Jx, -1*Jy),
+                                         src_domain, mindex)
 
     def set_adjoint_sources(self, src):
         """Set the sources of the system used in the adjoint solve.

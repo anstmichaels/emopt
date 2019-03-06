@@ -1,6 +1,5 @@
 """Demonstrate how to set up a simple simulation in emopt consisting of a
-waveguide which is excited by a mode source which injects the fundamental mode
-of the waveguide.
+waveguide which is excited with the fundamental mode of the waveguide.
 
 On most *nix-based machines, run the script with:
 
@@ -13,13 +12,12 @@ import emopt
 from emopt.misc import NOT_PARALLEL
 
 import numpy as np
-from math import pi
 
 ####################################################################################
 #Simulation Region parameters
 ####################################################################################
-W = 10.0
-H = 7.0
+W = 5.0
+H = 5.0
 dx = 0.02
 dy = 0.02
 wlen = 1.55
@@ -38,10 +36,10 @@ M = sim.M
 N = sim.N
 
 ####################################################################################
-# Setup system materials
+# Setup system materials and geometry
 ####################################################################################
 # Material constants
-n0 = 1.0
+n0 = 1.44
 n1 = 3.45
 
 # set a background permittivity of 1
@@ -50,7 +48,7 @@ eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
-h_wg = 0.11
+h_wg = 0.22
 waveguide = emopt.grid.Rectangle(W/2, H/2, W*2, h_wg)
 waveguide.layer = 1
 waveguide.material_value = n1**2
@@ -70,15 +68,10 @@ sim.set_materials(eps, mu)
 ####################################################################################
 # setup the sources
 ####################################################################################
-# The electric and magnetic current densities are defined at each point in the
-# discretize domain.  Currently we have to explicitly set this.
-Jz = np.zeros([M,N], dtype=np.complex128)
-Mx = np.zeros([M,N], dtype=np.complex128)
-My = np.zeros([M,N], dtype=np.complex128)
-
 # Specify a line of coordinates where the source is defined
-src_line = emopt.misc.DomainCoordinates(2.0, 2.0, H/2.0-2.5, H/2.0+2.5, 0.0, 0.0,
-                             dx, dy, 1.0)
+src_line = emopt.misc.DomainCoordinates(W/4, W/4,
+                                        sim.w_pml[2], H-sim.w_pml[3], 0.0, 0.0,
+                                        dx, dy, 1.0)
 
 # setup, build the system, and solve
 mode = emopt.modes.ModeTE(wlen, eps, mu, src_line, n0=n1, neigs=4)
@@ -89,16 +82,8 @@ mode.solve()
 # want.  We find the desired TE_X mode
 mindex = mode.find_mode_index(0)
 
-# Calculate the current sources for this mode
-msrc = mode.get_source(mindex, dx, dy)
-
-# set the current source distributions. The only non-zero current sources are
-# along the line where we calculated the mode
-Jz[src_line.j, src_line.k] = msrc[0] # make column vector
-Mx[src_line.j, src_line.k] = msrc[1]
-My[src_line.j, src_line.k] = msrc[2]
-
-sim.set_sources((Jz, Mx, My))
+# set the sources using our mode solver
+sim.set_sources(mode, src_line, mindex)
 
 ####################################################################################
 # Build and simulate
@@ -125,7 +110,7 @@ if(NOT_PARALLEL):
                             vmax=np.max(Ez.real)/1.0,
                             cmap='seismic')
     f.colorbar(im)
-    ax.set_title('E$_z$', fontsize=18)
+    ax.set_title('Re{$E_z$}', fontsize=18)
     ax.set_xlabel('x [um]', fontsize=14)
     ax.set_ylabel('y [um]', fontsize=14)
     plt.show()

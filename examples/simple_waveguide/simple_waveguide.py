@@ -14,7 +14,6 @@ import emopt
 from emopt.misc import NOT_PARALLEL
 
 import numpy as np
-from math import pi
 
 ####################################################################################
 #Simulation Region parameters
@@ -26,6 +25,12 @@ dy = 0.02
 wlen = 1.55
 sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
 
+# by default, PML size is chosen for you. If you want to specify your own PML
+# sizes you can set them using the sim.w_pml attribute which is an array with 4
+# values [w_xmin, w_xmax, w_ymin, w_ymax] where each value is a PML width for
+# the corresponding simulation boundary. e.g.
+# sim.w_pml = [dx*12, dx*12, dx*12, dx*12]
+
 # Get the actual width and height
 # The true width/height will not necessarily match what we used when
 # initializing the solver. This is the case when the width is not an integer
@@ -34,6 +39,7 @@ W = sim.W
 H = sim.H
 M = sim.M
 N = sim.N
+
 
 ####################################################################################
 # Setup system materials
@@ -99,6 +105,11 @@ if(NOT_PARALLEL):
                             vmin=-np.max(Ez.real)/1.0,
                             vmax=np.max(Ez.real)/1.0,
                             cmap='seismic')
+
+    # Plot the waveguide boundaries
+    ax.plot(extent[0:2], [H/2-h_wg/2, H/2-h_wg/2], 'k-')
+    ax.plot(extent[0:2], [H/2+h_wg/2, H/2+h_wg/2], 'k-')
+
     ax.set_title('E$_z$', fontsize=18)
     ax.set_xlabel('x [um]', fontsize=14)
     ax.set_ylabel('y [um]', fontsize=14)

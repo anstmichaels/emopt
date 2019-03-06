@@ -730,13 +730,16 @@ class AdjointMethod(object):
                 ax2 = f.add_subplot(312)
                 ax3 = f.add_subplot(313)
 
-
-                ax1.bar(indices, grad_fd)
+                xs = np.arange(len(indices))
+                ax1.bar(xs, grad_fd)
                 ax1.set_title('Finite Differences')
-                ax2.bar(indices, grad_am[indices])
+                ax2.bar(xs, grad_am[indices])
                 ax2.set_title('Adjoint Method')
-                ax3.bar(indices, errors)
+                ax3.bar(xs, errors)
                 ax3.set_title('Error in Adjoint Method')
+
+                for ax in [ax1, ax2, ax3]:
+                    ax.set_xticklabels(['%d' % i for i in indices])
 
                 ax3.set_yscale('log', nonposy='clip')
 

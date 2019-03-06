@@ -1,7 +1,7 @@
 """Various functions associated loading and saving files.
 """
 
-from misc import run_on_master, warning_message
+from misc import run_on_master, warning_message, NOT_PARALLEL, COMM
 from grid import Polygon
 import numpy as np
 
@@ -225,7 +225,7 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
         plt.tight_layout()
         plt.show()
 
-
+@run_on_master
 def save_results(fname, data, additional=None):
     """Save an hdf5 file containing common simulation and optimization results.
 
@@ -330,7 +330,7 @@ def save_results(fname, data, additional=None):
                 group_misc.create_dataset(key, data=additional[key])
 
 
-def load_results(fname):
+def load_results(fname, bcast=True):
     """
     Load data that has been saved with the :func:`save_results` function.
 
@@ -338,6 +338,9 @@ def load_results(fname):
     ----------
     fname : string
         The file name and path of file from which data is loaded.
+    bcast : bool (optional)
+        If True, broadcast the loaded data to all of the processes. (default =
+        True)
 
     Returns
     -------
@@ -348,20 +351,24 @@ def load_results(fname):
 
     data = {}
 
-    fname_full = ''.join([fname, '.h5'])
-    with h5py.File(fname_full, "r") as fh5:
+    if(NOT_PARALLEL):
+        fname_full = ''.join([fname, '.h5'])
+        with h5py.File(fname_full, "r") as fh5:
 
-        for key in fh5['simulation'].keys():
-            data[key] = fh5['simulation'][key][...]
+            for key in fh5['simulation'].keys():
+                data[key] = fh5['simulation'][key][...]
 
-        for key in fh5['simulation'].attrs.keys():
-            data[key] = fh5['simulation'].attrs[key][...]
+            for key in fh5['simulation'].attrs.keys():
+                data[key] = fh5['simulation'].attrs[key][...]
 
-        for key in fh5['optimization'].keys():
-            data[key] = fh5['optimization'][key][...]
+            for key in fh5['optimization'].keys():
+                data[key] = fh5['optimization'][key][...]
 
-        for key in fh5['misc'].keys():
-            data[key] = fh5['misc'][key][...]
+            for key in fh5['misc'].keys():
+                data[key] = fh5['misc'][key][...]
+
+    if(bcast):
+        data = COMM.bcast(data, root=0)
 
     return data
 

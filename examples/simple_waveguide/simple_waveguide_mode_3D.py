@@ -44,7 +44,7 @@ wavelength = 1.55
 #####################################################################################
 # Setup simulation
 #####################################################################################
-sim = emopt.fdfd.FDFD_3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5)
+sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5)
 w_pml = dx * 15
 sim.w_pml = [w_pml, w_pml, w_pml, w_pml, w_pml, w_pml]
 

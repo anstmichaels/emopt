@@ -24,8 +24,7 @@ def radius_of_curvature(x1, x2, x3, y1, y2, y3):
 
     Notes
     -----
-    To find the derivative of this function, it is easiest to simply perform a
-    finite difference.
+    The radius of curvature is signed.
 
     Parameters
     ----------
@@ -43,13 +42,15 @@ def radius_of_curvature(x1, x2, x3, y1, y2, y3):
         The y coordinate of the third point
 
     Returns
+    -------
     float
         The approximate radius of curvature of the set of points
     """
     t0 = 0
-    t1 = np.sqrt((x2-x1)**2 + (y2-y1)**2)
-    t2 = np.sqrt((x3-x2)**2 + (y3-y2)**2) + t1
-    t1 = t1/t2
+    #t1 = np.sqrt((x2-x1)**2 + (y2-y1)**2)
+    #t2 = np.sqrt((x3-x2)**2 + (y3-y2)**2) + t1
+    #t1 = t1/t2
+    t1 = 0.5
     t2 = 1.0
 
     c = x1
@@ -61,10 +62,245 @@ def radius_of_curvature(x1, x2, x3, y1, y2, y3):
     e = y3-y1-d
 
     # We calculate the radius of curvature at point x2
-    R = np.power((2*a*t1+b)**2 + (2*d*t1+e)**2, 1.5) / np.abs((2*a*t1+b)*2*d - (2*d*t1+e)*2*a)
+    R = np.power((2*a*t1+b)**2 + (2*d*t1+e)**2, 1.5) / ((2*a*t1+b)*2*d - (2*d*t1+e)*2*a)
 
     return float(R)
 
+def d_roc_dx1(x1, x2, x3, y1, y2, y3):
+    """Calculate the derivative of the radius of curvature with respect to the
+    changes in the x coordinate of the point.
+
+    This function calculates the derivative of the approximate radius of
+    curvature at a point (x2, y2) with respect to x1.
+
+    Notes
+    -----
+    Currently this is computed using a finite difference which will introduce a
+    small amount of error and be slightly less performant than an analytic
+    implementation. An analytic implementation will be implemented soon!
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the first point
+    x2 : float
+        The x coordinate of the second point
+    x3 : float
+        The x coordinate of the third point
+    y1 : float
+        The y coordinate of the first point
+    y2 : float
+        The y coordinate of the second point
+    y3 : float
+        The y coordinate of the third point
+
+    Returns
+    -------
+    float
+        The derivative of the approximate radius of curvature at point (x2, y2)
+        with respect to x1.
+    """
+    return 0.125*(12.0*(-x1 + x3)*((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))*((x1 - x3)**2 + \
+           (y1 - y3)**2)**0.5 - 16.0*(y2 - y3)*((x1 - x3)**2 + \
+           (y1 - y3)**2)**1.5)/((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))**2
+
+def d_roc_dx2(x1, x2, x3, y1, y2, y3):
+    """Calculate the derivative of the radius of curvature with respect to the
+    changes in the x coordinate of the point.
+
+    This function calculates the derivative of the approximate radius of
+    curvature at a point (x2, y2) with respect to x2.
+
+    Notes
+    -----
+    Currently this is computed using a finite difference which will introduce a
+    small amount of error and be slightly less performant than an analytic
+    implementation. An analytic implementation will be implemented soon!
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the first point
+    x2 : float
+        The x coordinate of the second point
+    x3 : float
+        The x coordinate of the third point
+    y1 : float
+        The y coordinate of the first point
+    y2 : float
+        The y coordinate of the second point
+    y3 : float
+        The y coordinate of the third point
+
+    Returns
+    -------
+    float
+        The derivative of the approximate radius of curvature at point (x2, y2)
+        with respect to x2.
+    """
+    return 2.0*(y1 - y3)*((x1 - x3)**2 + \
+           (y1 - y3)**2)**1.5/((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))**2
+
+def d_roc_dx3(x1, x2, x3, y1, y2, y3):
+    """Calculate the derivative of the radius of curvature with respect to the
+    changes in the x coordinate of the point.
+
+    This function calculates the derivative of the approximate radius of
+    curvature at a point (x2, y2) with respect to x3.
+
+    Notes
+    -----
+    Currently this is computed using a finite difference which will introduce a
+    small amount of error and be slightly less performant than an analytic
+    implementation. An analytic implementation will be implemented soon!
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the first point
+    x2 : float
+        The x coordinate of the second point
+    x3 : float
+        The x coordinate of the third point
+    y1 : float
+        The y coordinate of the first point
+    y2 : float
+        The y coordinate of the second point
+    y3 : float
+        The y coordinate of the third point
+
+    Returns
+    -------
+    float
+        The derivative of the approximate radius of curvature at point (x2, y2)
+        with respect to x3.
+    """
+    return 0.125*(12.0*(x1 - x3)*((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))*((x1 - x3)**2 + \
+           (y1 - y3)**2)**0.5 - 16.0*(y1 - y2)*((x1 - x3)**2 + \
+           (y1 - y3)**2)**1.5)/((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))**2
+
+def d_roc_dy1(x1, x2, x3, y1, y2, y3):
+    """Calculate the derivative of the radius of curvature with respect to the
+    changes in the y coordinate of the point.
+
+    This function calculates the derivative of the approximate radius of
+    curvature at a point (x2, y2) with respect to y1.
+
+    Notes
+    -----
+    Currently this is computed using a finite difference which will introduce a
+    small amount of error and be slightly less performant than an analytic
+    implementation. An analytic implementation will be implemented soon!
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the first point
+    x2 : float
+        The x coordinate of the second point
+    x3 : float
+        The x coordinate of the third point
+    y1 : float
+        The y coordinate of the first point
+    y2 : float
+        The y coordinate of the second point
+    y3 : float
+        The y coordinate of the third point
+
+    Returns
+    -------
+    float
+        The derivative of the approximate radius of curvature at point (x2, y2)
+        with respect to y1.
+    """
+    return 0.125*(16.0*(x2 - x3)*((x1 - x3)**2 + (y1 - y3)**2)**1.5 + \
+           12.0*(-y1 + y3)*((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))*((x1 - x3)**2 + \
+           (y1 - y3)**2)**0.5)/((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))**2
+
+def d_roc_dy2(x1, x2, x3, y1, y2, y3):
+    """Calculate the derivative of the radius of curvature with respect to the
+    changes in the y coordinate of the point.
+
+    This function calculates the derivative of the approximate radius of
+    curvature at a point (x2, y2) with respect to y2.
+
+    Notes
+    -----
+    Currently this is computed using a finite difference which will introduce a
+    small amount of error and be slightly less performant than an analytic
+    implementation. An analytic implementation will be implemented soon!
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the first point
+    x2 : float
+        The x coordinate of the second point
+    x3 : float
+        The x coordinate of the third point
+    y1 : float
+        The y coordinate of the first point
+    y2 : float
+        The y coordinate of the second point
+    y3 : float
+        The y coordinate of the third point
+
+    Returns
+    -------
+    float
+        The derivative of the approximate radius of curvature at point (x2, y2)
+        with respect to y2.
+    """
+    return 2.0*(-x1 + x3)*((x1 - x3)**2 + \
+           (y1 - y3)**2)**1.5/((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))**2
+
+def d_roc_dy3(x1, x2, x3, y1, y2, y3):
+    """Calculate the derivative of the radius of curvature with respect to the
+    changes in the y coordinate of the point.
+
+    This function calculates the derivative of the approximate radius of
+    curvature at a point (x2, y2) with respect to y3.
+
+    Notes
+    -----
+    Currently this is computed using a finite difference which will introduce a
+    small amount of error and be slightly less performant than an analytic
+    implementation. An analytic implementation will be implemented soon!
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the first point
+    x2 : float
+        The x coordinate of the second point
+    x3 : float
+        The x coordinate of the third point
+    y1 : float
+        The y coordinate of the first point
+    y2 : float
+        The y coordinate of the second point
+    y3 : float
+        The y coordinate of the third point
+
+    Returns
+    -------
+    float
+        The derivative of the approximate radius of curvature at point (x2, y2)
+        with respect to y3.
+    """
+    return 0.125*(16.0*(x1 - x2)*((x1 - x3)**2 + (y1 - y3)**2)**1.5 + \
+           12.0*(y1 - y3)*((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))*((x1 - x3)**2 + \
+           (y1 - y3)**2)**0.5)/((x1 - x3)*(2.0*y1 - 4.0*y2 + 2.0*y3) - \
+           (y1 - y3)*(2.0*x1 - 4.0*x2 + 2.0*x3))**2
 
 def step(x, k, y0=0, A=1.0):
     """Compute the value of a smooth and analytic step function.
@@ -97,8 +333,27 @@ def step(x, k, y0=0, A=1.0):
     """
     return A / (1 + np.exp(-k*x)) + y0
 
-def step_derivative(x, k, A=1.0):
-    pass
+def step_derivative(x, k, y0=0, A=1.0):
+    """Compute the derivative of a smooth approximation of a step function.
+
+    Parameters
+    ----------
+    x : float or numpy.ndarray
+        The input values
+    k : float
+        The steepness of step function
+    y0 : float (optional)
+        The shift of the step function (default = 0)
+    A : float (optional)
+        The scale factor of the step function (default = 1.0)
+
+    Returns
+    -------
+    float or numpy.ndarray
+        The dertivative of the step function applied to x.
+    """
+    exp_func = np.exp(-k*x)
+    return A*k*exp_func / (1+exp_func)**2
 
 def calc_ROC_foms(x, y, Rmin, k):
     """Calculate a figure of merit which imposes a minimum radius of curvature

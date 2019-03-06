@@ -9,18 +9,29 @@ detailed example optimizations. After completing these two tutorials, you
 should have a pretty good idea of how to setup EMopt for your own
 optimizations.
 
+===========
+2D Examples
+===========
+
 .. toctree::
-    :maxdepth: 3
-    :caption: 2D Examples
+    :maxdepth: 1
+    :numbered:
 
     tutorial_2D_waveguide_sim
+    tutorial_1D_mode_solution
+    tutorial_2D_waveguide_mode_sim
     tutorial_2D_grating_coupler
 
+===========
+3D Examples
+===========
+
 .. toctree::
-    :maxdepth: 3
-    :caption: 3D Examples
+    :maxdepth: 1
+    :numbered:
 
     tutorial_3D_waveguide_sim
+    tutorial_2D_mode_solution
     tutorial_3D_mmi_splitter
 
 ===================

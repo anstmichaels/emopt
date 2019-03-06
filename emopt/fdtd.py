@@ -1541,19 +1541,19 @@ class FDTD(MaxwellSolver):
         else: xmin = 0.0
 
         if(self._w_pml[1] > 0): xmax = self._X - self._w_pml[1]-dx
-        else: xmax = self._X
+        else: xmax = self._X - self._dx
 
         if(self._w_pml[2] > 0): ymin = self._w_pml[2]+dy
         else: ymin = 0.0
 
         if(self._w_pml[3] > 0): ymax = self._Y - self._w_pml[3]-dy
-        else: ymax = self._Y
+        else: ymax = self._Y - self._dy
 
         if(self._w_pml[4] > 0): zmin = self._w_pml[4]+dz
         else: zmin = 0.0
 
         if(self._w_pml[5] > 0): zmax = self._Z - self._w_pml[5]-dz
-        else: zmax = self._Z
+        else: zmax = self._Z - self._dz
 
         x1 = DomainCoordinates(xmin, xmin, ymin, ymax, zmin, zmax, dx, dy, dz)
         x2 = DomainCoordinates(xmax, xmax, ymin, ymax, zmin, zmax, dx, dy, dz)

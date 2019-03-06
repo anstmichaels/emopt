@@ -1,3 +1,30 @@
+Released on March 6, 2019
+-------------------------
+
+1. Added points_per_bend argument to emopt.geometry.fillet function. This allows you
+to explicitly specify a fixed number of points for the rounded corner. This is
+important when changing the angle of a corner in an optimization. In retrospect,
+specifying the number of points in the fillet is probably preferable to specifying
+the number of points per 90 degrees. Consider points_per_90 to be depricated.
+
+2. Changed behavior of FDFD_TE.set_sources() and FDFD_TM.set_sources such that
+they accept a mode solver object as an alternative to explicitly specifying the
+current density arrays. The FDFD objects will automatically extract the current
+density arrays. This is consistent with how the 3D solvers work.
+
+3. Modified 3D examples to use FDTD solver instead of FDFD solver.
+
+4. Big documentation updates: Readthedocs now has tutorials. In particular,
+tutorials for:
+
+     a) Setting up and running 2D simulations
+     b) Setting up and running 1D mode solutions
+     d) Setting up and running 2D mode solutions
+     e) Setting up and performing 2D optimizations
+
+have been added. This documentation is still a work in progress and 3D
+tutorials will be added soon!
+
 Released on November 16, 2018
 ------------------------------
 

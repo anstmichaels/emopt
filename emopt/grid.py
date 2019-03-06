@@ -499,12 +499,16 @@ class Rectangle(MaterialPrimitive):
 
 class Polygon(MaterialPrimitive):
 
-    def __init__(self):
+    def __init__(self, xs=None, ys=None):
         self._object = libGrid.Polygon_new()
 
-        self._xs = []
-        self._ys = []
-        self._Np = []
+        if(xs is None or ys is None):
+            self._xs = []
+            self._ys = []
+            self._Np = []
+        else:
+            self.set_points(xs,ys)
+
         self._value = 1.0
 
     @property

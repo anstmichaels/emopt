@@ -30,7 +30,10 @@ Andrew Michaels
 EMOpt is currently released under the GPL license (see LICENSE.md for details)
 
 ## References
-The methods employed by EMOpt are described in:
+The methods employed by EMopt are described in:
 
 Andrew Michaels and Eli Yablonovitch, "Leveraging continuous material averaging for inverse electromagnetic design," Opt. Express 26, 31717-31737 (2018)
 
+An example of applying these methods to real design problems can be found in:
+
+Andrew Michaels and Eli Yablonovitch, "Inverse design of near unity efficiency perfectly vertical grating couplers," Opt. Express 26, 4766-4779 (2018)

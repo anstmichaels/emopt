@@ -70,8 +70,8 @@ class SiliconGratingAM(AdjointMethodPNF):
     mm_line : emopt.misc.DomainCoordinates
         The line where the mode match is computed.
     """
-    def __init__(self, sim, grating_etch, wg, substrate, y_ts, w_in, h_wg, H, Ng,
-                 eps_clad, mm_line):
+    def __init__(self, sim, grating_etch, wg, substrate, y_ts, w_in, h_wg, H,
+                 Ng, Nc, eps_clad, mm_line):
         super(SiliconGratingAM, self).__init__(sim, step=1e-10)
 
         # save the variables for later
@@ -81,6 +81,7 @@ class SiliconGratingAM(AdjointMethodPNF):
         self.h_wg = h_wg
         self.H = H
         self.Ng = Ng
+        self.Nc = Nc
         self.wg = wg
         self.substrate = substrate
 
@@ -89,14 +90,15 @@ class SiliconGratingAM(AdjointMethodPNF):
         # desired Gaussian beam properties used in mode match
         theta = 8.0/180.0*pi
         match_w0 = 5.2
-        match_center = 11.0
+        match_center = 13.0
 
         # Define the desired field profiles
-        # We want to generate a vertical Gaussian beam, so these are the fields
-        # are the use in our calculation of the mode match
-        Ezm = Ez_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
-        Hxm = Hx_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
-        Hym = Hy_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
+        # We use a tilted Gaussian beam which approximates a fiber mode
+        Ezm, Hxm, Hym = emopt.misc.gaussian_fields(mm_line.x-match_center,
+                                                      0.0, 0.0, match_w0,
+                                                      theta, sim.wavelength,
+                                                      np.sqrt(eps_clad))
+
         self.mode_match = emopt.fomutils.ModeMatch([0,1,0], sim.dx, Ezm=Ezm, Hxm=Hxm, Hym=Hym)
 
         self.current_fom = 0.0
@@ -106,7 +108,8 @@ class SiliconGratingAM(AdjointMethodPNF):
         design parameters.
 
         The design parameters of the a list of fourier series coefficients
-        which are used to compute the etch widths and period along the grating.
+        which are used to compute the etch widths and period along the grating
+        plus the BOX thickness, etch depth, and shift of the whole grating.
 
         A fourier series representation for the grating dimensions is chosen
         because it forces the grating to evolve in a smooth and gradual way
@@ -115,18 +118,21 @@ class SiliconGratingAM(AdjointMethodPNF):
         This generally works pretty well, as well.
         """
         coeffs = params
-        N_coeffs = (len(coeffs) - 3) / 4
+        Nc = self.Nc
 
         h_etch = params[-3]
         h_BOX = params[-1]
         x0 = self.w_in + params[-2]
 
         # compute the periods and duty factors using a Fourier series
-        fseries = lambda i, coeffs : coeffs[0] + np.sum([coeffs[j] *np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) \
-                                            + np.sum([coeffs[N_coeffs + j] * np.cos(pi/2*i*j*1.0/self.Ng) for j in range(0,N_coeffs)])
+        fseries = lambda i, coeffs : \
+                  coeffs[0] + np.sum([coeffs[j] *np.sin(pi/2*i*j*1.0/self.Ng) \
+                                      for j in range(1,Nc)]) \
+                            + np.sum([coeffs[Nc + j] * np.cos(pi/2*i*j*1.0/self.Ng) \
+                                      for j in range(0,Nc)])
         for i in range(self.Ng):
-            w_etch = fseries(i, coeffs[0:2*N_coeffs])
-            period = fseries(i, coeffs[2*N_coeffs:4*N_coeffs])
+            w_etch = fseries(i, coeffs[0:2*Nc])
+            period = fseries(i, coeffs[2*Nc:4*Nc])
 
             # update the rectangles
             self.grating_etch[i].width  = w_etch
@@ -253,7 +259,8 @@ def plot_update(params, fom_list, sim, am):
 
     foms = {'Insertion Loss' : fom_list}
     emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Wreal,
-                            sim.Hreal, foms, fname='current_result.pdf')
+                            sim.Hreal, foms, fname='current_result.pdf',
+                            dark=False)
 
     data = {}
     data['Ez'] = Ez
@@ -264,7 +271,7 @@ def plot_update(params, fom_list, sim, am):
     data['foms'] = fom_list
 
     i = len(fom_list)
-    fname = 'data/gc_8deg_opt'
+    fname = 'data/gc_opt_results'
     emopt.io.save_results(fname, data)
 
 if __name__ == '__main__':
@@ -272,12 +279,10 @@ if __name__ == '__main__':
     # define the system parameters
     ####################################################################################
     wavelength = 1.55
-    W = 26.0
+    W = 28.0
     H = 8.0
     dx = 0.02
     dy = dx
-    w_pml = 1.0
-    w_src= 3.5
 
     # create the simulation object.
     # TE => Ez, Hx, Hy
@@ -288,69 +293,63 @@ if __name__ == '__main__':
     H = sim.H
     M = sim.M
     N = sim.N
+    w_pml = sim.w_pml[0] # PML width which is the same on all boundaries by default
 
     ####################################################################################
     # Define the structure
     ####################################################################################
     n_si = emopt.misc.n_silicon(wavelength)
-    eps_core = n_si**2
+    eps_si = n_si**2
     eps_clad = 1.444**2
 
     # the effective indices are precomputed for simplicity.  We can compute
     # these values using emopt.modes
-    neff = 2.8548
-    neff_etched = 2.0879
+    neff = 2.86
+    neff_etched = 2.10
+    n0 = np.sqrt(eps_clad)
 
     # set up the initial dimensions of the waveguide structure that we are exciting
     h_wg = 0.28
     h_etch = 0.19 # etch depth
     w_wg_input = 5.0
-
-    # define the starting parameters of the partially-etched grating
-    # notably the period and shift between top and bottom layers
-    ne1 = neff
-    ne2 = neff_etched
-    n0 = np.sqrt(eps_clad)
-    df = 0.75
-    theta = 8.0/180.0*pi
-
-    period = wavelength / (df * ne1 + (1-df)*ne2 - n0*np.sin(theta))
+    Ng = 26 #number of grating teeth
 
     # set the center position of the top silicon and the etches
     y_ts = H/2.0
     y_etch = y_ts + h_wg/2.0 - h_etch/2.0
 
+    # define the starting parameters of the partially-etched grating
+    # notably the period and shift between top and bottom layers
+    df = 0.8
+    theta = 8.0/180.0*pi
+    period = wavelength / (df * neff + (1-df)*neff_etched - n0*np.sin(theta))
+
     # We now build up the grating using a bunch of rectangles
-    Ng = 26
     grating_etch = []
 
     for i in range(Ng):
-        rect_etch = emopt.grid.Rectangle(0,y_etch, (1-df)*period, h_etch)
+        rect_etch = emopt.grid.Rectangle(w_wg_input+i*period, y_etch,
+                                         (1-df)*period, h_etch)
         rect_etch.layer = 1
         rect_etch.material_value = eps_clad
         grating_etch.append(rect_etch)
 
-    # input waveguide
+    # grating waveguide
     Lwg = Ng*period + w_wg_input
     wg = emopt.grid.Rectangle(Lwg/2.0, y_ts, Lwg, h_wg)
+    wg.layer = 2
+    wg.material_value = eps_si
 
     # define substrate
     h_BOX = 2.0
     h_subs = H/2.0 - h_wg/2.0 - h_BOX
     substrate = emopt.grid.Rectangle(W/2.0, h_subs/2.0, W, h_subs)
+    substrate.layer = 2
+    substrate.material_value = eps_si # silicon
 
     # set the background material using a rectangle equal in size to the system
     background = emopt.grid.Rectangle(W/2,H/2,W,H)
-
-    # set the relative layers of the permitivity primitives
-    wg.layer = 2
-    substrate.layer = 2
     background.layer = 3
-
-    # set the complex permitivies of each shape
-    # the waveguide is Silicon clad in SiO2
-    wg.material_value = eps_core
-    substrate.material_value = eps_core
     background.material_value = eps_clad
 
     # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
@@ -374,21 +373,18 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the sources
     ####################################################################################
-
-    if(NOT_PARALLEL):
-        print('Generating mode data...')
-
-    # We begin by setting up the source
-    Jz = np.zeros([M,N], dtype=np.complex128)
-    Mx = np.zeros([M,N], dtype=np.complex128)
-    My = np.zeros([M,N], dtype=np.complex128)
+    w_src= 3.5
 
     # place the source in the simulation domain
     src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, H/2-w_src/2,
                                  H/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver.    
-    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
+    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=n_si, neigs=4)
+
+    if(NOT_PARALLEL):
+        print('Generating mode data...')
+
     mode.build()
     mode.solve()
 
@@ -396,15 +392,8 @@ if __name__ == '__main__':
     # one we fundamental mode.  We have a way to determine this, however
     mindex = mode.find_mode_index(0)
 
-    # calculate the source from the mode fields
-    msrc = mode.get_source(mindex, dx, dy)
-
-    # set the source array explicitly. In the future, this might be managed in
-    # a more high-level manner.
-    Jz[src_line.j, src_line.k] = msrc[0]
-    Mx[src_line.j, src_line.k] = msrc[1]
-    My[src_line.j, src_line.k] = msrc[2]
-    sim.set_sources((Jz, Mx, My))
+    # set the current sources using the mode solver object
+    sim.set_sources(mode, src_line, mindex)
 
     ####################################################################################
     # Setup the mode match domain
@@ -423,13 +412,6 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the optimization
     ####################################################################################
-
-    # We initialize our application-specific adjoint method object which is
-    # responsible for computing the figure of merit and its gradient with
-    # respect to the design parameters of the problem
-    am = SiliconGratingAM(sim, grating_etch, wg, substrate, y_ts,
-                            w_wg_input, h_wg, H, Ng, eps_clad, mm_line)
-
     # inital parameterization is a uniform grating defined by a truncated
     # Fourier series
     N_coeffs = 5
@@ -440,16 +422,26 @@ if __name__ == '__main__':
     design_params[-2] = 0.0
     design_params[-1] = h_BOX
 
-    am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
+    # We initialize our application-specific adjoint method object which is
+    # responsible for computing the figure of merit and its gradient with
+    # respect to the design parameters of the problem
+    am = SiliconGratingAM(sim, grating_etch, wg, substrate, y_ts,
+                            w_wg_input, h_wg, H, Ng, N_coeffs, eps_clad, mm_line)
+
+    data = emopt.io.load_results('data/gc_opt_results')
+    design_params = data['params']
+
+    #am.check_gradient(design_params)
+    #am.check_gradient(design_params, indices=np.arange(0,len(design_params),2))
 
     fom_list = []
     callback = lambda x : plot_update(x, fom_list, sim, am)
 
     # setup and run the optimization!
     opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
-                                    callback_func=callback, Nmax=60)
+                                    callback_func=callback,
+                                    opt_method='BFGS',
+                                    Nmax=40)
 
     # Run the optimization
-    # A good thing to do would be to save the results of the optimization. This
-    # can be done using the emopt.misc.save_results function.
-    opt.run()
+    final_fom, final_params = opt.run()
