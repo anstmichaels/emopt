@@ -27,5 +27,5 @@ setup(name='emopt',
       packages=['emopt'],
       package_data={'emopt':['*.so', '*.csv', 'data/*']},
       cmdclass={'install':MakeInstall},
-      install_requires=['numpy', 'scipy', 'petsc4py', 'slepc4py', 'mpi4py'],
+      install_requires=['numpy', 'scipy', 'mpi4py', 'petsc4py', 'slepc4py'],
       zip_safe=False)

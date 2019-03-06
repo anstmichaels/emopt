@@ -99,7 +99,7 @@ If you reboot, you will need to load it again unless you add this line to your
 
 Finally, we need to install some required python packages::
 
-    $ pip install requests matplotlib numpy scipy --user
+    $ pip install requests matplotlib numpy scipy mpi4py --user
 
 
 -----------------------
@@ -124,7 +124,7 @@ Finally, we need to install a few python prerequisites (technically a few of the
 should be installed by emopt's installation script, but we install them manually just
 to be safe)::
 
-    $ pip install requests matplotlib numpy scipy --user
+    $ pip install requests matplotlib numpy scipy mpi4py --user
 
 --------------------------
 Installing on Ubuntu 18.04
@@ -136,7 +136,7 @@ First, we install necessary packages using ``apt-get``::
 
 Finally, we install a few required python packages::
 
-    $ install requests matplotlib numpy scipy --user
+    $ install requests matplotlib numpy scipy mpi4py --user
 
 ---------------------------------------
 Installing Remaining EMopt Dependencies
