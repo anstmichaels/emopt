@@ -428,10 +428,7 @@ if __name__ == '__main__':
     am = SiliconGratingAM(sim, grating_etch, wg, substrate, y_ts,
                             w_wg_input, h_wg, H, Ng, N_coeffs, eps_clad, mm_line)
 
-    data = emopt.io.load_results('data/gc_opt_results')
-    design_params = data['params']
-
-    #am.check_gradient(design_params)
+    am.check_gradient(design_params)
     #am.check_gradient(design_params, indices=np.arange(0,len(design_params),2))
 
     fom_list = []

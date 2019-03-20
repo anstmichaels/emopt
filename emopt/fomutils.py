@@ -429,8 +429,8 @@ def rect(x, w1p, ws):
         The value of rect(x).
     """
     k = 2*np.log(99.0)/ws
-    x1 = -w1p/2.0 + 1/k*np.log(99.0)
-    x2 = w1p/2.0 - 1/k*np.log(99.0)
+    x1 = -w1p/2.0 + ws/2
+    x2 = w1p/2.0 - ws/2
 
     return 1/(1 + np.exp(-k*(x-x1))) - 1/(1 + np.exp(-k*(x-x2)))
 
@@ -457,6 +457,116 @@ def rect_derivative(x, w1p, ws):
     x2 = + w1p/2.0 - 1/k*np.log(99.0)
 
     return k*np.exp(-k*(x-x1))/(1 + np.exp(-k*(x-x1)))**2 - k*np.exp(-k*(x-x2))/(1 + np.exp(-k*(x-x2)))**2
+
+def normal_dist_to_y(x, y, y0):
+    """Calculate the approximate distance from each point in a polygon to a y
+    position along the polygon normal direction.
+
+    Given a polygon defined by a set of x and y coordinates, find the distance
+    from each point in that polygon to a desired y position. The normal
+    direction is approximated based on the surrounding points.s
+
+    Paramters
+    ---------
+    x : list or np.array
+        X coordinates of polygon
+    y : list or np.array
+        Y coordinates of polygon
+
+    Returns
+    -------
+    np.array
+        List of distances with length N-2 where N=len(x)
+    """
+    x1 = x[0:-2]; x2 = x[1:-1]; x3 = x[2:]
+    y1 = y[0:-2]; y2 = y[1:-1]; y3 = y[2:]
+
+    dx = x3-x1
+    dy = y3-y1
+    ds = np.sqrt(dx**2 + dy**2)
+    nx = dy / ds
+    ny = -dx / ds
+
+    xb = x2 + nx/ny * (y0-y2)
+    dists = np.sqrt((xb-x2)**2 + (y0-y2)**2)
+
+    return dists
+
+def dist_to_edges(x1, x2, x3, y1, y2, y3, xe, ye):
+    """Calculate the signed distance to a set of edges.
+
+    Given a set of three points (x1, y1), (x2, y2), and (x3, y3) calculate the
+    distance from (x2, y2) to the edges defined by lists of coordinates xe and
+    ye. These distances typically correspond to gaps and bridges in a polygon.
+
+    Parameters
+    ----------
+    x1 : float
+        The x coordinate of the "previous" point
+    y1 : float
+        The y coordinate of the "previous" point
+    x2 : float
+        The x coordinate of the "current" point
+    y2 : float
+        The y coordinate of the "current" point
+    x3 : float
+        The x coordinate of the "next" point
+    y3 : float
+        The y coordinate of the "next" point
+    xe : float
+        The list of x coordinates which define a polygon
+    ye: float
+        The list of y coordinates which define a polygon
+
+    Returns
+    -------
+    np.array
+        The list of signed distances from point (x2, y2) to the edges defined
+        by xe and ye. The number of distances will be equal to the number of
+        edges in the polygon.
+    np.array
+        Parameters used to define edge lines. An intersection with an edge
+        occurs when these parameters are between 0 and 1
+    """
+    ## Get the normal direction
+    dx = x3-x1
+    dy = y3-y1
+    ds = np.sqrt(dx**2 + dy**2)
+    nx = -dy / ds
+    ny = dx / ds
+
+    ## Loop through the edges and check for intersections
+    dists = []
+    us = []
+    Ne = len(xe) - 1
+    for j in range(Ne):
+        xj0 = xe[j]; xj1 = xe[j+1]
+        yj0 = ye[j]; yj1 = ye[j+1]
+
+        dx = xj1 - xj0
+        dy = yj1 - yj0
+
+        ## check for parallel lines
+        if(dy*nx - dx*ny == 0.0):
+            return np.array([]), np.array([])
+
+        t = (dx*(y2-yj0) - dy*(x2-xj0)) / (dy*nx - dx*ny)
+        u = (nx*(yj0-y2) - ny*(xj0-x2)) / (ny*dx - nx*dy)
+
+        xu = dx*u + xj0
+        yu = dy*u + yj0
+
+        dist = np.sqrt((xu-x2)**2 + (yu-y2)**2)
+
+        ## sign the distance based on sign(t)
+        # this can tell us if we have a bridge or gap
+        dist *= np.sign(t)
+
+        dists.append(dist)
+        us.append(u)
+
+    return np.array(dists), np.array(us)
+
 
 #===================================================================================
 # Mode Match

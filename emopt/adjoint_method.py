@@ -574,7 +574,8 @@ class AdjointMethod(object):
         for i in xrange(lenp):
             # send the partially computed gradient to the master node to finish
             # up the calculation
-            COMM.Gatherv(grad_parts[i], grad_full, root=0)
+            #COMM.Gather(grad_parts[i], grad_full, root=0)
+            grad_full = COMM.gather(grad_parts[i], root=0)
 
             # finish calculating the gradient
             if(NOT_PARALLEL):
@@ -1077,7 +1078,8 @@ class AdjointMethodFM(AdjointMethod):
 
             # send the partially computed gradient to the master node to finish
             # up the calculation
-            MPI.COMM_WORLD.Gatherv(grad_part, grad_full, root=0)
+            #MPI.COMM_WORLD.Gather(grad_part, grad_full, root=0)
+            grad_full = MPI.COMM_WORLD.gather(grad_part, root=0)
 
             # We also need dAdp to account for the derivative of eps and mu
             # get the updated diagonal elements of A
