@@ -641,7 +641,7 @@ class AdjointMethod(object):
             return None
 
     def check_gradient(self, params, indices=[], plot=True, verbose=True,
-                       return_gradients=False):
+                       return_gradients=False, fd_step=1e-10):
         """Verify that the gradient is accurate.
 
         It is highly recommended that the accuracy of the gradients be checked
@@ -705,10 +705,10 @@ class AdjointMethod(object):
 
             j = indices[i]
             p0 = params[j]
-            params[j] += self._step
+            params[j] += fd_step
             fom1 = self.fom(params)
             if(NOT_PARALLEL):
-                grad_fd[i] = (fom1-fom0)/self._step
+                grad_fd[i] = (fom1-fom0)/fd_step
             params[j] = p0
 
 
@@ -937,7 +937,7 @@ class AdjointMethodMO(AdjointMethod):
 
 
     def check_gradient(self, params, indices=[], plot=True, verbose=True,
-                       return_gradients=False):
+                       return_gradients=False, fd_step=1e-10):
         """Check the gradient of an multi-objective AdjointMethod.
 
         Parameters
@@ -962,7 +962,9 @@ class AdjointMethodMO(AdjointMethod):
             am.sim.update()
 
         return super(AdjointMethodMO, self).check_gradient(params, indices, plot,
-                                                           verbose, return_gradients)
+                                                           verbose,
+                                                           return_gradients,
+                                                           fd_step)
 
 class AdjointMethodFM(AdjointMethod):
     """Define an :class:`.AdjointMethod` which simplifies the calculation of
