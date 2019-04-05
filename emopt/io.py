@@ -141,8 +141,17 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
                      cmap=struct_cmap)
 
     # outline structure in field plot
-    ax_field.contour(np.flipud(structure), extent=extent, levels=Nlevels,
-                      colors='#666666', linewidths=0.1)
+    # Temporary fix for old versions of Matplotlib which dont support int for
+    # levels
+    try:
+        ax_field.contour(np.flipud(structure), extent=extent, levels=Nlevels,
+                          colors='#666666', linewidths=0.1)
+    except:
+        smin = np.min(structure)
+        smax = np.max(structure)
+        ax_field.contour(np.flipud(structure), extent=extent,
+                         levels=[smin, smax],
+                          colors='#666666', linewidths=0.1)
 
     # set dark colors
     # plot title with important iteration number, etc
