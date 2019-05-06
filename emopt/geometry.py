@@ -7,6 +7,12 @@ import scipy
 from math import pi
 from .misc import warning_message, error_message, NOT_PARALLEL
 
+__author__ = "Andrew Michaels"
+__license__ = "GPL License, Version 3.0"
+__version__ = "2019.5.6"
+__maintainer__ = "Andrew Michaels"
+__status__ = "development"
+
 def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
            ignore_roc_lim=False, points_per_bend=None):
     """Round corners of a polygon.
