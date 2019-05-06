@@ -18,7 +18,8 @@ extern "C" {
 	////////////////////////////////////////////////////////////////////////////////
 	void Material2D_get_value(Material2D* mat, complex64* val, double x, double y);
 
-    void Material2D_get_values(Material2D* mat, int k1, int k2, int j1, int j2, complex64* arr);
+    void Material2D_get_values(Material2D* mat, complex64* arr, int k1, int k2, int j1,
+                               int j2, double sx, double sy);
 
 	////////////////////////////////////////////////////////////////////////////////
 	// GridMaterial2D

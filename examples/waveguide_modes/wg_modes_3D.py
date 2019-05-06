@@ -34,12 +34,12 @@ eps_Si = 3.506**2
 eps_SiO2 = 1.4467**2
 
 w_wg = 1.0
-h_SOI = 0.22
+h_Si = 0.22
 
 # we need to set up the geometry of the cross section for which the mode will
 # be computed. Here we use emopt.grid objects to define the permittivity and
 # permeability of waveguiding structure for which the modes will be calculated
-strip = emopt.grid.Rectangle(W/2, H/2, w_wg, h_SOI)
+strip = emopt.grid.Rectangle(W/2, H/2, w_wg, h_Si)
 eps_bg = emopt.grid.Rectangle(W/2, H/2, 2*W, 2*H)
 
 strip.layer = 1; strip.material_value = eps_Si
@@ -60,11 +60,11 @@ modes = emopt.modes.ModeFullVector(wavelength, eps, mu, domain, n0=np.sqrt(eps_S
 modes.build() # build the eigenvalue problem internally
 modes.solve() # solve for the effective indices and mode profiles
 
-Ex = modes.get_field_interp(0, 'Ex')
+Ex = modes.get_field_interp(0, 'Ex', squeeze=True)
 if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
-    print modes.neff[0]
+    print('Effective index = {:.4}'.format(modes.neff[0].real))
 
     eps_arr = eps.get_values_in(domain)
 
@@ -75,7 +75,10 @@ if(NOT_PARALLEL):
     ax = f.add_subplot(111)
     im = ax.imshow(np.abs(Ex), extent=[0,W,0,H], vmin=vmin,
                      vmax=vmax, cmap='hot', origin='lower')
-    ax.contour(eps_arr.real, levels=[eps_Si,], extent=[0,W,0,H],
-                linewidths=[1,], colors=['w'], alpha=0.5)
+
+    ax.plot([W/2-w_wg/2, W/2+w_wg/2, W/2+w_wg/2, W/2-w_wg/2, W/2-w_wg/2],
+            [H/2+h_Si/2, H/2+h_Si/2, H/2-h_Si/2, H/2-h_Si/2, H/2+h_Si/2],
+            'w-', linewidth=1.0)
+
     f.colorbar(im)
     plt.show()

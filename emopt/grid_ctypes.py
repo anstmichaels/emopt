@@ -26,8 +26,8 @@ c_double_p = ndpointer(np.double, ndim=1, flags='C')
 #####################################################################################
 libGrid.Material2D_get_value.argtypes = [c_void_p, c_complex_1D_p, c_double, c_double]
 libGrid.Material2D_get_value.restype = None
-libGrid.Material2D_get_values.argtypes = [c_void_p, c_int, c_int, c_int, c_int,
-                                          c_complex_1D_p]
+libGrid.Material2D_get_values.argtypes = [c_void_p, c_complex_1D_p, c_int, c_int, c_int,
+                                          c_int, c_double, c_double]
 libGrid.Material2D_get_values.restype = None
 
 ####################################################################################

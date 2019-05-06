@@ -19,8 +19,8 @@ from math import pi
 ####################################################################################
 W = 1.5
 H = 1.0
-dx = 0.01
-dy = 0.01
+dx = 0.02
+dy = 0.02
 N = int(np.ceil(W/dx)+1)
 M = int(np.ceil(H/dy)+1)
 W = (N-1)*dx
@@ -63,7 +63,7 @@ modes.bc = 'HE'
 modes.build() # build the eigenvalue problem internally
 modes.solve() # solve for the effective indices and mode profiles
 
-Ex = modes.get_field_interp(0, 'Ex')
+Ex = modes.get_field_interp(0, 'Ex', squeeze=True)
 if(NOT_PARALLEL):
     import matplotlib.pyplot as plt
 
@@ -76,7 +76,7 @@ if(NOT_PARALLEL):
     H *= 2
     W *= 2
 
-    print modes.neff[0]
+    print('Effective index = {:.4}'.format(modes.neff[0].real))
 
     vmin = np.min(np.abs(Ex))
     vmax = np.max(np.abs(Ex))

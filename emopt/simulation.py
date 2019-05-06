@@ -7,7 +7,9 @@ all Maxwell solvers must implement. This allows us to standard functionality
 and ensure compatibility between modules.
 """
 
+from builtins import object
 from abc import ABCMeta, abstractmethod
+from future.utils import with_metaclass
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
@@ -15,7 +17,7 @@ __version__ = "0.4"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-class MaxwellSolver(object):
+class MaxwellSolver(with_metaclass(ABCMeta, object)):
     """An interface for defining a solver for Maxwell's Equations.
 
     Methods
@@ -55,7 +57,6 @@ class MaxwellSolver(object):
     ndims : int
         number of cartesian dimensions in simulation (2 = 2D sim, 3 = 3D sim)
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, ndims):
         self._field_domains = []
@@ -160,3 +161,15 @@ class MaxwellSolver(object):
         this object.
         """
         pass
+
+    @property
+    def X(self):
+        raise NotImplemented('Simulations must implement the "X" property.')
+
+    @property
+    def Y(self):
+        raise NotImplemented('Simulations must implement the "Y" property.')
+
+    @property
+    def Z(self):
+        raise NotImplemented('3D simulations must implement the "Z" property.')

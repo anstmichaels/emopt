@@ -54,7 +54,7 @@ class Material2D {
 
             /* Get a block of values.
              */
-            virtual void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2) = 0;
+            virtual void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy) = 0;
 			virtual ~Material2D() {};
 };
 
@@ -89,7 +89,7 @@ class GridMaterial2D : public Material2D {
 			 * @return the complex material value at (x,y)
 			 */
 			std::complex<double> get_value(double x, double y);
-            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
+            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy);
 
 			/* Assign a new grid as the <Material>
 			 * @M the number of columns in the array (width)
@@ -474,7 +474,7 @@ class StructuredMaterial2D : public Material2D {
 		 */
 		std::complex<double> get_value(double x, double y);
 
-        void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
+        void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy);
 
         /* Get the list of primitives belonging to this StructuredMaterial
          * @return The std::list<MaterialPrimitive*> containing the constituent
@@ -509,7 +509,7 @@ class ConstantMaterial2D : public Material2D {
              *
              * This just fills the provided array with a single value
              */
-            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2);
+            void get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy);
 
             /* Set the complex material value.
              * @val the complex material value

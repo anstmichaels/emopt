@@ -12,12 +12,12 @@ Mathematically, the adjoint method calculates the gradient of a function
 :math:`F(\mathbf{E}, \mathbf{H})` which has an explicit dependence on the
 electric and magnetic fields (:math:`\mathbf{E}` and :math:`\mathbf{H}`).
 Assuming we have expressed Maxwell's equations as a discretized linear system
-of equations, one can show [1]_ that the gradient of :math:`F` is given by
+of equations, one can show [1]_ that the derivatives of :math:`F` are given by
 
 .. math::
-    \\nabla_\\mathbf{p} F = -2\\Re\\left\{ \\lambda^T \\frac{\\partial A}{\\partial p_i} x\\right\\}
+    \\frac{d F}{d p_i} = -2\\Re\\left\{ y^T \\frac{\\partial A}{\\partial p_i} x\\right\\}
 
-where :math:`x` contains the electric and magnetic fields, :math:`\lambda`
+where :math:`x` contains the electric and magnetic fields, :math:`y`
 contains a second set of 'adjoint' fields which are found by solving a second
 set of linear system of equations which consist of the transposed Maxwell's
 equations, and :math:`\partial A / \partial p_i` describes how the materials in
@@ -25,30 +25,27 @@ the system change with respect to changes to the design variables of the
 system.
 
 The AdjointMethod class does most of the work needed to compute :math:`x`,
-:math:`\lambda`, :math:`\partial A / \partial p_i`, and the gradient
+:math:`y`, :math:`\partial A / \partial p_i`, and the gradient
 :math:`\\nabla_\\mathbf{p}F`.
 
-More generally, we may specify a function of not only the fields, but also of
-additional quantities which depend in some way on the design parameters.  In
-this case, the function is given by
+More generally, we may specify a function of which depndends not only on the
+fields, but also explicitly on the design variables. In this case, the function
+is given by
 
 .. math::
-    F \\rightarrow F(\\mathbf{E}, \\mathbf{H}, y_1, y_2, \cdots, y_N)
+    F \\rightarrow F(\\mathbf{E}, \\mathbf{H}, p_1, p_2, \cdots, p_N)
 
-where :math:`y_1`, ..., :math:`y_N` are functions of the design variables but
-not of the fields.  The derivative of this function with respect to the i'th
+The derivative of this function with respect to the i'th
 design variable, :math:`p_i` is given by
 
 .. math::
-    \\frac{\\partial F}{\\partial p_i} = -2\\Re\\left\{ \\lambda^T
+    \\frac{d F}{d p_i} = -2\\Re\\left\{ y^T
     \\frac{\\partial A}{\\partial p_i} x\\right\\} + \\frac{\\partial
-    F}{\\partial y_1} \\frac{\\partial y_1}{\\partial p_i} + \\frac{\\partial
-    F}{\\partial y_1^*} \\frac{\\partial y_1^*}{\\partial p_i} + \cdots +
-    \\frac{\\partial F}{\\partial y_N} \\frac{\\partial y_N}{\\partial p_i} +
-    \\frac{\\partial F}{\\partial y_N^*} \\frac{\\partial y_N^*}{\\partial p_i}
+    F}{\\partial p_i}
 
-The derivatives of the :math:`y`s are assumed to be known, thus very general
-figures of merit can be computed using the adjoint method.
+The derivative with respect to :math:`p_i` on the right-hand side is assumed to
+be known, thus very general figures of merit can be computed using the adjoint
+method.
 
 Note: This file uses MPI for parallelism.  As a result, return types and values
 will depend on the RANK of the node running the code.
@@ -85,9 +82,9 @@ example, a custom AdjointMethod class might look like
             ...
             return dFdx
 
-        def calc_grad_y(self, sim, params):
-            # calculte the gradient of F with respect to any non-field
-            # quantities
+        def calc_grad_p(self, sim, params):
+            # calculte the gradient of F with respect to the design variables,
+            # holding the fields constant
             ...
             return grad_y
 
@@ -123,7 +120,7 @@ check to the first ten components of the gradient in order to speed things up.
 
 In addition to the adjoint method base class, there are a number of
 application-specific implementations which you may find useful. In particular,
-the :class:`.AdjointMethodFM` class provides a simplified interface for
+the :class:`.AdjointMethodFM2D` class provides a simplified interface for
 computing the gradient of a function that depends not only on the fields but
 also the permittivity and permeability.  In addition to the functions specified
 above, the user must implement an additional function
@@ -137,43 +134,8 @@ In many cases, this efficiency is defined in terms of the ratio of a calculated
 power to the total source power of the system.  Because differentiating these
 power-normalized quantities (which depend on the fields and the
 permittivity/permeability) is rather laborious, this functionality is
-implemented in the :class:`.AdjointMethodPNF` class for convenience.  The
-interface for this class is a bit different from the base
-:class:`.AdjointMethod` class.  The relevant functions which must be overriden
-are:
-
-.. doctest::
-
-    class MyAdjointMethod(AdjointMethodPNF):
-
-        def __init__(self, sim, myparam, step=1e-8):
-            super(MyAdjointMethod, self).__init__(sim, step=step)
-            self._myparam = myparam
-
-        def update_system(self, params):
-            # update system based on values in params
-            ...
-
-        def calc_f(self, sim, params):
-            # calculate the non-power-normalized figure of merit.  This
-            # function is called by AdjointMethodPNF.calc_fom where power
-            # normalization is taken care of
-            ...
-            return fom
-
-        def calc_dfdx(self, sim, params):
-            # calculate derivative of f (the non-power-normalized figure of
-            # merit) with respect to the field components.  This function is
-            # called by AdjointMethodPNF.calc_dFdx which handles the
-            # differentiation of the full power-normalized function.
-            ...
-            return dFdx
-
-        def calc_grad_y(self, sim, params):
-            # calculte the gradient of F with respect to any non-field
-            # quantities
-            ...
-            return grad_y
+implemented in the :class:`.AdjointMethodPNF2D` and
+:class:`.AdjointMethodPNF3D` classes for convenience.
 
 See Also
 --------
@@ -183,20 +145,25 @@ emopt.optimizer.Optimizer : Primary application of :class:`.AdjointMethod` to op
 
 References
 ----------
-.. [1] A. Michaels, E. Yablonovitch, "Gradient-Based Inverse Electromagnetic Design Using Continuously-Smoothed Boundaries", arXiv:1705.07188, 2017
+.. [1] A. Michaels and E. Yablonovitch, "Leveraging continuous material averaging for inverse electromagnetic design," Opt. Express 26, 31717-31737 (2018)
 """
+from __future__ import print_function
+from __future__ import absolute_import
 
-import fdfd
-import fdtd
-from misc import info_message, warning_message, error_message, RANK, \
+from builtins import range
+from builtins import object
+from . import fdfd
+from . import fdtd
+from .misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, N_PROC, COMM
-import fomutils
+from . import fomutils
 
 import numpy as np
 from math import pi
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
 from mpi4py import MPI
+from future.utils import with_metaclass
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
@@ -204,35 +171,31 @@ __version__ = "0.4"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-class AdjointMethod(object):
+class AdjointMethod(with_metaclass(ABCMeta, object)):
     """Adjoint Method Class
 
     Defines the core functionality needed to compute the gradient of a function
     of the form
 
     .. math:
-        F \\rightarrow F(\\mathbf{E}, \\mathbf{H}, y_1, y_2, \cdots, y_M)
+        F \\rightarrow F(\\mathbf{E}, \\mathbf{H}, \\vec{p})
 
-    with respect to an arbitrary set of design variables :math:`\\mathbf{p}`.
+    with respect to an arbitrary set of design variables :math:`\\vec{p}`.
     In general, the gradient is given by
 
     .. math::
-        \\nabla F = \\nabla_\mathrm{AM} F + \\frac{\partial F}{\partial y_1}
-        \\nabla_\mathbf{p} y_1 + \\frac{\partial F}{\partial y_1^*}
-        \\nabla_\\mathbf{p} y_1^* + \cdots + \\frac{\partial F}{\partial y_M}
-        \\nabla_\mathrm{p} y_M + \\frac{\partial F}{\partial y_M^*}
-        \\nabla_\\mathrm{p} y_M^*
+        \\nabla F = \\nabla_\mathrm{AM} F + \\frac{\partial F}{\partial \\vec{p}}
 
     where :math:`\\nabla_\\mathrm{AM} F` is the gradient of :math:`F` computed
-    using the adjoint method, and the remaining gradient terms correspond to
-    any dependence of the figure of merit on quantities other than the fields.
+    using the adjoint method, and the remaining gradient term corresponds to
+    any explicit dependence of the figure of merit on the design parameters.
     The derivatives of these quantities are assumed to be known and should be
-    computed using :meth:`.AdjointMethod.calc_grad_y` function.
+    computed using :meth:`.AdjointMethod.calc_grad_p` function.
 
     In order to use the AdjointMethod class, it should extended and the
     abstract methods :meth:`.AdjointMethod.update_system`,
     :meth:`.AdjointMethod.calc_fom`, :meth:`.AdjointMethod.calc_dFdx`, and
-    :meth:`.AdjointMethod.calc_grad_y` should be implemented for the desired
+    :meth:`.AdjointMethod.calc_grad_p` should be implemented for the desired
     application.
 
     Notes
@@ -273,7 +236,6 @@ class AdjointMethod(object):
     gradient(params)
         Get the gradient for at the current set of design parameter values.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, sim, step=1e-8):
         self.sim = sim
@@ -376,18 +338,22 @@ class AdjointMethod(object):
         pass
 
     @abstractmethod
-    def calc_grad_y(self, sim, params):
-        """Compute the gradient of :math:`y_i` and :math:`y_i^*` with
-        respect to the design parameters of the system
+    def calc_grad_p(self, sim, params):
+        """Compute the gradient of of the figure of merit with respect to the
+        design variables :math:`\\vec{p}`, **holding the fields
+        constant**.
 
-        This function should calculate the list of gradients/derivatives
-        of :math:`y_i` and :math:`y_i^*` given by
+        This function should calculate the list of partial derivatives
+        of the figure of merit with respect to each design variable
 
-        .. math::
-            \\left[ \\frac{\\partial F}{\\partial y_1}\\nabla_\mathbf{p} y_i,
-            \\frac{\\partial F}{\\partial y_1^*}\\nabla_\mathbf{p} y_i^*, \cdots,
-            \\frac{\\partial F}{\\partial y_M}\\nabla_\mathbf{p} y_M,
-            \\frac{\\partial F}{\\partial y_M^*}\\nabla_\mathbf{p} y_M^* \\right]
+        .. math:
+            \\frac{\\partial F}{\\partial \\vec{p}} =
+            \\left[\\frac{\\partial F}{\\partial p_1}, \\frac{\\partial
+            F}{\\partial p_2}, \\cdots, \\frac{\\partial F}{\\partial p_N}\\right]
+
+        This allows us to include an explicit dependence on the design
+        variables in our figure of merit. This is useful for imposing
+        constraints in an optimization.
 
         Notes
         -----
@@ -405,7 +371,7 @@ class AdjointMethod(object):
         Returns
         -------
         numpy.ndarray
-            The sum of the extra "non-adjoint" gradient terms
+            The partial derivatives with respect to the design variables.
         """
         pass
 
@@ -435,18 +401,12 @@ class AdjointMethod(object):
             zmax) in 3D which describes which portion of the system should be
             update during gradient calculations.
         """
-        if(type(sim) == fdfd.FDFD_TE or type(sim) == fdfd.FDFD_TM):
-            M = sim.M
-            N = sim.N
+        if(sim.ndims == 2):
+            X = sim.X
+            Y = sim.Y
             lenp = len(params)
-            return [(0, N, 0, M) for i in range(lenp)]
-        elif(type(sim) == fdfd.FDFD_3D):
-            Nx = sim.Nx
-            Ny = sim.Ny
-            Nz = sim.Nz
-            lenp = len(params)
-            return [(0, Nx, 0, Ny, 0, Nz) for i in range(lenp)]
-        elif(type(sim) == fdtd.FDTD):
+            return [(0, X, 0, Y) for i in range(lenp)]
+        elif(sim.ndims == 3):
             X = sim.X
             Y = sim.Y
             Z = sim.Z
@@ -540,7 +500,7 @@ class AdjointMethod(object):
             grad_full = np.zeros(N_PROC, dtype=np.double)
 
         gradient = np.zeros(lenp)
-        for i in xrange(lenp):
+        for i in range(lenp):
             p0 = params[i]
             ub = update_boxes[i]
 
@@ -571,7 +531,7 @@ class AdjointMethod(object):
 
 
         COMM.Barrier()
-        for i in xrange(lenp):
+        for i in range(lenp):
             # send the partially computed gradient to the master node to finish
             # up the calculation
             #COMM.Gather(grad_parts[i], grad_full, root=0)
@@ -633,10 +593,10 @@ class AdjointMethod(object):
             info_message('Calculating gradient...')
 
         grad_f = self.calc_gradient(self.sim, params)
-        grad_y = self.calc_grad_y(self.sim, params)
+        grad_p = self.calc_grad_p(self.sim, params)
 
         if(NOT_PARALLEL):
-            return grad_f + grad_y
+            return grad_f + grad_p
         else:
             return None
 
@@ -755,7 +715,7 @@ class AdjointMethod(object):
                 return None, None, None
             return None
 
-class AdjointMethodMO(AdjointMethod):
+class AdjointMethodMO(with_metaclass(ABCMeta, AdjointMethod)):
     """An AdjointMethod object for an ensemble of different figures of merit
     (Multi-objective adjoint method).
 
@@ -783,7 +743,6 @@ class AdjointMethodMO(AdjointMethod):
     adjoint_methods : list of :class:`.AdjointMethod`
         A list containing extended AdjointMethod objects
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, ams, step=1e-6):
         self._ams = ams
@@ -814,8 +773,8 @@ class AdjointMethodMO(AdjointMethod):
         # AdjointMethod objects contained in self._ams
         pass
 
-    def calc_grad_y(self, sim, params):
-        # We dont need this -- all individual grad_y calculations are handled
+    def calc_grad_p(self, sim, params):
+        # We dont need this -- all individual grad_p calculations are handled
         # by supplied AdjointMethod objects.
         pass
 
@@ -966,9 +925,10 @@ class AdjointMethodMO(AdjointMethod):
                                                            return_gradients,
                                                            fd_step)
 
-class AdjointMethodFM(AdjointMethod):
+class AdjointMethodFM2D(AdjointMethod):
     """Define an :class:`.AdjointMethod` which simplifies the calculation of
-    gradients which are a function of the materials (eps and mu).
+    gradients which are a function of the materials (eps and mu) in 2D
+    problems.
 
     In certain cases, the gradient of a function of the fields, permittivity,
     and permeability may be desired.  Differentiating the function with respect
@@ -985,7 +945,7 @@ class AdjointMethodFM(AdjointMethod):
         The step size used by gradient calculation (default = False)
     """
     def __init__(self, sim, step=1e-8):
-        super(AdjointMethodFM, self).__init__(sim, step)
+        super(AdjointMethodFM2D, self).__init__(sim, step)
 
     @abstractmethod
     def calc_dFdm(self, sim, params):
@@ -1039,6 +999,8 @@ class AdjointMethodFM(AdjointMethod):
         w_pml_b = sim.w_pml_bottom
         M = sim.M
         N = sim.N
+        X = sim.X
+        Y = sim.Y
 
         # get the current diagonal elements of A.
         # only these elements change when the design variables change.
@@ -1058,7 +1020,7 @@ class AdjointMethodFM(AdjointMethod):
             grad_full = np.zeros(sim.nunks, dtype=np.double)
 
         gradient = np.zeros(lenp)
-        for i in xrange(lenp):
+        for i in range(lenp):
             #if(NOT_PARALLEL):
             #    print i
             p0 = params[i]
@@ -1098,8 +1060,9 @@ class AdjointMethodFM(AdjointMethod):
                 # Next we compute the derivative with respect to eps and mu. We
                 # exclude the PML regions because changes to the materials in
                 # the PMLs are generally not something we want to consider.
-                jmin = ub[0]; jmax = ub[1]
-                imin = ub[2]; imax = ub[3]
+                # TODO: make compatible with multiple update boxes...
+                jmin = int(np.floor(ub[0]/X*N)); jmax = int(np.ceil(ub[1]/X*N))
+                imin = int(np.floor(ub[2]/Y*M)); imax = int(np.ceil(ub[3]/Y*M))
                 if(jmin < w_pml_l): jmin = w_pml_l
                 if(jmax > N-w_pml_r): jmax = N-w_pml_r
                 if(imin < w_pml_b): imin = w_pml_b
@@ -1141,9 +1104,9 @@ class AdjointMethodFM(AdjointMethod):
         if(NOT_PARALLEL):
             return gradient
 
-class AdjointMethodPNF(AdjointMethodFM):
+class AdjointMethodPNF2D(AdjointMethodFM2D):
     """Define an AdjointMethod object for a figure of merit which contains
-    power normalization.
+    power normalization in 2D problems.
 
     A power-normalized figure of merit has the form
 
@@ -1157,7 +1120,7 @@ class AdjointMethodPNF(AdjointMethodFM):
     """
 
     def __init__(self, sim, step=1e-8):
-        super(AdjointMethodPNF, self).__init__(sim, step)
+        super(AdjointMethodPNF2D, self).__init__(sim, step)
 
     @abstractmethod
     def calc_f(self, sim, params):
@@ -1197,14 +1160,17 @@ class AdjointMethodPNF(AdjointMethodFM):
         """
         pass
 
-    def calc_y(self, sim, params):
+    def calc_penalty(self, sim, params):
         """Calculate the additive contribution to the figure of merit by
         explicit functions of the design variables.
 
         Because of the power normalization, we have to handle contributions to
         the figure of merit which depend explicitly on the design variables
-        separately. This function returns the value of the functional y(p)
-        where y(p) is given by F = f(E,H,p)/Psrc + y(p).
+        separately. This function returns the value of the functional Q(p)
+        where Q(p) is given by F = f(E,H,p)/Psrc + Q(p).
+
+        This is typically used to impose penalties to the figure of merit
+        (hence the name of the function).
 
         Parameters
         ----------
@@ -1216,7 +1182,7 @@ class AdjointMethodPNF(AdjointMethodFM):
         Returns
         -------
         tuple of numpy.ndarray
-            The value of y(p)
+            The value of the penalty function
         """
         return 0.0
 
@@ -1237,11 +1203,11 @@ class AdjointMethodPNF(AdjointMethodFM):
             The value of the power-normalized figure of merit.
         """
         f = self.calc_f(sim, params)
-        y = self.calc_y(sim, params)
+        penalty = self.calc_penalty(sim, params)
         Psrc = sim.get_source_power()
 
         if(NOT_PARALLEL):
-            return f / Psrc + y
+            return f / Psrc + penalty
         else:
             return None
 
@@ -1356,3 +1322,162 @@ class AdjointMethodPNF(AdjointMethodFM):
             return dFdy1, dFdy2, dFdy3, dFdy4
         else:
             return None
+
+class AdjointMethodPNF3D(AdjointMethod):
+    """Define an AdjointMethod object for a figure of merit which contains
+    power normalization in 3D problems.
+
+    In 3D, lossy materials are not supported. As a result, power normalization
+    is based purely on the power flux at the boundaries of the simulation (and
+    is thus independent of the material values within the simulation domain).
+    """
+
+    def __init__(self, sim, step=1e-8):
+        super(AdjointMethodPNF3D, self).__init__(sim, step)
+
+    @abstractmethod
+    def calc_f(self, sim, params):
+        """Calculate the non-power-normalized figure of merit
+        :math:`f(\\mathbf{E}, \\mathbf{H})`.
+
+        Parameters
+        ----------
+        sim : emopt.simulation.MaxwellSolver
+            The 3D simulation object.
+        params : numpy.ndarray
+            The current set of design variables
+
+        Returns
+        -------
+        float
+            The value of the non-power-normalized figure of merit.
+        """
+        pass
+
+    @abstractmethod
+    def calc_dfdx(self, sim, params):
+        """Calculate the derivative of the non-power-normalized figure of merit
+        with respect to the fields in the discretized grid.
+
+        Parameters
+        ----------
+        sim : emopt.simulation.MaxwellSolver
+            The 3D simulation object.
+        params : numpy.ndarray
+            The current set of design variables
+
+        Returns
+        -------
+        list of tuples of 6 numpy.ndarray
+            The derivative of f with respect to the fields in the form (E, H)
+        """
+        pass
+
+    @abstractmethod
+    def get_fom_domains(self):
+        """Retrieve the user-defined domains where the figure of merit is
+        calculated.
+
+        Returns
+        -------
+        List of emopt.misc.DomainCoordinates
+            The list of FOM domains.
+        """
+        pass
+
+    def calc_penalty(self, sim, params):
+        """Calculate the additive contribution to the figure of merit by
+        explicit functions of the design variables.
+
+        Because of the power normalization, we have to handle contributions to
+        the figure of merit which depend explicitly on the design variables
+        separately. This function returns the value of the functional Q(p)
+        where Q(p) is given by F = f(E,H,p)/Psrc + Q(p).
+
+        This is typically used to impose penalties to the figure of merit
+        (hence the name of the function).
+
+        Parameters
+        ----------
+        sim : emopt.simulation.MaxwellSolver
+            The 3D simulation object.
+        params : numpy.ndarray
+            The current set of design variables
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            The value of the penalty function
+        """
+        return 0.0
+
+
+    def calc_fom(self, sim, params):
+        """Calculate the power-normalized figure of merit.
+
+        Parameters
+        ----------
+        sim : emopt.simulation.MaxwellSolver
+            The 3D simulation object.
+        params : numpy.ndarray
+            The current set of design variables
+
+        Returns
+        -------
+        float
+            The value of the power-normalized figure of merit.
+        """
+        f = self.calc_f(sim, params)
+        penalty = self.calc_penalty(sim, params)
+        Psrc = sim.source_power
+
+        if(NOT_PARALLEL):
+            return f / Psrc + penalty
+        else:
+            return None
+
+    def calc_dFdx(self, sim, params):
+        """Calculate the derivative of the power-normalized figure of merit
+        with respect to the field.
+
+        Parameters
+        ----------
+        sim : emopt.simulation.MaxwellSolver
+            The 3D simulation object.
+        params : numpy.ndarray
+            The current set of design variables
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            The derivative of F with respect to the fields in the form (E, H)
+        """
+        fom = self.calc_f(sim, params)
+        dfdxs = self.calc_dfdx(sim, params)
+        domains = self.get_fom_domains()
+
+        domains = COMM.bcast(domains, root=0)
+        Nderiv = len(domains)
+
+        adjoint_sources = [[], []]
+        for i in range(Nderiv):
+            if(NOT_PARALLEL):
+                dfdx = dfdxs[i]
+                dFdEx = dfdx[0]
+                dFdEy = dfdx[1]
+                dFdEz = dfdx[2]
+                dFdHx = dfdx[3]
+                dFdHy = dfdx[4]
+                dFdHz = dfdx[5]
+            else:
+                dFdEx = None; dFdEy = None; dFdEz = None
+                dFdHx = None; dFdHy = None; dFdHz = None
+
+            fom_domain = domains[i]
+            a_src = fomutils.power_norm_dFdx_3D(sim, fom,
+                                                self.fom_domain,
+                                                dFdEx, dFdEy, dFdEz,
+                                                dFdHx, dFdHy, dFdHz)
+            adjoint_sources = [adjoint_sources[0]+a_src[0],
+                               adjoint_sources[1]+a_src[1]]
+        return adjoint_sources

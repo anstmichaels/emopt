@@ -766,17 +766,15 @@ For our optimization, we do this in PART 7 of our script:
 .. code-block:: python
 
     def get_update_boxes(self, sim, params):
-        N = sim.M
-        N = sim.N
-        h_wg = int(self.h_wg/sim.dy)
-        y_wg = int(self.y_ts/sim.dy)
+        h_wg = self.h_wg
+        y_wg = self.y_ts
         lenp = len(params)
 
         # define boxes surrounding grating
-        boxes = [(0,N,y_wg-h_wg, y_wg+h_wg) for i in range(lenp-1)]
+        boxes = [(0, sim.W, y_wg-h_wg, y_wg+h_wg) for i in range(lenp-1)]
 
         # for BOX, update everything (easier)
-        boxes.append((0,N,0,M))
+        boxes.append((0, sim.W, 0, sim.H))
         return boxes
 
 This completes our parameterization-related tasks.
@@ -817,14 +815,14 @@ following code:
 
 .. code-block:: python
 
-        Ezm, Hxm, Hym = emopt.misc.gaussian_fields(mm_line.x-match_center,
-                                                      0.0, 0.0, match_w0,
-                                                      theta, sim.wavelength,
-                                                      np.sqrt(eps_clad))
+        Ezm, Hxm, Hym = emopt.misc.gaussian_mode(mm_line.x-match_center,
+                                                 0.0, match_w0,
+                                                 theta, sim.wavelength,
+                                                 np.sqrt(eps_clad))
         self.mode_match = emopt.fomutils.ModeMatch([0,1,0], sim.dx, Ezm=Ezm, Hxm=Hxm, Hym=Hym)
 
 Here we generate the refernce fields with the help of the
-:meth:`misc.gaussian_fields` function. These fields are then used to
+:meth:`misc.gaussian_mode` function. These fields are then used to
 instantiate a :class:`.ModeMatch` object as shown above. The
 :class:`.ModeMatch` class is one of the most essential classes when it comes to
 defining figures of merit in silicon photonics. It facilitates not only the

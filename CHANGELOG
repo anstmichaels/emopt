@@ -1,3 +1,70 @@
+Releades on May 6, 2019
+-----------------------
+
+This is a major update. Please read through each of these changes carefully and
+update your code as needed. Code built upon previous version of EMopt are not
+guaranteed to run without errors.
+
+1. New versioning format based on YYYY.MM.DD.
+
+2. Changed names of AdjointMethodFM and AdjointMethodPNF to AdjointMethodFM2D
+and AdjointMethodPNF2D. This is to distinguish it from the new
+AdjointMethodPNF3D implementation. Note: This will break your code, but is
+easily fixed by tacking '2D' onto AdjointMethodPNF.
+
+3. Introduced AdjointMethodPNF3D class. This makes it easier to implement
+figures of merit which are normalized with respect to power in 3D simulations.
+The implementation is very similar to its 2D counterpart. See the
+MMI_splitter_3D exmaple for a demonstration of how to use it.
+
+4. Added a gaussian_mode function which calculates the electric and magnetic
+field of an approximate fiber mode. This is useful for grating couplers and the
+like.
+
+5. ModeFullVector.get_field and ModeFullVector.get_field_interp have been
+updated to return non-squeezed fields (i.e. 3D arrays with one dimension equal
+to 1). This reduces the need for additional reshaping code when using mode
+fields for figures of merit. In order to plot the result of a ModeFullVector
+calculation, you can supply the optional squeeze argument to get_field_interp.
+See wg_modes_3D.py for an example.
+
+6. Fixed a bug in  the ModeTM solver which caused symmetries to not work
+properly.
+
+7. Improved performance of FDFD_TE.update and FDFD_TM.update. In some cases,
+the update can be 2x faster. This will speed up gradient calculations in 2D.
+
+8. Changed update box format for 2D solvers to be consistent with 3D solvers
+(and to be generally easier to work with). Now, a tuple of real-space bounds
+are supplied instead of grid indices. See Silicon_Grating_Coupler for an
+example. Note: this will break existing codes built on top of EMopt, but it is
+typically a very easy fix.
+
+9. Added emopt.misc.n_SiO2 and emopt.misc.n_Si3N4 material data functions for
+convenience.
+
+10. Fixed improper normalization of magnetic fields in gaussian_fields
+function.
+
+11. Add support for python 3.x (using futurize). All of the examples have been
+tested using python 2.7.5 and python 3.6.6. If you encounter problems with
+other version of python, please post a bug report.
+
+12. Updated install.py script for newest SLEPc version.
+
+13. Added complex material support to FDTD solver. In order to use complex
+materials, you must set the optional argument complex_eps=True when
+instantiating your FDTD object. After doing so, you may assign complex
+permittivities to structures. For example, given a rectangle called 'rect', we
+can assign it a lossy material value with 'rect.material_value = 2.0 + 1j*0.1'.
+
+Important: currently the source power calculation does not account for the
+complex permittivity.
+
+Important 2: currently, negative (real) permittivities are not supported. This is a
+result of the fact that dispersion is not currently implemented which is
+necessary to make simulation of negative (real) permittivities stable.
+
 Released on March 19, 2019
 --------------------------
 

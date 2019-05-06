@@ -38,9 +38,11 @@ The :class:`.Optimizer` is used approximately as follows:
     # run the optimization
     opt.run()
 """
+from __future__ import absolute_import
 
-import fdfd # this needs to come first
-from misc import info_message, warning_message, error_message, RANK, \
+from builtins import object
+from . import fdfd # this needs to come first
+from .misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, COMM
 
 import numpy as np

@@ -37,19 +37,19 @@ change 8 to the desired number of cores.
 """
 import emopt
 from emopt.misc import NOT_PARALLEL, RANK, run_on_master
-from emopt.adjoint_method import AdjointMethodPNF
+from emopt.adjoint_method import AdjointMethodPNF2D
 
 import numpy as np
 from math import pi
 
 from mpi4py import MPI
 
-class WGCrossAM_TM(AdjointMethodPNF):
+class WGCrossAM_TM(AdjointMethodPNF2D):
     """Define an adjoint method class which calculates the figure of merit and
     its gradient for the waveguide crossing structure.
 
     In general, there is a lot of overhead associated with running
-    optimizations of complex electromagnetic structures.  Gremlin attempts to
+    optimizations of complex electromagnetic structures.  EMopt attempts to
     alleviate the burden of dealing with some of this complexity by
     implementing a set of base classes which handle the problem-agnostic
     components of the adjoint method. This leaves only the problem-specific
@@ -66,14 +66,14 @@ class WGCrossAM_TM(AdjointMethodPNF):
 
     In emopt, the implementation of these functions is handled by extending a
     base AdjointMethod class and implementing the required abstract methods.
-    There are a number of AdjointMethod classes to choose from:
+    There are a number of AdjointMethod classes to choose from (for 2D problems):
 
         1) AdjointMethod : This is the simplest and should be used when your
         merit function is independent of the materials of the system and does
         not require power normalization.
-        2) AdjointMethodPNF : This is for figures of merit which have source
+        2) AdjointMethodPNF2D : This is for figures of merit which have source
         power normalization.
-        3) AdjointMethodFM : This is for figures of merit which depend on the
+        3) AdjointMethodFM2D : This is for figures of merit which depend on the
         materials of the system
         4) AdjointMethodMO : This provides a simple way of combining multiple
         AdjointMethods to allow for optimizations of figures of merit which
@@ -91,13 +91,13 @@ class WGCrossAM_TM(AdjointMethodPNF):
         self.crossing_x = crossing_x
         self.crossing_y = crossing_y
 
-        self.y0 = sim.H/2.0
-        self.x0 = sim.W/2.0
+        self.y0 = sim.Y/2.0
+        self.x0 = sim.X/2.0
 
         self.mode_match = mode_match
         self.line_fom = line_fom
 
-        self.W = sim.W
+        self.X = sim.X
 
     def update_system(self, params):
         """Update the geometry of the system given a set of values for the
@@ -111,16 +111,16 @@ class WGCrossAM_TM(AdjointMethodPNF):
         """
         L_taper = params[0]
         cross_height = params[1]
-        w_in_out = (self.W - params[2] - L_taper*2)/2.0
+        w_in_out = (self.X - params[2] - L_taper*2)/2.0
         h_wg = self.h_wg
 
         # Update the horizontal crossing structure
         self.crossing_x.set_point(1, w_in_out, self.y0+self.h_wg/2.0)
         self.crossing_x.set_point(2, w_in_out+L_taper, self.y0+cross_height/2.0)
-        self.crossing_x.set_point(3, self.W-w_in_out-L_taper, self.y0+cross_height/2.0)
-        self.crossing_x.set_point(4, self.W-w_in_out, self.y0+self.h_wg/2.0)
-        self.crossing_x.set_point(7, self.W-w_in_out, self.y0-self.h_wg/2.0)
-        self.crossing_x.set_point(8, self.W-w_in_out-L_taper, self.y0-cross_height/2.0)
+        self.crossing_x.set_point(3, self.X-w_in_out-L_taper, self.y0+cross_height/2.0)
+        self.crossing_x.set_point(4, self.X-w_in_out, self.y0+self.h_wg/2.0)
+        self.crossing_x.set_point(7, self.X-w_in_out, self.y0-self.h_wg/2.0)
+        self.crossing_x.set_point(8, self.X-w_in_out-L_taper, self.y0-cross_height/2.0)
         self.crossing_x.set_point(9, w_in_out+L_taper, self.y0-cross_height/2.0)
         self.crossing_x.set_point(10, w_in_out, self.y0-h_wg/2.0)
 
@@ -147,7 +147,7 @@ class WGCrossAM_TM(AdjointMethodPNF):
 
         This function accepts the simulation object and current set of design
         parameters and returns a single real scalar which gives the figure of
-        merit. Gremlin always minimizes the figure of merit, so we need to
+        merit. EMopt always minimizes the figure of merit, so we need to
         multiply the mode match by -1 in order to ensure that it is actually
         maximized.
 
@@ -223,7 +223,7 @@ class WGCrossAM_TM(AdjointMethodPNF):
 
         return (dFdHz, dFdEx, dFdEy)
 
-    def calc_grad_y(self, sim, params):
+    def calc_grad_p(self, sim, params):
         """Out figure of merit contains no additional non-field dependence on
         the design variables so we just return zeros here.
 
@@ -245,7 +245,7 @@ def opt_plot(params, sim, am, fom_hist):
     Hz, Ex, Ey = sim.saved_fields[1]
     eps = sim.eps.get_values_in(sim.field_domains[1])
 
-    emopt.io.plot_iteration(np.real(Hz), np.real(eps), sim.Wreal, sim.Hreal, foms,
+    emopt.io.plot_iteration(np.real(Hz), np.real(eps), sim.Xreal, sim.Yreal, foms,
                    fname='current_result.pdf')
 
 if __name__ == '__main__':
@@ -261,16 +261,16 @@ if __name__ == '__main__':
     L_crossing = 10.0
     L_taper = 1.25
 
-    # Set the simulation wavelength. Gremlin uses non-dimensionalized
+    # Set the simulation wavelength. EMopt uses non-dimensionalized
     # equations, so as long as all quantities with length units are chosen with
     # consistent units, things should work out.  Here we choose to express
     # everything in micrometers
     wlen = 1.55
-    W = w_in*2.0 + L_crossing + L_taper*2
-    H = 8.0
+    X = w_in*2.0 + L_crossing + L_taper*2
+    Y = 8.0
     dx = 0.04
     dy = 0.03
-    sim = emopt.fdfd.FDFD_TM(W, H, dx, dy, wlen)
+    sim = emopt.fdfd.FDFD_TM(X, Y, dx, dy, wlen)
     pmls = [0.5,0.5,0.5,0.5]
     sim.w_pml = pmls
 
@@ -278,8 +278,8 @@ if __name__ == '__main__':
     # The true width/height will not necessarily match what we used when
     # initializing the solver. This is the case when the width is not an integer
     # multiple of the grid spacing used.
-    W = sim.W
-    H = sim.H
+    X = sim.X
+    Y = sim.Y
     M = sim.M
     N = sim.N
 
@@ -298,7 +298,7 @@ if __name__ == '__main__':
     n_eff = 2.85 # Precomputed. We could use the mode solver to do this too
 
     # set a background permittivity containing the cladding material (SiO2)
-    eps_background = emopt.grid.Rectangle(W/2, H/2, 2*W, H)
+    eps_background = emopt.grid.Rectangle(X/2, Y/2, 2*X, Y)
     eps_background.layer = 2
     eps_background.material_value = eps_clad
 
@@ -320,7 +320,7 @@ if __name__ == '__main__':
 
     # define the x coordinates
     xs = np.array([-w_in, w_in, w_in + L_taper])
-    xs = concat(xs, W-np.array([w_in+L_taper, w_in, -w_in,
+    xs = concat(xs, X-np.array([w_in+L_taper, w_in, -w_in,
                                  -w_in, w_in, w_in + L_taper]))
     xs = concat(xs, [w_in + L_taper, w_in, -w_in, -w_in])
 
@@ -329,7 +329,7 @@ if __name__ == '__main__':
     ys = concat(ys, [h_crossing/2.0, h_wg/2.0, h_wg/2.0,
                 -h_wg/2.0, -h_wg/2.0,-h_crossing/2.0])
     ys = concat(ys, [-h_crossing/2.0, -h_wg/2.0, -h_wg/2.0, h_wg/2.0])
-    ys += H/2.0
+    ys += Y/2.0
 
     # assemble the polygon
     crossing_x.set_points(xs, ys)
@@ -342,11 +342,11 @@ if __name__ == '__main__':
     xs = xs.copy()
     ys = ys.copy()
 
-    xs -= W/2.0
-    ys -= H/2.0
+    xs -= X/2.0
+    ys -= Y/2.0
 
-    xs += H/2.0
-    ys += W/2.0
+    xs += Y/2.0
+    ys += X/2.0
 
     crossing_y = emopt.grid.Polygon()
 
@@ -357,7 +357,7 @@ if __name__ == '__main__':
     # All primitive components (polygons, rectangles, etc) must be added to a
     # StructuredMaterial. This layers the components in such a way that more
     # complicated material distributions can be formed
-    eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
+    eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
     eps.add_primitive(crossing_x)
     eps.add_primitive(crossing_y)
     eps.add_primitive(eps_background)
@@ -376,12 +376,8 @@ if __name__ == '__main__':
     # To make accessing and initializing arrays easier, we create
     # DomainCoordinates. These manage the mapping between real-space coordinates
     # and array index coordinates.
-    src_line = emopt.misc.DomainCoordinates(pmls[0]+0.1, pmls[0]+0.1, H/2-w_src/2,
-                                            H/2+w_src/2, 0, 0, dx, dy, 1.0)
-
-    Mz = np.zeros([M,N], dtype=np.complex128)
-    Jx = np.zeros([M,N], dtype=np.complex128)
-    Jy = np.zeros([M,N], dtype=np.complex128)
+    src_line = emopt.misc.DomainCoordinates(pmls[0]+0.1, pmls[0]+0.1, Y/2-w_src/2,
+                                            Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # setup, build the system, and solve for the modes of the input waveguide
     mode = emopt.modes.ModeTM(wlen, eps, mu, src_line, n0=3.5, neigs=8)
@@ -392,15 +388,7 @@ if __name__ == '__main__':
 
     # Get the current sources which excite the desired mode
     msrc = mode.get_source(mindex, dx, dy)
-
-    # Currently, the emopt FDFD object accepts 3 big arrays that define the
-    # current sources in space. The current sources are zero everywhere except
-    # on the line where we calculated the mode.
-    Mz[src_line.j, src_line.k] = msrc[0]
-    Jx[src_line.j, src_line.k] = msrc[1]
-    Jy[src_line.j, src_line.k] = msrc[2]
-
-    sim.set_sources((Mz, Jx, Jy))
+    sim.set_sources(mode, src_domain=src_line, mindex=mindex)
 
     ####################################################################################
     # Set up the Mode match which will be used by the figure of merit
@@ -408,9 +396,6 @@ if __name__ == '__main__':
     # Get the mode fields to use as a mode match
     mode_match = None
     if(NOT_PARALLEL):
-        # The mode fields are returns with size (N,) but the field slices used
-        # in the future mode match calculations will be of size (N,1). We will
-        # reshape the mode fields so that things are compatible
         Exm = mode.get_field_interp(mindex, 'Ex')
         Eym = mode.get_field_interp(mindex, 'Ey')
         Hzm = mode.get_field_interp(mindex, 'Hz')
@@ -420,10 +405,10 @@ if __name__ == '__main__':
 
     # the mode match will be computed along a line intersecting the output
     # waveguide of the structure
-    mm_line = emopt.misc.DomainCoordinates(W-pmls[1]-dx, W-pmls[1]-dx, H/2-w_src/2,
-                                           H/2+w_src/2, 0, 0, dx, dy, 1.0)
+    mm_line = emopt.misc.DomainCoordinates(X-pmls[1]-dx, X-pmls[1]-dx, Y/2-w_src/2,
+                                           Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
-    full_field = emopt.misc.DomainCoordinates(pmls[0], W-pmls[1], pmls[2], H-pmls[3], 0,
+    full_field = emopt.misc.DomainCoordinates(pmls[0], X-pmls[1], pmls[2], Y-pmls[3], 0,
                                               0, dx, dy, 1.0)
 
     # we also tell our FDFD object to record the fields on this line
@@ -445,7 +430,7 @@ if __name__ == '__main__':
     # design parameters for the system and create an adjoint method object
     # which will compute the figure of merit that is minimized during
     # optimization and the gradient of that figure of merit
-    design_params = np.array([L_taper, h_crossing, W-w_in*2-L_taper*2])
+    design_params = np.array([L_taper, h_crossing, X-w_in*2-L_taper*2])
 
     # The adjoint method class for this problem is defined above!
     am = WGCrossAM_TM(sim, crossing_x, crossing_y, h_wg, mode_match, mm_line)

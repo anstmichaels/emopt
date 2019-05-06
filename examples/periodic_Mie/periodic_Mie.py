@@ -17,12 +17,12 @@ from math import pi
 ####################################################################################
 #Simulation Region parameters
 ####################################################################################
-W = 5.0
-H = 15.0
+X = 5.0
+Y = 15.0
 dx = 0.02
 dy = 0.02
 wlen = 1.55
-sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
+sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
 
 # planewave incident along x
 sim.w_pml = [0.75, 0.75, 0., 0.]
@@ -36,8 +36,8 @@ sim.bc = '0P'
 # The true width/height will not necessarily match what we used when
 # initializing the solver. This is the case when the width is not an integer
 # multiple of the grid spacing used.
-W = sim.W
-H = sim.H
+X = sim.X
+Y = sim.Y
 M = sim.M
 N = sim.N
 
@@ -49,14 +49,14 @@ n0 = 1.0
 n1 = 1.444
 
 # set a background permittivity of 1
-eps_background = emopt.grid.Rectangle(W/2, 0, 2*W, H)
+eps_background = emopt.grid.Rectangle(X/2, 0, 2*X, Y)
 eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index circle in the middle of the simulation
 R = 0.5
-x0 = W/2
-y0 = H/2
+x0 = X/2
+y0 = Y/2
 theta = np.linspace(0,2*pi,100)
 xs = x0 + R*np.cos(theta)
 ys = y0 + R*np.sin(theta)
@@ -65,7 +65,7 @@ cyl.set_points(xs,ys)
 cyl.layer = 1
 cyl.material_value = n1**2
 
-eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
+eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
 eps.add_primitive(cyl)
 eps.add_primitive(eps_background)
 
@@ -100,7 +100,7 @@ sim.build()
 sim.solve_forward()
 
 # Get the fields we just solved for
-sim_area = emopt.misc.DomainCoordinates(1.0, W-1.0, 0.0, H-0.0, 0.0, 0.0, dx, dy, 1.0)
+sim_area = emopt.misc.DomainCoordinates(1.0, X-1.0, 0.0, Y-0.0, 0.0, 0.0, dx, dy, 1.0)
 Ez = sim.get_field_interp('Ez', sim_area)
 
 # Simulate the field.  Since we are running this using MPI, we only generate

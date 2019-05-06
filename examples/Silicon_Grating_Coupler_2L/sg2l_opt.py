@@ -36,15 +36,12 @@ machine.
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL
-from emopt.adjoint_method import AdjointMethodPNF
-
-# We define the desired Gaussian modes in a separate file
-from mode_data import Ez_Gauss, Hx_Gauss, Hy_Gauss
+from emopt.adjoint_method import AdjointMethodPNF2D
 
 import numpy as np
 from math import pi
 
-class SiliconGrating2LAM(AdjointMethodPNF):
+class SiliconGrating2LAM(AdjointMethodPNF2D):
     """Compute the merit function and gradient of a two layer grating coupler.
 
     Parameters
@@ -88,14 +85,16 @@ class SiliconGrating2LAM(AdjointMethodPNF):
         # desired Gaussian beam properties used in mode match
         theta = 0.0/180.0*pi
         match_w0 = 5.2
-        match_center = 11.
+        match_center = 11.0
 
         # Define the desired field profiles
         # We want to generate a vertical Gaussian beam, so these are the fields
         # are the use in our calculation of the mode match
-        Ezm = Ez_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
-        Hxm = Hx_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
-        Hym = Hy_Gauss(mm_line.x, match_center, match_w0, theta, sim.wavelength, np.sqrt(eps_clad))
+        Ezm, Hxm, Hym = emopt.misc.gaussian_mode(mm_line.x-match_center,
+                                                 0.0, match_w0,
+                                                 theta, sim.wavelength,
+                                                 np.sqrt(eps_clad))
+
         self.mode_match = emopt.fomutils.ModeMatch([0,1,0], sim.dx, Ezm=Ezm, Hxm=Hxm, Hym=Hym)
 
         self.current_fom = 0.0
@@ -118,17 +117,12 @@ class SiliconGrating2LAM(AdjointMethodPNF):
         x0_top = self.w_in + params[-2]
         x0_bot = self.w_in + params[-1]
         coeffs = params
-        N_coeffs = (len(coeffs) - 2) / 8
+        N_coeffs = (len(coeffs) - 2) // 8
 
         # compute the periods and duty factors using a Fourier series
         fseries = lambda coeffs : coeffs[0] + np.sum([coeffs[j] *np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) \
                                             + np.sum([coeffs[N_coeffs + j] * np.cos(pi/2*i*j*1.0/self.Ng) for j in range(0,N_coeffs)])
         for i in range(self.Ng):
-            #period_top = coeffs[0] + np.sum([coeffs[j] * np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) + np.sum([coeffs[N_coeffs + j] * np.cos(pi/2*i*j*1.0/self.Ng) for j in range(0,N_coeffs)])
-            #df_top = coeffs[2*N_coeffs] + np.sum([coeffs[2*N_coeffs+j] * np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) + np.sum([coeffs[3*N_coeffs + j] * np.cos(pi/2*i*j*1.0/self.Ng) for j in range(0,N_coeffs)])
-            #period_bot = coeffs[4*N_coeffs] + np.sum([coeffs[4*N_coeffs+j] * np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) + np.sum([coeffs[5*N_coeffs + j] * np.cos(pi/2*i*j*1.0/self.Ng) for j in range(0,N_coeffs)])
-            #df_bot = coeffs[6*N_coeffs] + np.sum([coeffs[6*N_coeffs+j] * np.sin(pi/2*i*j*1.0/self.Ng) for j in range(1,N_coeffs)]) + np.sum([coeffs[7*N_coeffs + j] * np.cos(pi/2*i*j*1.0/self.Ng) for j in range(0,N_coeffs)])
-
             period_top = fseries(coeffs[0:2*N_coeffs])
             df_top     = fseries(coeffs[2*N_coeffs:4*N_coeffs])
             period_bot = fseries(coeffs[4*N_coeffs:6*N_coeffs])
@@ -211,18 +205,18 @@ class SiliconGrating2LAM(AdjointMethodPNF):
         """
         N = sim.N
         lenp = len(params)
-        h_wg = int(self.h_wg/sim.dy)
-        y_bot = int(self.y_bot/sim.dy)
-        y_top = int(self.y_top/sim.dy)
+        h_wg = self.h_wg
+        y_bot = self.y_bot
+        y_top = self.y_top
 
-        return [(0,N,y_bot-h_wg, y_top+h_wg) for i in range(lenp)]
+        return [(0, sim.X, y_bot-h_wg, y_top+h_wg) for i in range(lenp)]
 
-    def calc_grad_y(self, sim, params):
+    def calc_grad_p(self, sim, params):
         """Out figure of merit contains no additional non-field dependence on
         the design variables so we just return zeros here.
 
         See the AdjointMethod documentation for the mathematical details of
-        grad y and to learn more about its use case.
+        grad p and to learn more about its use case.
         """
         return np.zeros(params.shape)
 
@@ -241,8 +235,8 @@ def plot_update(params, fom_list, sim, am):
     eps = sim.eps.get_values_in(sim.field_domains[1])
 
     foms = {'Insertion Loss' : fom_list}
-    emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Wreal,
-                            sim.Hreal, foms, fname='current_result.pdf')
+    emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Xreal,
+                            sim.Yreal, foms, fname='current_result.pdf')
 
     data = {}
     data['Ez'] = Ez
@@ -263,7 +257,7 @@ if __name__ == '__main__':
     wavelength = 1.55
     W = 28.0
     H = 8.0
-    dx = 0.02
+    dx = 0.03
     dy = dx
     w_pml = 1.0
     w_src= 5.0
@@ -273,8 +267,8 @@ if __name__ == '__main__':
     sim.w_pml = [0.5, 0.5, 0.5, 0.5]
 
     # Get the actual width and height
-    W = sim.W
-    H = sim.H
+    X = sim.X
+    Y = sim.Y
     M = sim.M
     N = sim.N
 
@@ -287,8 +281,8 @@ if __name__ == '__main__':
 
     # the effective indices are precomputed for simplicity.  We can compute
     # these values using emopt.modes
-    neff = 2.8499235
-    neff_etched = 2.27162265
+    neff = 2.849
+    neff_etched = 2.271
 
     # set up the dimensions of the waveguide structure that we are exciting
     h_wg = 0.22
@@ -334,7 +328,7 @@ if __name__ == '__main__':
         grating_bot.append(rect_bot)
 
     # set the background material using a rectangle equal in size to the system
-    background = emopt.grid.Rectangle(W/2,H/2,W,H)
+    background = emopt.grid.Rectangle(X/2, Y/2, X, Y)
 
     # set the relative layers of the permitivity primitives
     wg.layer = 1
@@ -348,7 +342,7 @@ if __name__ == '__main__':
     # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
     # This Material defines the distribution of the permittivity within the simulated
     # environment
-    eps = emopt.grid.StructuredMaterial2D(W,H,dx,dy)
+    eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
     eps.add_primitive(wg)
 
     for g in grating_top:
@@ -378,8 +372,8 @@ if __name__ == '__main__':
     My = np.zeros([M,N], dtype=np.complex128)
 
     # place the source in the simulation domain
-    src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, H/2-w_src/2,
-                                            H/2+w_src/2, 0, 0, dx, dy, 1.0)
+    src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, Y/2-w_src/2,
+                                            Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver.
     mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
@@ -403,9 +397,9 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the mode match domain
     ####################################################################################
-    mm_line = emopt.misc.DomainCoordinates(w_pml, W-w_pml, H/2.0+2.0, H/2.0+2.0, 0, 0,
+    mm_line = emopt.misc.DomainCoordinates(w_pml, X-w_pml, Y/2.0+2.0, Y/2.0+2.0, 0, 0,
                                            dx, dy, 1.0)
-    full_field = emopt.misc.DomainCoordinates(w_pml, W-w_pml, w_pml, H-w_pml, 0.0, 0.0,
+    full_field = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, 0.0, 0.0,
                                               dx, dy, 1.0)
     sim.field_domains = [mm_line, full_field]
 

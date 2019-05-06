@@ -20,14 +20,17 @@ topology (creation and elimination of holes, etc). It relies on representing
 boundaries using polygons and then computing the smoothed grid by applying a
 series of boolean subtraction operations (in c++).
 """
+from __future__ import absolute_import
 
-from grid_ctypes import libGrid
+from builtins import range
+from builtins import object
+from .grid_ctypes import libGrid
 import numpy as np
 import scipy
 from ctypes import c_int, c_double
 
-from misc import DomainCoordinates
-from misc import warning_message
+from .misc import DomainCoordinates
+from .misc import warning_message
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
@@ -76,7 +79,7 @@ class Material2D(object):
 
         return value
 
-    def get_values(self, k1, k2, j1, j2, sx=0, sy=0, arr=None):
+    def get_values(self, k1, k2, j1, j2, sx=0.0, sy=0.0, arr=None):
         """Get the values of the material distribution within a set of array
         indicesa set of array indices.
 
@@ -108,7 +111,7 @@ class Material2D(object):
         else:
             arr = np.ravel()
 
-        libGrid.Material2D_get_values(self._object, k1, k2, j1, j2, arr)
+        libGrid.Material2D_get_values(self._object, arr, k1, k2, j1, j2, sx, sy)
 
         # This might result in an expensive copy operation, unfortunately
         arr = np.reshape(arr, [Ny, Nx])
@@ -133,7 +136,7 @@ class Material2D(object):
         k1 = domain.k.start
         k2 = domain.k.stop
 
-        arr = self.get_values(k1, k2, j1, j2, arr)
+        arr = self.get_values(k1, k2, j1, j2, sx, sy, arr)
         if(squeeze): return np.squeeze(arr)
         else: return arr
 

@@ -24,6 +24,8 @@ fdtd::FDTD::FDTD()
     _w_pml_x0 = 0; _w_pml_x1 = 0;
     _w_pml_y0 = 0; _w_pml_y1 = 0;
     _w_pml_z0 = 0; _w_pml_z1 = 0;
+
+    _complex_eps = false;
 }
 
 fdtd::FDTD::~FDTD()
@@ -94,6 +96,12 @@ void fdtd::FDTD::set_wavelength(double wavelength)
 void fdtd::FDTD::set_dt(double dt)
 {
     _dt = dt;
+    _odt = 1.0/_dt;
+}
+
+void fdtd::FDTD::set_complex_eps(bool complex_eps)
+{
+    _complex_eps = complex_eps;
 }
 
 void fdtd::FDTD::set_field_arrays(double *Ex, double *Ey, double *Ez,
@@ -365,7 +373,13 @@ void fdtd::FDTD::update_E(int n, double t)
            odz = _R/_dz,
            b, C, kappa,
            src_t,
-           dt_by_epsx, dt_by_epsy, dt_by_epsz;
+           a_x, a_y, a_z, b_x, b_y, b_z;
+
+#ifdef COMPLEX_EPS
+    double epsxr_by_dt, epsyr_by_dt, epszr_by_dt,
+           epsxi_by_2, epsyi_by_2, epszi_by_2;
+    complex128  epsx, epsy, epsz;
+#endif
 
     int pml_xmin = _w_pml_x0, pml_xmax = _Nx-_w_pml_x1,
         pml_ymin = _w_pml_y0, pml_ymax = _Ny-_w_pml_y1,
@@ -496,28 +510,64 @@ void fdtd::FDTD::update_E(int n, double t)
 
                 ind_global = i*_J*_K + j*_K + k;
 
-                // calculate prefactors
-                dt_by_epsx = _dt/_eps_x[ind_global].real;
-                dt_by_epsy = _dt/_eps_y[ind_global].real;
-                dt_by_epsz = _dt/_eps_z[ind_global].real;
-        
+#ifdef COMPLEX_EPS
+                // calculate permittivity quantities
+                if(!_complex_eps) {
+                    a_x = 1.0; a_y = 1.0; a_z = 1.0;
+                    b_x = _dt/_eps_x[ind_global].real;
+                    b_y = _dt/_eps_y[ind_global].real;
+                    b_z = _dt/_eps_z[ind_global].real;
+                }
+                else {
+                    epsx = _eps_x[ind_global];
+                    epsy = _eps_y[ind_global];
+                    epsz = _eps_z[ind_global];
+
+                    epsxr_by_dt = epsx.real*_odt;
+                    epsyr_by_dt = epsy.real*_odt;
+                    epszr_by_dt = epsz.real*_odt;
+
+                    epsxi_by_2 = epsx.imag*0.5;
+                    epsyi_by_2 = epsy.imag*0.5;
+                    epszi_by_2 = epsz.imag*0.5;
+
+                    // The update equations have the following form:
+                    // E_{i,t+1} = a_i * E_{i,t} + curl(H)_{i,t} / b_x
+                    // where i is the spatial component, t is the time step,
+                    // and a_i and b_i are conefficients which depend on
+                    // the relative permittivities and time step
+                    a_x = (epsxr_by_dt - epsxi_by_2) / (epsxr_by_dt + epsxi_by_2);
+                    a_y = (epsyr_by_dt - epsyi_by_2) / (epsyr_by_dt + epsyi_by_2);
+                    a_z = (epszr_by_dt - epszi_by_2) / (epszr_by_dt + epszi_by_2);
+
+                    b_x = 1.0/(epsxr_by_dt + epsxi_by_2);
+                    b_y = 1.0/(epsyr_by_dt + epsyi_by_2);
+                    b_z = 1.0/(epszr_by_dt + epszi_by_2);
+                }
+#else
+                a_x = 1.0; a_y = 1.0; a_z = 1.0;
+                b_x = _dt/_eps_x[ind_global].real;
+                b_y = _dt/_eps_y[ind_global].real;
+                b_z = _dt/_eps_z[ind_global].real;
+#endif
+
                 // Update Ex
                 dHzdy = ody*(_Hz[ind_ijk] - _Hz[ind_ijm1k]);
                 dHydz = odz*(_Hy[ind_ijk] - _Hy[ind_im1jk]);
                 
-                _Ex[ind_ijk] = _Ex[ind_ijk] +  dt_by_epsx * (dHzdy - dHydz);
+                _Ex[ind_ijk] = a_x*_Ex[ind_ijk] + (dHzdy - dHydz) * b_x;
 
                 // Update Ey
                 dHxdz = odz*(_Hx[ind_ijk] - _Hx[ind_im1jk]);
                 dHzdx = odx * (_Hz[ind_ijk] - _Hz[ind_ijkm1]);
                 
-                _Ey[ind_ijk] = _Ey[ind_ijk] + dt_by_epsy * (dHxdz - dHzdx);
+                _Ey[ind_ijk] = a_y * _Ey[ind_ijk] + (dHxdz - dHzdx) * b_y;
                 
                 // Update Ez
                 dHydx = odx*(_Hy[ind_ijk] - _Hy[ind_ijkm1]);
                 dHxdy = ody * (_Hx[ind_ijk] - _Hx[ind_ijm1k]);
 
-                _Ez[ind_ijk] = _Ez[ind_ijk] + dt_by_epsz * (dHydx - dHxdy);
+                _Ez[ind_ijk] = a_z * _Ez[ind_ijk] + (dHydx - dHxdy) * b_z;
 
                 
                 // Do PML updates
@@ -533,8 +583,8 @@ void fdtd::FDTD::update_E(int n, double t)
                     _pml_Hyx0[ind_pml] = C * dHydx + b*_pml_Hyx0[ind_pml];
                     _pml_Hzx0[ind_pml] = C * dHzdx + b*_pml_Hzx0[ind_pml];
 
-                    _Ez[ind_ijk] = _Ez[ind_ijk] + dt_by_epsz * (_pml_Hyx0[ind_pml]-dHydx+dHydx/kappa);
-                    _Ey[ind_ijk] = _Ey[ind_ijk] - dt_by_epsy * (_pml_Hzx0[ind_pml]-dHzdx+dHzdx/kappa);
+                    _Ez[ind_ijk] = _Ez[ind_ijk] + (_pml_Hyx0[ind_pml]-dHydx+dHydx/kappa) * b_z;
+                    _Ey[ind_ijk] = _Ey[ind_ijk] - (_pml_Hzx0[ind_pml]-dHzdx+dHzdx/kappa) * b_y;
 
                 }
                 else if(k + _k0 >= pml_xmax) {
@@ -549,8 +599,8 @@ void fdtd::FDTD::update_E(int n, double t)
                     _pml_Hyx1[ind_pml] = C * dHydx + b*_pml_Hyx1[ind_pml];
                     _pml_Hzx1[ind_pml] = C * dHzdx + b*_pml_Hzx1[ind_pml];
 
-                    _Ez[ind_ijk] = _Ez[ind_ijk] + dt_by_epsz * (_pml_Hyx1[ind_pml]-dHydx+dHydx/kappa);
-                    _Ey[ind_ijk] = _Ey[ind_ijk] - dt_by_epsy * (_pml_Hzx1[ind_pml]-dHzdx+dHzdx/kappa);
+                    _Ez[ind_ijk] = _Ez[ind_ijk] + (_pml_Hyx1[ind_pml]-dHydx+dHydx/kappa) * b_z;
+                    _Ey[ind_ijk] = _Ey[ind_ijk] - (_pml_Hzx1[ind_pml]-dHzdx+dHzdx/kappa) * b_y;
                 }
 
                 if(j + _j0 < pml_ymin) {
@@ -565,8 +615,8 @@ void fdtd::FDTD::update_E(int n, double t)
                     _pml_Hxy0[ind_pml] = C * dHxdy + b*_pml_Hxy0[ind_pml];
                     _pml_Hzy0[ind_pml] = C * dHzdy + b*_pml_Hzy0[ind_pml];
 
-                    _Ez[ind_ijk] = _Ez[ind_ijk] - dt_by_epsz * (_pml_Hxy0[ind_pml]-dHxdy+dHxdy/kappa);
-                    _Ex[ind_ijk] = _Ex[ind_ijk] + dt_by_epsx * (_pml_Hzy0[ind_pml]-dHzdy+dHzdy/kappa);
+                    _Ez[ind_ijk] = _Ez[ind_ijk] - (_pml_Hxy0[ind_pml]-dHxdy+dHxdy/kappa) * b_z;
+                    _Ex[ind_ijk] = _Ex[ind_ijk] + (_pml_Hzy0[ind_pml]-dHzdy+dHzdy/kappa) * b_x;
                 }
                 else if(j + _j0 >= pml_ymax) {
                     ind_pml = i*(_j0 + _J - pml_ymax)*_K +(_j0 + j - pml_ymax)*_K + k;
@@ -580,8 +630,8 @@ void fdtd::FDTD::update_E(int n, double t)
                     _pml_Hxy1[ind_pml] = C * dHxdy + b*_pml_Hxy1[ind_pml];
                     _pml_Hzy1[ind_pml] = C * dHzdy + b*_pml_Hzy1[ind_pml];
 
-                    _Ez[ind_ijk] = _Ez[ind_ijk] - dt_by_epsz * (_pml_Hxy1[ind_pml]-dHxdy+dHxdy/kappa);
-                    _Ex[ind_ijk] = _Ex[ind_ijk] + dt_by_epsx * (_pml_Hzy1[ind_pml]-dHzdy+dHzdy/kappa);
+                    _Ez[ind_ijk] = _Ez[ind_ijk] - (_pml_Hxy1[ind_pml]-dHxdy+dHxdy/kappa) * b_z;
+                    _Ex[ind_ijk] = _Ex[ind_ijk] + (_pml_Hzy1[ind_pml]-dHzdy+dHzdy/kappa) * b_x;
                 }
 
                 if(i + _i0 < pml_zmin) {
@@ -596,8 +646,8 @@ void fdtd::FDTD::update_E(int n, double t)
                     _pml_Hxz0[ind_pml] = C * dHxdz + b*_pml_Hxz0[ind_pml];
                     _pml_Hyz0[ind_pml] = C * dHydz + b*_pml_Hyz0[ind_pml];
 
-                    _Ex[ind_ijk] = _Ex[ind_ijk] - dt_by_epsx * (_pml_Hyz0[ind_pml]-dHydz+dHydz/kappa);
-                    _Ey[ind_ijk] = _Ey[ind_ijk] + dt_by_epsy * (_pml_Hxz0[ind_pml]-dHxdz+dHxdz/kappa);       
+                    _Ex[ind_ijk] = _Ex[ind_ijk] - (_pml_Hyz0[ind_pml]-dHydz+dHydz/kappa) * b_x;
+                    _Ey[ind_ijk] = _Ey[ind_ijk] + (_pml_Hxz0[ind_pml]-dHxdz+dHxdz/kappa) * b_y;       
                 }
                 else if(i + _i0 > pml_zmax) {
                     ind_pml = (_i0 + i - pml_zmax)*_J*_K +j*_K + k;
@@ -611,8 +661,8 @@ void fdtd::FDTD::update_E(int n, double t)
                     _pml_Hxz1[ind_pml] = C * dHxdz + b*_pml_Hxz1[ind_pml];
                     _pml_Hyz1[ind_pml] = C * dHydz + b*_pml_Hyz1[ind_pml];
 
-                    _Ex[ind_ijk] = _Ex[ind_ijk] - dt_by_epsx * (_pml_Hyz1[ind_pml]-dHydz+dHydz/kappa);
-                    _Ey[ind_ijk] = _Ey[ind_ijk] + dt_by_epsy * (_pml_Hxz1[ind_pml]-dHxdz+dHxdz/kappa);
+                    _Ex[ind_ijk] = _Ex[ind_ijk] - (_pml_Hyz1[ind_pml]-dHydz+dHydz/kappa) * b_x;
+                    _Ey[ind_ijk] = _Ey[ind_ijk] + (_pml_Hxz1[ind_pml]-dHxdz+dHxdz/kappa) * b_y;
                 }
             }
         }
@@ -634,8 +684,18 @@ void fdtd::FDTD::update_E(int n, double t)
                     ind_global = (i+i0s)*_J*_K + (j+j0s)*_K + k+k0s;
                     ind_src = i*Js*Ks + j*Ks + k;
                     
+#ifdef COMPLEX_EPS
+                    if(!_complex_eps)
+                        b_x = _dt/_eps_x[ind_global].real;
+                    else {
+                        epsx = _eps_x[ind_global];
+                        b_x = 1.0/(epsx.real * _odt + epsx.imag*0.5);
+                    }
+#else
+                    b_x = _dt/_eps_x[ind_global].real;
+#endif
                     src_t = src_func_t(n, t, Jx[ind_src].imag);
-                    _Ex[ind_ijk] = _Ex[ind_ijk] - src_t * Jx[ind_src].real * _dt / _eps_x[ind_global].real;                   
+                    _Ex[ind_ijk] = _Ex[ind_ijk] - src_t * Jx[ind_src].real * b_x;                   
                 }
             }
         }
@@ -650,8 +710,18 @@ void fdtd::FDTD::update_E(int n, double t)
                     ind_global = (i+i0s)*_J*_K + (j+j0s)*_K + k+k0s;
                     ind_src = i*Js*Ks + j*Ks + k;
                     
+#ifdef COMPLEX_EPS
+                    if(!_complex_eps)
+                        b_y = _dt/_eps_y[ind_global].real;
+                    else {
+                        epsy = _eps_y[ind_global];
+                        b_y = 1.0/(epsy.real * _odt + epsy.imag*0.5);
+                    }
+#else
+                    b_y = _dt/_eps_y[ind_global].real;
+#endif
                     src_t = src_func_t(n, t, Jy[ind_src].imag);
-                    _Ey[ind_ijk] = _Ey[ind_ijk] - src_t * Jy[ind_src].real * _dt / _eps_y[ind_global].real;                   
+                    _Ey[ind_ijk] = _Ey[ind_ijk] - src_t * Jy[ind_src].real * b_y;                   
                 }
             }
         }
@@ -666,8 +736,18 @@ void fdtd::FDTD::update_E(int n, double t)
                     ind_global = (i+i0s)*_J*_K + (j+j0s)*_K + k+k0s;
                     ind_src = i*Js*Ks + j*Ks + k;
                     
+#ifdef COMPLEX_EPS
+                    if(!_complex_eps)
+                        b_z = _dt/_eps_z[ind_global].real;
+                    else {
+                        epsz = _eps_z[ind_global];
+                        b_z = 1.0/(epsz.real * _odt + epsz.imag*0.5);
+                    }
+#else
+                    b_z = _dt/_eps_z[ind_global].real;
+#endif
                     src_t = src_func_t(n, t, Jz[ind_src].imag);
-                    _Ez[ind_ijk] = _Ez[ind_ijk] - src_t * Jz[ind_src].real * _dt / _eps_z[ind_global].real;                   
+                    _Ez[ind_ijk] = _Ez[ind_ijk] - src_t * Jz[ind_src].real * b_z;                   
                 }
             }
         }
@@ -1568,6 +1648,11 @@ void FDTD_set_local_grid(fdtd::FDTD* fdtd,
 void FDTD_set_dt(fdtd::FDTD* fdtd, double dt)
 {
     fdtd->set_dt(dt);
+}
+
+void FDTD_set_complex_eps(fdtd::FDTD* fdtd, bool complex_eps)
+{
+    fdtd->set_complex_eps(complex_eps);
 }
 
 void FDTD_set_field_arrays(fdtd::FDTD* fdtd,

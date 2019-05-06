@@ -18,12 +18,12 @@ import numpy as np
 ####################################################################################
 #Simulation Region parameters
 ####################################################################################
-W = 10.0
-H = 7.0
+X = 10.0
+Y = 7.0
 dx = 0.02
 dy = 0.02
 wlen = 1.55
-sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
+sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
 
 # by default, PML size is chosen for you. If you want to specify your own PML
 # sizes you can set them using the sim.w_pml attribute which is an array with 4
@@ -35,8 +35,8 @@ sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
 # The true width/height will not necessarily match what we used when
 # initializing the solver. This is the case when the width is not an integer
 # multiple of the grid spacing used.
-W = sim.W
-H = sim.H
+X = sim.X
+Y = sim.Y
 M = sim.M
 N = sim.N
 
@@ -49,17 +49,17 @@ n0 = 1.0
 n1 = 3.0
 
 # set a background permittivity of 1
-eps_background = emopt.grid.Rectangle(W/2, H/2, 2*W, H)
+eps_background = emopt.grid.Rectangle(X/2, Y/2, 2*X, Y)
 eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
 h_wg = 0.5
-waveguide = emopt.grid.Rectangle(W/2, H/2, 2*W, h_wg)
+waveguide = emopt.grid.Rectangle(X/2, Y/2, 2*X, h_wg)
 waveguide.layer = 1
 waveguide.material_value = n1**2
 
-eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
+eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
 eps.add_primitive(waveguide)
 eps.add_primitive(eps_background)
 
@@ -75,7 +75,7 @@ sim.set_materials(eps, mu)
 Jz = np.zeros([M,N], dtype=np.complex128)
 Mx = np.zeros([M,N], dtype=np.complex128)
 My = np.zeros([M,N], dtype=np.complex128)
-Jz[M/2, N/2] = 1.0
+Jz[M//2, N//2] = 1.0
 
 sim.set_sources((Jz, Mx, My))
 
@@ -87,7 +87,7 @@ sim.solve_forward()
 
 # Get the fields we just solved for
 # define a plane using a DomainCoordinates with no z-thickness
-sim_area = emopt.misc.DomainCoordinates(1.0, W-1.0, 1.0, H-1.0, 0, 0, dx, dy, 1.0)
+sim_area = emopt.misc.DomainCoordinates(1.0, X-1.0, 1.0, Y-1.0, 0, 0, dx, dy, 1.0)
 Ez = sim.get_field_interp('Ez', sim_area)
 
 # Simulate the field.  Since we are running this using MPI, we only generate
@@ -107,8 +107,8 @@ if(NOT_PARALLEL):
                             cmap='seismic')
 
     # Plot the waveguide boundaries
-    ax.plot(extent[0:2], [H/2-h_wg/2, H/2-h_wg/2], 'k-')
-    ax.plot(extent[0:2], [H/2+h_wg/2, H/2+h_wg/2], 'k-')
+    ax.plot(extent[0:2], [Y/2-h_wg/2, Y/2-h_wg/2], 'k-')
+    ax.plot(extent[0:2], [Y/2+h_wg/2, Y/2+h_wg/2], 'k-')
 
     ax.set_title('E$_z$', fontsize=18)
     ax.set_xlabel('x [um]', fontsize=14)

@@ -18,13 +18,18 @@ considerably less RAM, making it useful for optimizing much larger devices at mu
 higher resolutions.
 
 """
+from __future__ import print_function
+from __future__ import absolute_import
 
-from simulation import MaxwellSolver
-from defs import FieldComponent
-from misc import DomainCoordinates, RANK, MathDummy, NOT_PARALLEL, COMM, \
+from builtins import zip
+from builtins import range
+from builtins import object
+from .simulation import MaxwellSolver
+from .defs import FieldComponent
+from .misc import DomainCoordinates, RANK, MathDummy, NOT_PARALLEL, COMM, \
 info_message, warning_message, N_PROC, run_on_master
-from fdtd_ctypes import libFDTD
-from modes import ModeFullVector
+from .fdtd_ctypes import libFDTD
+from .modes import ModeFullVector
 import petsc4py
 import sys
 petsc4py.init(sys.argv)
@@ -147,6 +152,9 @@ class FDTD(MaxwellSolver):
         correctly can speed up your simulations by quite a bit, however you
         must be careful that its value does not exceed the minimum refractive
         index in your simulation. (default = 1.0)
+    complex_eps : boolean (optional)
+        Tells the solver if the permittivity is complex-valued. Setting this to
+        False can speed up the solver when run on fewer cores (default = False)
 
     Attributes
     ----------
@@ -221,7 +229,7 @@ class FDTD(MaxwellSolver):
     """
 
     def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=None,
-                 min_rindex=1.0):
+                 min_rindex=1.0, complex_eps=False):
         super(FDTD, self).__init__(3)
 
         if(nconv is None):
@@ -252,6 +260,7 @@ class FDTD(MaxwellSolver):
         self._min_rindex = min_rindex
         dt = self._Sc * np.min([dx, dy, dz])/self._R / np.sqrt(3) * min_rindex
         self._dt = dt
+
 
         # stencil_type=1 => box
         # stencil_width=1 => 1 element ghosted region
@@ -334,6 +343,9 @@ class FDTD(MaxwellSolver):
                 self._eps_x.getArray(), self._eps_y.getArray(), self._eps_z.getArray(),
                 self._mu_x.getArray(), self._mu_y.getArray(), self._mu_z.getArray())
 
+        # set whether or not materials are complex valued
+        libFDTD.FDTD_set_complex_eps(self._libfdtd, complex_eps)
+
         ## Setup default PML properties
         w_pml = 15
         self._w_pml = [w_pml*dx, w_pml*dx, \
@@ -392,7 +404,7 @@ class FDTD(MaxwellSolver):
 
         # default boundary conditions = PEC
         self._bc = ['0', '0', '0']
-        libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc))
+        libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc).encode('ascii'))
 
         # make room for eps and mu
         self._eps = None
@@ -546,7 +558,7 @@ class FDTD(MaxwellSolver):
                                           'implemented')
 
         self._bc = list(newbc)
-        libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc))
+        libFDTD.FDTD_set_bc(self._libfdtd, ''.join(self._bc).encode('ascii'))
 
     @property
     def w_pml(self):
@@ -1133,7 +1145,7 @@ class FDTD(MaxwellSolver):
 
         # perform a couple more iterations to get a second time point
         n0 = n
-        for n in xrange(Tn):
+        for n in range(Tn):
             libFDTD.FDTD_update_H(self._libfdtd, n+n0, (n+n0)*dt)
 
             # Note: da.localToLocal seems to have the same performance?
@@ -1150,7 +1162,7 @@ class FDTD(MaxwellSolver):
 
         libFDTD.FDTD_capture_t1_fields(self._libfdtd)
 
-        for n in xrange(Tn):
+        for n in range(Tn):
             libFDTD.FDTD_update_H(self._libfdtd, n+n0+Tn, (n+n0+Tn)*dt)
 
             # Note: da.localToLocal seems to have the same performance?
@@ -1767,7 +1779,7 @@ class GhostComm(object):
         for pd in pos_data:
             gindex, i0n, j0n, k0n, In, Jn, Kn = pd
             if(k == k0n + Kn-1 and i0 == i0n and j0 == j0n):
-                ighosts += range(gindex+In*Jn, gindex+2*In*Jn)
+                ighosts += list(range(gindex+In*Jn, gindex+2*In*Jn))
 
         # xmax boundary
         k = k0+K
@@ -1775,7 +1787,7 @@ class GhostComm(object):
         for pd in pos_data:
             gindex, i0n, j0n, k0n, In, Jn, Kn = pd
             if(k ==  k0n and i0 == i0n and j0 == j0n):
-                ighosts += range(gindex, gindex + In*Jn)
+                ighosts += list(range(gindex, gindex + In*Jn))
 
         # ymin boundary
         j = j0-1
@@ -1783,7 +1795,7 @@ class GhostComm(object):
         for pd in pos_data:
             gindex, i0n, j0n, k0n, In, Jn, Kn = pd
             if(j == j0n + Jn - 1 and k0 == k0n and i0 == i0n):
-                ighosts += range(gindex+2*In*Jn+In*Kn, gindex+2*In*Jn+2*In*Kn)
+                ighosts += list(range(gindex+2*In*Jn+In*Kn, gindex+2*In*Jn+2*In*Kn))
 
         # ymax boundary
         j = j0+J
@@ -1791,7 +1803,7 @@ class GhostComm(object):
         for pd in pos_data:
             gindex, i0n, j0n, k0n, In, Jn, Kn = pd
             if(j == j0n and k0 == k0n and i0 == i0n):
-                ighosts += range(gindex+2*In*Jn, gindex+2*In*Jn+In*Kn)
+                ighosts += list(range(gindex+2*In*Jn, gindex+2*In*Jn+In*Kn))
 
         # zmin boundary
         i = i0-1
@@ -1799,8 +1811,8 @@ class GhostComm(object):
         for pd in pos_data:
             gindex, i0n, j0n, k0n, In, Jn, Kn = pd
             if(i == i0n + In - 1 and j0 == j0n and k0 == k0n):
-                ighosts += range(gindex+2*In*Jn+2*In*Kn+Jn*Kn,
-                                 gindex+2*In*Jn+2*In*Kn+2*Jn*Kn)
+                ighosts += list(range(gindex+2*In*Jn+2*In*Kn+Jn*Kn,
+                                 gindex+2*In*Jn+2*In*Kn+2*Jn*Kn))
 
         # zmax boundary
         i = i0+I
@@ -1808,8 +1820,8 @@ class GhostComm(object):
         for pd in pos_data:
             gindex, i0n, j0n, k0n, In, Jn, Kn = pd
             if(i == i0n and j0 == j0n and k0 == k0n):
-                ighosts += range(gindex+2*In*Jn+2*In*Kn,
-                                 gindex+2*In*Jn+2*In*Kn+Jn*Kn)
+                ighosts += list(range(gindex+2*In*Jn+2*In*Kn,
+                                 gindex+2*In*Jn+2*In*Kn+Jn*Kn))
 
         # Set the ghost indices = finish constructing ghost vector
         self._ighosts = np.array(ighosts, dtype=np.int32)

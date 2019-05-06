@@ -23,7 +23,7 @@ std::complex<double> GridMaterial2D::get_value(double x, double y)
 }
 
 
-void GridMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2)
+void GridMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy)
 {
     int N = k2 - k1;
 
@@ -436,13 +436,13 @@ void StructuredMaterial2D::add_primitives(std::list<MaterialPrimitive*> primitiv
 }
 
 
-void StructuredMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2)
+void StructuredMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy)
 {
     int N = k2 - k1;
 
-    for(int i = j1; i < j2; i++) {
-        for(int j = k1; j < k2; j++) {
-            grid((i-j1)*N+j-k1) = get_value(j, i);
+    for(int j = j1; j < j2; j++) {
+        for(int k = k1; k < k2; k++) {
+            grid((j-j1)*N+k-k1) = get_value(k+sx, j+sy);
         }
     }
 }
@@ -537,7 +537,7 @@ std::complex<double> ConstantMaterial2D::get_value(double x, double y)
     return _value;
 }
 
-void ConstantMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2)
+void ConstantMaterial2D::get_values(ArrayXcd& grid, int k1, int k2, int j1, int j2, double sx, double sy)
 {
     int N = k2 - k1;
 

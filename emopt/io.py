@@ -1,8 +1,11 @@
 """Various functions associated loading and saving files.
 """
+from __future__ import absolute_import
 
-from misc import run_on_master, warning_message, NOT_PARALLEL, COMM
-from grid import Polygon
+from builtins import zip
+from builtins import range
+from .misc import run_on_master, warning_message, NOT_PARALLEL, COMM
+from .grid import Polygon
 import numpy as np
 
 __author__ = "Andrew Michaels"
@@ -143,22 +146,14 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
     # outline structure in field plot
     # Temporary fix for old versions of Matplotlib which dont support int for
     # levels
-    try:
-        ax_field.contour(np.flipud(structure), extent=extent, levels=Nlevels,
-                          colors='#666666', linewidths=0.1)
-    except:
-        smin = np.min(structure)
-        smax = np.max(structure)
-        ax_field.contour(np.flipud(structure), extent=extent,
-                         levels=[smin, smax],
-                          colors='#666666', linewidths=0.1)
-
+    ax_field.contour(np.flipud(structure), extent=extent, levels=Nlevels,
+                      colors='#666666', linewidths=0.1)
     # set dark colors
     # plot title with important iteration number, etc
     # sum along z-axis for structure
 
     # define fom plot colors
-    Nplot = len(foms.keys())
+    Nplot = len(list(foms.keys()))
     red = np.linspace(0.2, 1.0, Nplot)
     blue = np.linspace(1.0, 0.2, Nplot)
     green = np.zeros(Nplot)
@@ -169,7 +164,7 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
     i = 0
     Niter = 0
     current_foms = []
-    for desc in foms.keys():
+    for desc in list(foms.keys()):
         fom = foms[desc]
         Niter = len(fom)
         iters = np.arange(Niter)
@@ -181,7 +176,7 @@ def plot_iteration(field, structure, W, H, foms, fname='', layout='auto',
 
     ax_foms.set_xlabel('Iteration', fontsize=12)
     ax_foms.set_ylabel('Figure of Merit', fontsize=12)
-    ax_foms.legend(foms.keys(), loc=4)
+    ax_foms.legend(list(foms.keys()), loc=4)
     ax_foms.grid(True, linewidth=0.5)
 
     # general tick properties
@@ -364,16 +359,16 @@ def load_results(fname, bcast=True):
         fname_full = ''.join([fname, '.h5'])
         with h5py.File(fname_full, "r") as fh5:
 
-            for key in fh5['simulation'].keys():
+            for key in list(fh5['simulation'].keys()):
                 data[key] = fh5['simulation'][key][...]
 
-            for key in fh5['simulation'].attrs.keys():
+            for key in list(fh5['simulation'].attrs.keys()):
                 data[key] = fh5['simulation'].attrs[key][...]
 
-            for key in fh5['optimization'].keys():
+            for key in list(fh5['optimization'].keys()):
                 data[key] = fh5['optimization'][key][...]
 
-            for key in fh5['misc'].keys():
+            for key in list(fh5['misc'].keys()):
                 data[key] = fh5['misc'][key][...]
 
     if(bcast):

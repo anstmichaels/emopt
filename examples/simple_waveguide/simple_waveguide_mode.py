@@ -16,22 +16,22 @@ import numpy as np
 ####################################################################################
 #Simulation Region parameters
 ####################################################################################
-W = 5.0
-H = 5.0
+X = 5.0
+Y = 5.0
 dx = 0.02
 dy = 0.02
 wlen = 1.55
 
 # set up TE simulation. TE refers to the field polarization which has E
 # strictly perpendicular to the direction of propagation, i.e. E = Ez
-sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wlen)
+sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
 
 # Get the actual width and height
 # The true width/height will not necessarily match what we used when
 # initializing the solver. This is the case when the width is not an integer
 # multiple of the grid spacing used.
-W = sim.W
-H = sim.H
+X = sim.Y
+Y = sim.X
 M = sim.M
 N = sim.N
 
@@ -43,18 +43,18 @@ n0 = 1.44
 n1 = 3.45
 
 # set a background permittivity of 1
-eps_background = emopt.grid.Rectangle(W/2, H/2, 2*W, H)
+eps_background = emopt.grid.Rectangle(X/2, Y/2, 2*X, Y)
 eps_background.layer = 2
 eps_background.material_value = n0**2
 
 # Create a high index waveguide through the center of the simulation
-h_wg = 0.22
-waveguide = emopt.grid.Rectangle(W/2, H/2, W*2, h_wg)
+h_wg = 0.5
+waveguide = emopt.grid.Rectangle(X/2, Y/2, X*2, h_wg)
 waveguide.layer = 1
 waveguide.material_value = n1**2
 
 # Create the a structured material which holds the waveguide and background
-eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
+eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
 eps.add_primitive(waveguide)
 eps.add_primitive(eps_background)
 
@@ -69,8 +69,8 @@ sim.set_materials(eps, mu)
 # setup the sources
 ####################################################################################
 # Specify a line of coordinates where the source is defined
-src_line = emopt.misc.DomainCoordinates(W/4, W/4,
-                                        sim.w_pml[2], H-sim.w_pml[3], 0.0, 0.0,
+src_line = emopt.misc.DomainCoordinates(X/4, X/4,
+                                        sim.w_pml[2], Y-sim.w_pml[3], 0.0, 0.0,
                                         dx, dy, 1.0)
 
 # setup, build the system, and solve
@@ -92,7 +92,7 @@ sim.build()
 sim.solve_forward()
 
 # Get the fields we just solved for
-sim_area = emopt.misc.DomainCoordinates(1.0, W-1.0, 1.0, H-1.0, 0.0, 0.0, dx, dy, 1.0)
+sim_area = emopt.misc.DomainCoordinates(1.0, X-1.0, 1.0, Y-1.0, 0.0, 0.0, dx, dy, 1.0)
 Ez = sim.get_field_interp('Ez', sim_area)
 
 # Visualize the field.  Since we are running this using MPI, we only generate

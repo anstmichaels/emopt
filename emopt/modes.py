@@ -38,15 +38,19 @@ References
 Modesolver for Anisotropic Dielectric Waveguides", J. Lightwave Technol. 26(11),
 1423-1431, (2008).
 """
+from __future__ import absolute_import
 # Initialize petsc first
+from builtins import range
+from builtins import object
 import sys, slepc4py
+from future.utils import with_metaclass
 slepc4py.init(sys.argv)
 
-from defs import FieldComponent
-from misc import info_message, warning_message, error_message, \
+from .defs import FieldComponent
+from .misc import info_message, warning_message, error_message, \
 NOT_PARALLEL, run_on_master, MathDummy
 
-import grid
+from . import grid
 
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
@@ -60,7 +64,7 @@ __version__ = "0.4"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-class ModeSolver(object):
+class ModeSolver(with_metaclass(ABCMeta, object)):
     """A generic interface for electromagnetic mode solvers.
 
     At a minimum, a mode solver must provide functions for solving for the
@@ -93,7 +97,6 @@ class ModeSolver(object):
     get_source(self, i, ds1, ds2, ds3=0.0)
         Get the source current distribution for the i'th mode.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, wavelength, n0=1.0, neigs=1):
         self._neff = []
@@ -401,13 +404,14 @@ class ModeTE(ModeSolver):
         ds = self.ds/self.R # non-dimensionalize
 
         eps = self.eps.get_values_in(self.domain, squeeze=True)
-        mu = self.mu.get_values_in(self.domain, squeeze=True)
+        mu_x = self.mu.get_values_in(self.domain, sy=0.5, squeeze=True)
+        mu_y = self.mu.get_values_in(self.domain, sx=-0.5, squeeze=True)
 
         A = self._A
         B = self._B
         N = self._N
 
-        for I in xrange(self.ib, self.ie):
+        for I in range(self.ib, self.ie):
 
             # (stuff) = n_x B H_y
             if(I < N):
@@ -417,7 +421,7 @@ class ModeTE(ModeSolver):
                 j0 = I
                 j1 = I+N
 
-                A[i,j0] = 1j*eps[j0]
+                A[i,j0] = 1j*eps[y]
 
                 A[i,j1] = -1.0/ds
                 if(j0 > 0):
@@ -446,9 +450,7 @@ class ModeTE(ModeSolver):
                 j0 = I
                 j1 = I-N
 
-                # the second or should be an and, but that results in a
-                # singular matrix -- is this a code error or physics error?
-                A[i,j0] = -1j*mu[j1]
+                A[i,j0] = -1j*mu_x[y]
 
                 A[i,j1] = -1.0/ds
 
@@ -460,6 +462,8 @@ class ModeTE(ModeSolver):
                 #############################
                 if(y == 0):
                     if(self._bc == '0'):
+                        A[i,j1] = 0
+                    if(self._bc == 'H'):
                         A[i,j1] = 0
                 elif(y == N-1):
                     if(self._bc == 'P'):
@@ -473,7 +477,7 @@ class ModeTE(ModeSolver):
                 y = I-2*N
                 j0 = I
 
-                A[i,j0] = 1j*mu[i-2*N]
+                A[i,j0] = 1j*mu_y[y]
 
                 #############################
                 # enforce boundary conditions
@@ -486,7 +490,7 @@ class ModeTE(ModeSolver):
 
         # Define B. It contains ones on the first and last third of the
         # diagonals
-        for i in xrange(self.ib, self.ie):
+        for i in range(self.ib, self.ie):
             if(i < N):
                 B[i,i+2*N] = -1j*self._dir # _dir=1 corresponds to exp(-ikx)
             elif(i < 2*N):
@@ -777,7 +781,8 @@ class ModeTE(ModeSolver):
 
         if(NOT_PARALLEL):
             eps = self.eps.get_values_in(self.domain, squeeze=True)
-            mu = self.mu.get_values_in(self.domain, squeeze=True)
+            mu_x = self.mu.get_values_in(self.domain, sy=0.5, squeeze=True)
+            mu_y = self.mu.get_values_in(self.domain, sx=-0.5, squeeze=True)
             Jz = np.zeros(N, dtype=np.complex128)
             Mx = np.zeros(N, dtype=np.complex128)
             My = np.zeros(N, dtype=np.complex128)
@@ -808,14 +813,13 @@ class ModeTE(ModeSolver):
             dx = dx/self.R # non-dimensionalize
             dy = dy/self.R # non-dimensionalize
 
-            dHxdy = np.diff(Hx) / dy
-            dHxdy = dHxdy[:-1]
+            dHxdy = (Hx[1:-1] - Hx[0:-2]) / dy
             dHydx = Hy[1:-1]*np.exp(self._dir*1j*neff*dx/2.0) / dx
-            dEzdy = np.diff(Ez)[1:] / dy
+            dEzdy = (Ez[2:] - Ez[1:-1]) / dy
             dEzdx = Ez[1:-1] / dx
 
             Jz = 1j*(eps*Ez[1:-1]) + dHydx - dHxdy
-            Mx = dEzdy - 1j*(mu*Hx[1:-1])
+            Mx = dEzdy - 1j*(mu_x*Hx[1:-1])
             My = -dEzdx
 
         else:
@@ -919,11 +923,11 @@ class ModeTM(ModeTE):
         # We need to unmix this up so the user isnt confused.
         bc = self._bc + ''
         if(len(bc) == 2):
-            if(bc[0] == 'E'): return 'H'
-            else: return 'E'
-        else:
             if(bc[0] == 'E'): return 'HM'
-            elif(bc[0] == 'H'): return 'EM'
+            else: return 'EM'
+        else:
+            if(bc[0] == 'E'): return 'H'
+            elif(bc[0] == 'H'): return 'E'
             elif(bc[0] == '0'): return 'M'
             elif(bc[0] == 'M'): return '0'
             else: return bc
@@ -937,11 +941,11 @@ class ModeTM(ModeTE):
         # we need to swap Es and Hs and 0s and Ms since we use the TE solver to
         # find the TM fields
         if(len(bc) == 2):
-            if(bc[0] == 'E'): self._bc = 'H'
-            else: self._bc = 'E'
-        else:
             if(bc[0] == 'E'): self._bc = 'HM'
-            elif(bc[0] == 'H'): self._bc = 'EM'
+            else: self._bc = 'EM'
+        else:
+            if(bc[0] == 'E'): self._bc = 'H'
+            elif(bc[0] == 'H'): self._bc = 'E'
             elif(bc[0] == '0'): self._bc = 'M'
             elif(bc[0] == 'M'): self._bc = '0'
             else: self._bc = bc
@@ -1155,6 +1159,8 @@ class ModeFullVector(ModeSolver):
         self.mu = mu
         self.domain = domain
 
+        self._fshape = domain.shape
+
         # figure out how 2D domain is oriented
         n = None
         if(domain.Nx == 1):
@@ -1339,7 +1345,7 @@ class ModeFullVector(ModeSolver):
                 get_mu_y = lambda x,y : mu.get_value(k0+x,j0+y,i0)
                 get_mu_z = lambda x,y : mu.get_value(k0+x,j0+y,i0)
 
-        for I in xrange(self.ib, self.ie):
+        for I in range(self.ib, self.ie):
             A[I,I] = 0.0
             B[I,I] = 0.0
 
@@ -1642,7 +1648,7 @@ class ModeFullVector(ModeSolver):
 
         return component
 
-    def get_field(self, i, component, permute=True):
+    def get_field(self, i, component, permute=True, squeeze=False):
         """Get the desired raw field component of the i'th mode.
 
         Notes
@@ -1773,11 +1779,14 @@ class ModeFullVector(ModeSolver):
         if(NOT_PARALLEL):
             x_assembled = np.concatenate(x_full)
             field = np.reshape(x_assembled, (M,N))
-            return field
+            if(squeeze):
+                return field
+            else:
+                return np.reshape(field, self._fshape)
         else:
             return MathDummy()
 
-    def get_field_interp(self, i, component):
+    def get_field_interp(self, i, component, squeeze=False):
         """Get the desired interpolated field component of the i'th mode.
 
         In general, this function should be preferred over
@@ -1818,11 +1827,20 @@ class ModeFullVector(ModeSolver):
             interpolated mode field.
         """
         if(self.ndir == 'x'):
-            return self.__get_field_interp_x(i, component)
+            field = self.__get_field_interp_x(i, component)
         elif(self.ndir == 'y'):
-            return self.__get_field_interp_y(i, component)
+            field = self.__get_field_interp_y(i, component)
         elif(self.ndir == 'z'):
-            return self.__get_field_interp_z(i, component)
+            field = self.__get_field_interp_z(i, component)
+
+        # Cant reshape in the next part unless we are rank 0
+        if(not NOT_PARALLEL):
+            return MathDummy()
+
+        if(squeeze):
+            return field
+        else:
+            return np.reshape(field, self._fshape)
 
     def __get_field_interp_x(self, i, component):
         ## Interpolate the fields assuming the mode propagates in the +z
@@ -1834,7 +1852,7 @@ class ModeFullVector(ModeSolver):
         ## emopt.fdtd.FDTD classes, interpolation has to be handled carefully
         ## depending on the direction that the mode propagates. In this case, we
         ## interpolate the fields about Ey, which corresponds to Ez in FDFD/FDTD.
-        f_raw = self.get_field(i, component)
+        f_raw = self.get_field(i, component, squeeze=True)
 
         # zero padding is equivalent to including boundary values outside of
         # the metal boundaries. This is needed to compute the interpolated
@@ -1901,7 +1919,7 @@ class ModeFullVector(ModeSolver):
         ## emopt.fdtd.FDTD classes, interpolation has to be handled carefully
         ## depending on the direction that the mode propagates. In this case, we
         ## interpolate the fields about Ex, which corresponds to Ez in FDFD/FDTD.
-        f_raw = self.get_field(i, component)
+        f_raw = self.get_field(i, component, squeeze=True)
 
         # zero padding is equivalent to including boundary values outside of
         # the metal boundaries. This is needed to compute the interpolated
@@ -1969,7 +1987,7 @@ class ModeFullVector(ModeSolver):
         ## emopt.fdtd.FDTD classes, interpolation has to be handled carefully
         ## depending on the direction that the mode propagates. In this case, we
         ## interpolate the fields about Ez, which corresponds to Ez in FDFD/FDTD.
-        f_raw = self.get_field(i, component)
+        f_raw = self.get_field(i, component, squeeze=True)
 
         # zero padding is equivalent to including boundary values outside of
         # the metal boundaries. This is needed to compute the interpolated
@@ -2050,27 +2068,27 @@ class ModeFullVector(ModeSolver):
         eps = self.eps.get_values_in(self.domain)
         mu = self.mu.get_values_in(self.domain)
 
-        Ex = self.get_field(i, FieldComponent.Ex)
+        Ex = self.get_field(i, FieldComponent.Ex, squeeze=True)
         WEx = np.sum(eps.real*np.abs(Ex)**2)
         del Ex
 
-        Ey = self.get_field(i, FieldComponent.Ey)
+        Ey = self.get_field(i, FieldComponent.Ey, squeeze=True)
         WEy = np.sum(eps.real*np.abs(Ey)**2)
         del Ey
 
-        Ez = self.get_field(i, FieldComponent.Ez)
+        Ez = self.get_field(i, FieldComponent.Ez, squeeze=True)
         WEz = np.sum(eps.real*np.abs(Ez)**2)
         del Ez
 
-        Hx = self.get_field(i, FieldComponent.Hx)
+        Hx = self.get_field(i, FieldComponent.Hx, squeeze=True)
         WHx = np.sum(mu.real*np.abs(Hx)**2)
         del Hx
 
-        Hy = self.get_field(i, FieldComponent.Hy)
+        Hy = self.get_field(i, FieldComponent.Hy, squeeze=True)
         WHy = np.sum(mu.real*np.abs(Hy)**2)
         del Hy
 
-        Hz = self.get_field(i, FieldComponent.Hz)
+        Hz = self.get_field(i, FieldComponent.Hz, squeeze=True)
         WHz = np.sum(mu.real*np.abs(Hz)**2)
         del Hz
 
@@ -2208,12 +2226,12 @@ class ModeFullVector(ModeSolver):
         ekz = np.exp(1j*self._dir*neff*dz/2)
 
         # Get field data
-        Ex = self.get_field(i, FieldComponent.Ex, permute=False)
-        Ey = self.get_field(i, FieldComponent.Ey, permute=False)
-        Ez = self.get_field(i, FieldComponent.Ez, permute=False)
-        Hx = self.get_field(i, FieldComponent.Hx, permute=False)
-        Hy = self.get_field(i, FieldComponent.Hy, permute=False)
-        Hz = self.get_field(i, FieldComponent.Hz, permute=False)
+        Ex = self.get_field(i, FieldComponent.Ex, permute=False, squeeze=True)
+        Ey = self.get_field(i, FieldComponent.Ey, permute=False, squeeze=True)
+        Ez = self.get_field(i, FieldComponent.Ez, permute=False, squeeze=True)
+        Hx = self.get_field(i, FieldComponent.Hx, permute=False, squeeze=True)
+        Hy = self.get_field(i, FieldComponent.Hy, permute=False, squeeze=True)
+        Hz = self.get_field(i, FieldComponent.Hz, permute=False, squeeze=True)
 
         # normalize power to ~1.0 -- not really necessary
         S = 0.5*mydx*mydy*np.sum(Ex*np.conj(Hy)-Ey*np.conj(Hx))

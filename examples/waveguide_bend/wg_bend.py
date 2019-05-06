@@ -19,7 +19,7 @@ from math import pi
 class WGBendAM(AdjointMethod):
 
     def __init__(self, sim, xs, ys, waveguide, Psrc):
-        super(WGBendAM, self).__init__(sim, step=1e-7)
+        super(WGBendAM, self).__init__(sim, step=1e-12)
 
         self.xs = xs
         self.ys = ys
@@ -78,7 +78,7 @@ class WGBendAM(AdjointMethod):
 
         return (dFdHz, dFdEx, dFdEy)
 
-    def calc_grad_y(self, sim, params):
+    def calc_grad_p(self, sim, params):
         return np.zeros(params.shape)
 
 def callback(params, sim, am, fom_history, Ts, Exm, Eym, Hzm):
@@ -103,8 +103,8 @@ def callback(params, sim, am, fom_history, Ts, Exm, Eym, Hzm):
     data['foms'] = fom_history
     data['dx'] = sim.dx
     data['dy'] = sim.dy
-    data['W'] = sim.W
-    data['H'] = sim.H
+    data['X'] = sim.X
+    data['Y'] = sim.Y
 
     additional = {}
     additional['Ts'] = Ts
@@ -123,14 +123,14 @@ if __name__ == '__main__':
     ###########################################################################
     # Setup the simulation domain
     ###########################################################################
-    W = 6.0
-    H = 6.0
+    X = 6.0
+    Y = 6.0
     dx = dy = 0.03
     wavelength = 1.55
 
-    sim = emopt.fdfd.FDFD_TM(W, H, dx, dy, wavelength)
-    W = sim.W
-    H = sim.H
+    sim = emopt.fdfd.FDFD_TM(X, Y, dx, dy, wavelength)
+    X = sim.X
+    Y = sim.Y
     M = sim.M
     N = sim.N
     w_pml = sim.w_pml
@@ -155,11 +155,11 @@ if __name__ == '__main__':
     waveguide.layer = 1
     waveguide.material_value = n1**2
 
-    background = emopt.grid.Rectangle(wg_pos, wg_pos, 2*W, 2*H)
+    background = emopt.grid.Rectangle(wg_pos, wg_pos, 2*X, 2*Y)
     background.layer = 2
     background.material_value = n0**2
 
-    eps = emopt.grid.StructuredMaterial2D(W, H, dx, dy)
+    eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
     eps.add_primitives([waveguide, background])
 
     mu = emopt.grid.ConstantMaterial2D(1.0)
@@ -203,8 +203,8 @@ if __name__ == '__main__':
     fom_area = emopt.misc.DomainCoordinates(wg_pos-w_fom/2, wg_pos+w_fom/2,
                                             w_pml[2]+5*dy, w_pml[2] + 5*dy,
                                             0, 0, dx, dy, 1.0)
-    full_field = emopt.misc.DomainCoordinates(w_pml[0], W-w_pml[1],
-                                              w_pml[2], H-w_pml[3],
+    full_field = emopt.misc.DomainCoordinates(w_pml[0], X-w_pml[1],
+                                              w_pml[2], Y-w_pml[3],
                                               0, 0, dx, dy, 1.0)
     sim.build()
     sim.field_domains = [fom_area, full_field, T_area]
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     design_params = np.array([0.25, 0.25+w_wg])
     am = WGBendAM(sim, xs, ys, waveguide, Psrc)
 
-    #am.check_gradient(design_params)
+    am.check_gradient(design_params)
 
     fom_history = []
     Ts = []

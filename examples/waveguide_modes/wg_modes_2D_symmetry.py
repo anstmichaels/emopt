@@ -37,7 +37,7 @@ wg_out.layer = 2; wg_out.material_value = 2.5**2
 wg_in = emopt.grid.Rectangle(0, 0, 1.0, w_wg_in)
 wg_in.layer = 1; wg_in.material_value = 3.45**2
 
-bg = emopt.grid.Rectangle(0, 0, 1.0, 2*H)
+bg = emopt.grid.Rectangle(0, H/2, 1.0, 2*H)
 bg.layer = 3; bg.material_value = 1.444**2
 
 # Create a structured material which is just the ensemble of rectangles created above

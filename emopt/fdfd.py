@@ -56,19 +56,23 @@ correctly-sized zeroed numpy array on the non-master nodes.
 2. Reimplement the set_source function with Domain support.  This will be
 necessary in 3D when the total grid size is very large.
 """
+from __future__ import absolute_import
 
 # Initialize petsc first
+from builtins import zip
+from builtins import range
 import petsc4py
 import sys
+from future.utils import with_metaclass
 petsc4py.init(sys.argv)
 
-from misc import info_message, warning_message, error_message, RANK, \
+from .misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, MathDummy, DomainCoordinates, COMM
-from defs import FieldComponent, SourceComponent
-import modes
-from simulation import MaxwellSolver
+from .defs import FieldComponent, SourceComponent
+from . import modes
+from .simulation import MaxwellSolver
 
-from grid import row_wise_A_update
+from .grid import row_wise_A_update
 
 import numpy as np
 from math import pi
@@ -83,7 +87,7 @@ __version__ = "0.4"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-class FDFD(MaxwellSolver):
+class FDFD(with_metaclass(ABCMeta, MaxwellSolver)):
     """Finite difference frequency domain solver.
 
     This class provides the generalized interface for a finite diffrence
@@ -150,7 +154,6 @@ class FDFD(MaxwellSolver):
     source_power
         The source power injected into the system.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, ndims):
         super(FDFD, self).__init__(ndims)
@@ -244,10 +247,10 @@ class FDFD_TE(FDFD):
 
     Parameters
     ----------
-    W : float
+    X : float
         Approximate width of the simulation region. If this is not an integer
         multiple of dx, this will be increased slightly
-    H : float
+    Y : float
         Approximate height of the simulation region. If this is not an integer
         multiple of dy, this will be increased slightly
     dx : float
@@ -277,6 +280,10 @@ class FDFD_TE(FDFD):
     W : float
         The width of the simulation region (including PMLs)
     H : float
+        The height of the simulation region (including PMLs)
+    X : float
+        The width of the simulation region (including PMLs)
+    Y : float
         The height of the simulation region (including PMLs)
     M : int
         The number of grid cells in the y direction
@@ -308,9 +315,13 @@ class FDFD_TE(FDFD):
         some calculations. (defaults to False)
     """
 
-    def __init__(self, W, H, dx, dy, wavelength, solver='auto',
+    def __init__(self, X, Y, dx, dy, wavelength, solver='auto',
                  ksp_solver='gmres'):
         super(FDFD_TE, self).__init__(2)
+
+        # Temporary
+        W = X
+        H = Y
 
         self._dx = dx
         self._dy = dy
@@ -340,15 +351,12 @@ class FDFD_TE(FDFD):
         # dx and dy are the only dimension rigorously enforced
         self._M = int(np.ceil(H/dy) + 1)
         self._N = int(np.ceil(W/dx) + 1)
-        self._nunks = 3*self._M*self._N
 
         # The width and height are as close to the desired W and H as possible
         # given the desired grid spacing
         self._W = (self._N - 1) * dx
         self._H = (self._M - 1) * dy
 
-        self.Wreal = self._W - self._w_pml_left*dx - self._w_pml_right*dx
-        self.Hreal = self._H - self._w_pml_top*dy - self._w_pml_bottom*dy
 
         self._eps = None
         self._mu = None
@@ -356,9 +364,14 @@ class FDFD_TE(FDFD):
 
         # factor of 3 due to 3 field components
         self.Nc = 3
-        self._A.setSizes([self.Nc*self._M*self._N, self.Nc*self._M*self._N])
+        self._nunks = self.Nc*self._M*self._N
+        self._A.setSizes([self._nunks, self._nunks])
         self._A.setType('aij')
         self._A.setUp()
+
+        self._workvec = PETSc.Vec().create()
+        self._workvec.setSizes(self._nunks)
+        self._workvec.setUp()
 
         #obtain solution and RHS vectors
         x, b = self._A.getVecs()
@@ -438,16 +451,68 @@ class FDFD_TE(FDFD):
         passed during initialization if it is equal to an integer multiple of
         grid cells.
         """
+        warning_message('The W property is deprecated. Use X instead.',
+                        'FDFD_TE')
         return self._W
 
     @property
     def H(self):
         """
         The height of the systme. This height will only exactly match the
-        height passed during initialization if it is equal to an integer 
+        height passed during initialization if it is equal to an integer
         multiple of grid cells.
         """
+        warning_message('The H property is deprecated. Use Y instead.',
+                        'FDFD_TE')
         return self._H
+
+    @property
+    def X(self):
+        """This is needed for MaxwellSolver implementation.
+
+        TODO
+        ----
+        Replace self._W with self._X
+        """
+        return self._W
+
+    @property
+    def Y(self):
+        """Also needed for MaxwellSolver implementation.
+
+        TODO
+        ----
+        Replace self._H with self._Y
+        """
+        return self._H
+
+    @property
+    def Wreal(self):
+        """Width of the simulation, excluding PMLs.
+        """
+        warning_message('The Wreal property is deprecated. Use Xreal instead.',
+                       'FDFD_TE')
+        return self._W - self._w_pml_left*self._dx - self._w_pml_right*self._dx
+
+    @property
+    def Hreal(self):
+        """Height of the simulation, excluding PMLs.
+        """
+        warning_message('The Hreal property is deprecated. Use Yreal instead.',
+                       'FDFD_TE')
+        return self._H - self._w_pml_top*self._dy - self._w_pml_bottom*self._dy
+
+    @property
+    def Xreal(self):
+        """Width of the simulation, excluding PMLs.
+        """
+        return self._W - self._w_pml_left*self._dx - self._w_pml_right*self._dx
+
+    @property
+    def Yreal(self):
+        """Height of the simulation, excluding PMLs.
+        """
+        return self._H - self._w_pml_top*self._dy - self._w_pml_bottom*self._dy
 
     @property
     def M(self):
@@ -516,9 +581,6 @@ class FDFD_TE(FDFD):
         self._w_pml_right = int(val[1]/dx)
         self._w_pml_top = int(val[2]/dy)
         self._w_pml_bottom = int(val[3]/dy)
-
-        self.Wreal = self._W - self._w_pml_left*dx - self._w_pml_right*dx
-        self.Hreal = self._H - self._w_pml_top*dy - self._w_pml_bottom*dy
 
         self._built = False
 
@@ -790,7 +852,7 @@ class FDFD_TE(FDFD):
         if(self.verbose and NOT_PARALLEL):
             info_message('Building system matrix...')
 
-        for i in xrange(self.ib, self.ie):
+        for i in range(self.ib, self.ie):
 
             ig = int(i/Nc)
             component = int(i - Nc*ig)
@@ -878,6 +940,8 @@ class FDFD_TE(FDFD):
                     if(bc[1] == 'P'):
                         jEz2 = x*Nc
                         A[i,jEz2] = ody_Hx[y,x]
+                    if(bc[1] == 'M'):
+                        A[i, jEz0] = 0.0
 
                 if(x == N-1):
                     if(bc[0] == '0'):
@@ -966,24 +1030,22 @@ class FDFD_TE(FDFD):
 
         if(bbox == None):
             x1 = 0
-            x2 = self.N
+            x2 = self._N
             y1 = 0
-            y2 = self.M
+            y2 = self._M
         else:
-            x1 = bbox[0]
-            x2 = bbox[1]
-            y1 = bbox[2]
-            y2 = bbox[3]
+            x1 = int(np.floor(bbox[0]/self._W*N))
+            x2 = int(np.ceil(bbox[1]/self._W*N))
+            y1 = int(np.floor(bbox[2]/self._H*M))
+            y2 = int(np.ceil(bbox[3]/self._H*M))
 
         self.A_diag_update = row_wise_A_update(eps, mu, self.ib, self.ie, M, N,\
                                                x1, x2, y1, y2, \
                                                self.A_diag_update)
 
         A_update = self.A_diag_update
-
-        #TODO: Use setDiagonal
-        for i in xrange(self.ib, self.ie):
-            A[i,i] = A_update[i-self.ib]
+        self._workvec.setValues(np.arange(self.ib, self.ie, dtype=np.int32), A_update)
+        A.setDiagonal(self._workvec, addv=PETSc.InsertMode.INSERT_VALUES)
 
         # communicate off-processor values and setup internal data structures for
         # performing parallel operations
@@ -1308,16 +1370,7 @@ class FDFD_TE(FDFD):
 
         Notes
         -----
-        1. According to Poynting's theorem, instead of integrating the fields
-        along the boundary AND the interior, we could integrate E dot J +
-        M dot H.  This would be slightly faster. HOWEVER, it looks like the
-        presence of the PMLs makes these two values slightly different as they
-        introduce non-physical loss.  Ultimately we only care about the losses
-        associated with materials not in the PMLs and thus we use the integral
-        of the pointing vector and field energy to compute the total source
-        power.
-
-        2. The source power is computed using the interpolated fields.
+        1. The source power is computed using the interpolated fields.
 
         Returns
         -------
@@ -1411,10 +1464,10 @@ class FDFD_TM(FDFD_TE):
 
     Parameters
     ----------
-    W : float
+    X : float
         Approximate width of the simulation region. If this is not an integer
         multiple of dx, this will be increased slightly
-    H : float
+    Y : float
         Approximate height of the simulation region. If this is not an integer
         multiple of dy, this will be increased slightly
     dx : float
@@ -1445,6 +1498,10 @@ class FDFD_TM(FDFD_TE):
         The width of the simulation region (including PMLs)
     H : float
         The height of the simulation region (including PMLs)
+    X : float
+        The width of the simulation region (including PMLs)
+    Y : float
+        The height of the simulation region (including PMLs)
     M : int
         The number of grid cells in the y direction
     N : int
@@ -1472,9 +1529,9 @@ class FDFD_TM(FDFD_TE):
         reinitialized in order to change the PML widths
     """
 
-    def __init__(self, W, H, dx, dy, wavelength, solver='auto',
+    def __init__(self, X, Y, dx, dy, wavelength, solver='auto',
                  ksp_solver='gmres'):
-        super(FDFD_TM, self).__init__(W, H, dx, dy, wavelength, solver=solver,
+        super(FDFD_TM, self).__init__(X, Y, dx, dy, wavelength, solver=solver,
               ksp_solver=ksp_solver)
 
         self.bc = 'MM'
@@ -1806,16 +1863,7 @@ class FDFD_TM(FDFD_TE):
 
         Notes
         -----
-        1. According to Poynting's theorem, instead of integrating the fields
-        along the boundary AND the interior, we could integrate E dot J +
-        M dot H.  This would be slightly faster. HOWEVER, it looks like the
-        presence of the PMLs makes these two values slightly different as they
-        introduce non-physical loss.  Ultimately we only care about the losses
-        associated with materials not in the PMLs and thus we use the integral
-        of the pointing vector and field energy to compute the total source
-        power.
-
-        2. The source power is computed using the interpolated fields.
+        1. The source power is computed using the interpolated fields.
 
         Returns
         -------
@@ -2420,7 +2468,7 @@ class FDFD_3D(FDFD):
         component = 0
         x = 0; y = 0; z = 0
         Nc = 6 # 6 field components
-        for i in xrange(ib, ie):
+        for i in range(ib, ie):
 
             ig = int(i/Nc)
             component = int(i - 6*ig)
@@ -2761,7 +2809,7 @@ class FDFD_3D(FDFD):
 
         alpha = 1.0/7.0
 
-        for i in xrange(ib,ie):
+        for i in range(ib,ie):
             ig = int(i/bsize)
             comp = int(i - bsize*ig)
 
@@ -2836,9 +2884,9 @@ class FDFD_3D(FDFD):
             j1 = 0; j2 = self._Ny
             i1 = 0; i2 = self._Nz
         else:
-            k1 = bbox[0]; k2 = bbox[1]
-            j1 = bbox[2]; j2 = bbox[3]
-            i1 = bbox[4]; i2 = bbox[5]
+            k1 = int(bbox[0]/self._X*Nx); k2 = int(bbox[1]/self._X*Nx)
+            j1 = int(bbox[2]/self._Y*Ny); j2 = int(bbox[3]/self._Y*Ny)
+            i1 = int(bbox[4]/self._Z*Nz); i2 = int(bbox[5]/self._Z*Nz)
 
         ib = self.ib
         ie = self.ie
@@ -2932,7 +2980,7 @@ class FDFD_3D(FDFD):
         component = 0
         x = 0; y = 0; z = 0
         Nc = 6 # 6 field components
-        for i in xrange(ib, ie):
+        for i in range(ib, ie):
 
             ig = int(i/Nc)
             component = int(i - 6*ig)
@@ -3159,9 +3207,9 @@ class FDFD_3D(FDFD):
         elif(component == FieldComponent.Hy): c = 4
         elif(component == FieldComponent.Hz): c = 5
 
-        for z in xrange(i1, i2):
-            for y in xrange(j1, j2):
-                for x in xrange(k1, k2):
+        for z in range(i1, i2):
+            for y in range(j1, j2):
+                for x in range(k1, k2):
                     index = Nc*(z*NxNy+y*Nx+x)+c
 
                     if(index >= ib and index < ie):
@@ -3417,9 +3465,9 @@ class FDFD_3D(FDFD):
         elif(component == FieldComponent.Hy): c = 4
         elif(component == FieldComponent.Hz): c = 5
 
-        for z in xrange(i1, i2):
-            for y in xrange(j1, j2):
-                for x in xrange(k1, k2):
+        for z in range(i1, i2):
+            for y in range(j1, j2):
+                for x in range(k1, k2):
                     index = Nc*(z*NxNy+y*Nx+x)+c
 
                     if(index >= ib and index < ie):

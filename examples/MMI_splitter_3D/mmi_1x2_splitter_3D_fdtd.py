@@ -36,7 +36,7 @@ spacing than the FDFD example.
 
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
-from emopt.adjoint_method import AdjointMethod
+from emopt.adjoint_method import AdjointMethodPNF3D
 
 import numpy as np
 from math import pi
@@ -44,7 +44,7 @@ from math import pi
 from petsc4py import PETSc
 from mpi4py import MPI
 
-class MMISplitterAdjointMethod(AdjointMethod):
+class MMISplitterAdjointMethod(AdjointMethodPNF3D):
     """Define a figure of merit and its derivative for adjoint sensitivity
     analysis.
 
@@ -76,21 +76,21 @@ class MMISplitterAdjointMethod(AdjointMethod):
         self.mmi.width = params[1]
 
     @run_on_master
-    def calc_fom(self, sim, params):
+    def calc_f(self, sim, params):
         """Calculate the figure of merit.
 
         The FOM is the mode overlap between the simulated fields and the
         fundamental super mode of the output waveguides.
         """
         Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[0]
-        Psrc = sim.source_power
 
         self.mode_match.compute(Ex, Ey, Ez, Hx, Hy, Hz)
         fom = -1*self.mode_match.get_mode_match_forward(1.0)
 
-        return fom/Psrc
+        return fom
 
-    def calc_dFdx(self, sim, params):
+    @run_on_master
+    def calc_dfdx(self, sim, params):
         """Calculate the figure of merit with respect to E and H.
 
         Note: our function is normalized with respect to the total source
@@ -105,29 +105,22 @@ class MMISplitterAdjointMethod(AdjointMethod):
         """
         Psrc = sim.source_power
 
-        # Note: calc_fom calls self.mode_match.compute(...)
-        fom_no_norm = self.calc_fom(sim, params) * Psrc
+        dfdEx = -1*self.mode_match.get_dFdEx()
+        dfdEy = -1*self.mode_match.get_dFdEy()
+        dfdEz = -1*self.mode_match.get_dFdEz()
+        dfdHx = -1*self.mode_match.get_dFdHx()
+        dfdHy = -1*self.mode_match.get_dFdHy()
+        dfdHz = -1*self.mode_match.get_dFdHz()
 
-        if(NOT_PARALLEL):
-            dFdEx = -1*self.mode_match.get_dFdEx() / Psrc
-            dFdEy = -1*self.mode_match.get_dFdEy() / Psrc
-            dFdEz = -1*self.mode_match.get_dFdEz() / Psrc
-            dFdHx = -1*self.mode_match.get_dFdHx() / Psrc
-            dFdHy = -1*self.mode_match.get_dFdHy() / Psrc
-            dFdHz = -1*self.mode_match.get_dFdHz() / Psrc
-        else:
-            dFdEx = None; dFdEy = None; dFdEz = None
-            dFdHx = None; dFdHy = None; dFdHz = None
+        return [(dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)]
 
-        adjoint_sources = \
-            emopt.fomutils.power_norm_dFdx_3D(sim, fom_no_norm,
-                                              self.fom_domain,
-                                              dFdEx, dFdEy, dFdEz,
-                                              dFdHx, dFdHy, dFdHz)
+    def get_fom_domains(self):
+        """We must return the DomainCoordinates object that corresponds to our
+        figure of merit. In theory, we could have many of these.
+        """
+        return [self.fom_domain]
 
-        return adjoint_sources
-
-    def calc_grad_y(self, sim, params):
+    def calc_grad_p(self, sim, params):
         """Our FOM does not depend explicitly on the design parameters so we
         return zeros."""
         return np.zeros(len(params))
@@ -139,9 +132,9 @@ class MMISplitterAdjointMethod(AdjointMethod):
 X = 5.0   # simulation size along x
 Y = 4.0/2 # simulation size along y
 Z = 2.5   # simulation size along z
-dx = 0.03 # grid spacing along x
-dy = 0.03 # grid spacing along y
-dz = 0.03 # grid spacing along z
+dx = 0.04 # grid spacing along x
+dy = 0.04 # grid spacing along y
+dz = 0.04 # grid spacing along z
 
 wavelength = 1.55
 
@@ -150,7 +143,7 @@ wavelength = 1.55
 #####################################################################################
 # Setup the simulation--rtol tells the iterative solver when to stop. 5e-5
 # yields reasonably accurate results/gradients
-sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-6, min_rindex=1.44,
+sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44,
                       nconv=200)
 sim.Nmax = 1000*sim.Ncycle
 w_pml = dx * 15 # set the PML width
@@ -242,17 +235,6 @@ Ezm = fom_mode.get_field_interp(0, 'Ez')
 Hxm = fom_mode.get_field_interp(0, 'Hx')
 Hym = fom_mode.get_field_interp(0, 'Hy')
 Hzm = fom_mode.get_field_interp(0, 'Hz')
-
-# In the current version of emopt, we need to manually reshape things to make
-# the mode match compatible with set_adjoint_sources
-if(NOT_PARALLEL):
-    Nz, Ny = Exm.shape
-    Exm = np.reshape(Exm, (Nz, Ny, 1))
-    Eym = np.reshape(Eym, (Nz, Ny, 1))
-    Ezm = np.reshape(Ezm, (Nz, Ny, 1))
-    Hxm = np.reshape(Hxm, (Nz, Ny, 1))
-    Hym = np.reshape(Hym, (Nz, Ny, 1))
-    Hzm = np.reshape(Hzm, (Nz, Ny, 1))
 
 mode_match = emopt.fomutils.ModeMatch([1,0,0], dy, dz, Exm, Eym, Ezm,
                                       Hxm, Hym, Hzm)

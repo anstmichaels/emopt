@@ -1,7 +1,11 @@
+from __future__ import absolute_import
+from builtins import zip
+from builtins import range
+from builtins import object
 import numpy as np
 import scipy
 from math import pi
-from misc import warning_message, error_message, NOT_PARALLEL
+from .misc import warning_message, error_message, NOT_PARALLEL
 
 def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
            ignore_roc_lim=False, points_per_bend=None):
@@ -54,13 +58,13 @@ def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
     N -= 1
 
     closed = True
+    i = 0
     if(x[0] != x[-1] or y[0] != y[-1]):
         closed = False
-        i += 1
         xn.append(x[0])
         yn.append(y[0])
+        i = 1
 
-    i = 0
     while(i < N):
         if(make_round is None or make_round[i]):
             # get current and adjacent points
@@ -406,7 +410,7 @@ class FourierDisplacer(object):
 
         return ys
 
-class NURBS:
+class NURBS(object):
     """Create a NURBS curve.
 
     This class wraps a NURBS-python NURBS object and provides some additional

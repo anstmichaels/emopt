@@ -1,3 +1,12 @@
+"""
+Demonstration of how to import text-formatted GDS files exported from klayout.
+
+Note: A more complete solution for importing GDS files is the gdspy library.
+
+To run this script:
+    $ python klayout_import
+"""
+
 import emopt
 import numpy as np
 import matplotlib.pyplot as plt

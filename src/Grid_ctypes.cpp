@@ -14,15 +14,15 @@ void Material2D_get_value(Material2D* mat, complex64* val, double x, double y) {
     val[0].imag = std::imag(value);
 }
 
-void Material2D_get_values(Material2D* mat, int k1, int k2, int j1, int j2,
-                         complex64* arr)
+void Material2D_get_values(Material2D* mat, complex64* arr, 
+        int k1, int k2, int j1, int j2, double sx, double sy)
 {
     std::complex<double> val;
     int Ny = j2-j1,
         Nx = k2-k1;
 
 	ArrayXcd grid(Nx*Ny);
-    mat->get_values(grid, k1, k2, j1, j2);
+    mat->get_values(grid, k1, k2, j1, j2, sx, sy);
 
     for(int i = 0; i < Nx*Ny; i++) {
         val = grid(i);

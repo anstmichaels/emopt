@@ -36,15 +36,12 @@ machine.
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL
-from emopt.adjoint_method import AdjointMethodPNF
-
-# We define the desired Gaussian modes in a separate file
-from mode_data import Ez_Gauss, Hx_Gauss, Hy_Gauss
+from emopt.adjoint_method import AdjointMethodPNF2D
 
 import numpy as np
 from math import pi
 
-class SiliconGratingAM(AdjointMethodPNF):
+class SiliconGratingAM(AdjointMethodPNF2D):
     """Compute the merit function and gradient of a grating coupler.
 
     Parameters
@@ -61,7 +58,7 @@ class SiliconGratingAM(AdjointMethodPNF):
         The width of the input waveguide
     h_wg : float
         The thickness of the input waveguide.
-    H : float
+    Y : float
         The total height of the simulation.
     Ng : int
         The number of grating lines in the grating.
@@ -70,7 +67,7 @@ class SiliconGratingAM(AdjointMethodPNF):
     mm_line : emopt.misc.DomainCoordinates
         The line where the mode match is computed.
     """
-    def __init__(self, sim, grating_etch, wg, substrate, y_ts, w_in, h_wg, H,
+    def __init__(self, sim, grating_etch, wg, substrate, y_ts, w_in, h_wg, Y,
                  Ng, Nc, eps_clad, mm_line):
         super(SiliconGratingAM, self).__init__(sim, step=1e-10)
 
@@ -79,7 +76,7 @@ class SiliconGratingAM(AdjointMethodPNF):
         self.y_ts = y_ts
         self.w_in = w_in
         self.h_wg = h_wg
-        self.H = H
+        self.Y = Y
         self.Ng = Ng
         self.Nc = Nc
         self.wg = wg
@@ -94,10 +91,10 @@ class SiliconGratingAM(AdjointMethodPNF):
 
         # Define the desired field profiles
         # We use a tilted Gaussian beam which approximates a fiber mode
-        Ezm, Hxm, Hym = emopt.misc.gaussian_fields(mm_line.x-match_center,
-                                                      0.0, 0.0, match_w0,
-                                                      theta, sim.wavelength,
-                                                      np.sqrt(eps_clad))
+        Ezm, Hxm, Hym = emopt.misc.gaussian_mode(mm_line.x-match_center,
+                                                 0.0, match_w0,
+                                                 theta, sim.wavelength,
+                                                 np.sqrt(eps_clad))
 
         self.mode_match = emopt.fomutils.ModeMatch([0,1,0], sim.dx, Ezm=Ezm, Hxm=Hxm, Hym=Hym)
 
@@ -143,7 +140,7 @@ class SiliconGratingAM(AdjointMethodPNF):
             x0 += period
 
         # update the BOX/Substrate
-        h_subs = self.H/2.0 - self.h_wg/2.0 - h_BOX
+        h_subs = self.Y/2.0 - self.h_wg/2.0 - h_BOX
         self.substrate.height = h_subs
         self.substrate.y0 = h_subs/2.0
 
@@ -220,20 +217,18 @@ class SiliconGratingAM(AdjointMethodPNF):
         Note: This function is optional. By default, the whole grid is updated
         in the calculation of the derivative of A w.r.t. each design variable.
         """
-        N = sim.M
-        N = sim.N
-        h_wg = int(self.h_wg/sim.dy)
-        y_wg = int(self.y_ts/sim.dy)
+        h_wg = self.h_wg
+        y_wg = self.y_ts
         lenp = len(params)
 
         # define boxes surrounding grating
-        boxes = [(0,N,y_wg-h_wg, y_wg+h_wg) for i in range(lenp-1)]
+        boxes = [(0, sim.X, y_wg-h_wg, y_wg+h_wg) for i in range(lenp-1)]
 
         # for BOX, update everything (easier)
-        boxes.append((0,N,0,M))
+        boxes.append((0, sim.X, 0, sim.Y))
         return boxes
 
-    def calc_grad_y(self, sim, params):
+    def calc_grad_p(self, sim, params):
         """Out figure of merit contains no additional non-field dependence on
         the design variables so we just return zeros here.
 
@@ -258,9 +253,9 @@ def plot_update(params, fom_list, sim, am):
     eps = sim.eps.get_values_in(sim.field_domains[1])
 
     foms = {'Insertion Loss' : fom_list}
-    emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Wreal,
-                            sim.Hreal, foms, fname='current_result.pdf',
-                            dark=False)
+    emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Xreal,
+                            sim.Yreal, foms, fname='current_result.pdf',
+                            dark=True)
 
     data = {}
     data['Ez'] = Ez
@@ -279,18 +274,18 @@ if __name__ == '__main__':
     # define the system parameters
     ####################################################################################
     wavelength = 1.55
-    W = 28.0
-    H = 8.0
-    dx = 0.02
+    X = 28.0
+    Y = 8.0
+    dx = 0.03
     dy = dx
 
     # create the simulation object.
     # TE => Ez, Hx, Hy
-    sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wavelength)
+    sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wavelength)
 
     # Get the actual width and height
-    W = sim.W
-    H = sim.H
+    X = sim.X
+    Y = sim.Y
     M = sim.M
     N = sim.N
     w_pml = sim.w_pml[0] # PML width which is the same on all boundaries by default
@@ -312,10 +307,10 @@ if __name__ == '__main__':
     h_wg = 0.28
     h_etch = 0.19 # etch depth
     w_wg_input = 5.0
-    Ng = 26 #number of grating teeth
+    Ng = 30 #number of grating teeth
 
     # set the center position of the top silicon and the etches
-    y_ts = H/2.0
+    y_ts = Y/2.0
     y_etch = y_ts + h_wg/2.0 - h_etch/2.0
 
     # define the starting parameters of the partially-etched grating
@@ -342,20 +337,20 @@ if __name__ == '__main__':
 
     # define substrate
     h_BOX = 2.0
-    h_subs = H/2.0 - h_wg/2.0 - h_BOX
-    substrate = emopt.grid.Rectangle(W/2.0, h_subs/2.0, W, h_subs)
+    h_subs = Y/2.0 - h_wg/2.0 - h_BOX
+    substrate = emopt.grid.Rectangle(X/2.0, h_subs/2.0, X, h_subs)
     substrate.layer = 2
     substrate.material_value = eps_si # silicon
 
     # set the background material using a rectangle equal in size to the system
-    background = emopt.grid.Rectangle(W/2,H/2,W,H)
+    background = emopt.grid.Rectangle(X/2, Y/2, X, Y)
     background.layer = 3
     background.material_value = eps_clad
 
     # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
     # This Material defines the distribution of the permittivity within the simulated
     # environment
-    eps = emopt.grid.StructuredMaterial2D(W,H,dx,dy)
+    eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
 
     for g in grating_etch:
         eps.add_primitive(g)
@@ -376,8 +371,8 @@ if __name__ == '__main__':
     w_src= 3.5
 
     # place the source in the simulation domain
-    src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, H/2-w_src/2,
-                                 H/2+w_src/2, 0, 0, dx, dy, 1.0)
+    src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, Y/2-w_src/2,
+                                 Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver.    
     mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=n_si, neigs=4)
@@ -398,9 +393,9 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the mode match domain
     ####################################################################################
-    mm_line = emopt.misc.DomainCoordinates(w_pml, W-w_pml, H/2.0+2.0, H/2.0+2.0, 0, 0,
+    mm_line = emopt.misc.DomainCoordinates(w_pml, X-w_pml, Y/2.0+2.0, Y/2.0+2.0, 0, 0,
                                            dx, dy, 1.0)
-    full_field = emopt.misc.DomainCoordinates(w_pml, W-w_pml, w_pml, H-w_pml, 0.0, 0.0,
+    full_field = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, 0.0, 0.0,
                                               dx, dy, 1.0)
     sim.field_domains = [mm_line, full_field]
 
@@ -426,7 +421,7 @@ if __name__ == '__main__':
     # responsible for computing the figure of merit and its gradient with
     # respect to the design parameters of the problem
     am = SiliconGratingAM(sim, grating_etch, wg, substrate, y_ts,
-                            w_wg_input, h_wg, H, Ng, N_coeffs, eps_clad, mm_line)
+                            w_wg_input, h_wg, Y, Ng, N_coeffs, eps_clad, mm_line)
 
     am.check_gradient(design_params)
     #am.check_gradient(design_params, indices=np.arange(0,len(design_params),2))

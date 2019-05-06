@@ -42,6 +42,7 @@
 .DS_Store
 ._.DS_Store
 ._*
+*.log
 
 # Python dist files
 build/

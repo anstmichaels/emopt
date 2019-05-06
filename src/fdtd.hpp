@@ -8,6 +8,9 @@
 #define pow2(x) x*x
 #define pow3(x) x*x*x
 
+// uncomment to enable lossy materials
+#define COMPLEX_EPS
+
 /** A complex value data type that is compatible with numpy.
  *
  * Currently, the computationally intensive components of FDTD 
@@ -173,7 +176,7 @@ namespace fdtd {
             double _wavelength;
 
             // spatial normalization factor, time step
-            double _R, _dt;
+            double _R, _dt, _odt;
 
             // source time parameters
             double _src_T, _src_min, _src_k, _src_n0;
@@ -181,6 +184,8 @@ namespace fdtd {
             // Field and source arrays
             double  *_Ex, *_Ey, *_Ez,
                     *_Hx, *_Hy, *_Hz;
+
+            bool _complex_eps;
 
             // Complex array associated with materials and field at captured
             // time steps. Technically only one set of captured fields need to be
@@ -367,6 +372,12 @@ namespace fdtd {
              */
             void set_mat_arrays(complex128 *eps_x, complex128 *eps_y, complex128 *eps_z,
                                 complex128 *mu_x, complex128 *mu_y, complex128 *mu_z);
+
+            /*!
+             * Set a flag that indicates whether or not the permittivity is pure real
+             * valued.
+             */
+            void set_complex_eps(bool complex_eps);
 
             /*!
              * Update the magnetic field at time t using the electric field at time t-1/2*dt.
@@ -570,6 +581,7 @@ extern "C" {
                                  int k0, int j0, int i0,
                                  int K, int J, int I);
         void FDTD_set_dt(fdtd::FDTD* fdtd, double dt);
+        void FDTD_set_complex_eps(fdtd::FDTD* fdtd, bool complex_eps);
         void FDTD_set_field_arrays(fdtd::FDTD* fdtd,
                                    double *Ex, double *Ey, double *Ez,
                                    double *Hx, double *Hy, double *Hz);

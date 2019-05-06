@@ -42,7 +42,7 @@ r1.material_value = 3.45**2
 r2.material_value = 1.444**2
 
 eps = emopt.grid.StructuredMaterial3D(X, Y, Z, dx, dy, dz)
-eps.add_primitive(r2, -Z, Z)
+eps.add_primitive(r2, -2*Z, 2*Z)
 eps.add_primitive(r1, Z/2-0.11, Z/2+0.11)
 
 mu = emopt.grid.ConstantMaterial3D(1.0)
