@@ -3,8 +3,8 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = python -msphinx
-SPHINXPROJ    = EMOpt
+SPHINXBUILD   = python3 -msphinx
+SPHINXPROJ    = EMopt
 SOURCEDIR     = source
 BUILDDIR      = build
 

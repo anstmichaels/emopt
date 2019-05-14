@@ -520,7 +520,7 @@ def ndisty(x, y, y0):
     from each point in that polygon to a desired y position. The normal
     direction is approximated based on the surrounding points.s
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -558,7 +558,7 @@ def d_ndisty_dx1(x, y, y0):
     """Calculate the derivative of ndisty with respect the the x coordinate of
     the 'previous' point.
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -579,7 +579,7 @@ def d_ndisty_dx2(x, y, y0):
     """Calculate the derivative of ndisty with respect the the x coordinate of
     the 'current' point.
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -599,7 +599,7 @@ def d_ndisty_dx3(x, y, y0):
     """Calculate the derivative of ndisty with respect the the x coordinate of
     the 'next' point.
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -620,7 +620,7 @@ def d_ndisty_dy1(x, y, y0):
     """Calculate the derivative of ndisty with respect the the y coordinate of
     the 'previous' point.
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -641,7 +641,7 @@ def d_ndisty_dy2(x, y, y0):
     """Calculate the derivative of ndisty with respect the the y coordinate of
     the 'current' point.
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -662,7 +662,7 @@ def d_ndisty_dy3(x, y, y0):
     """Calculate the derivative of ndisty with respect the the y coordinate of
     the 'next' point.
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -698,7 +698,7 @@ def ndisty_penalty(x, y, y0, dmin, delta_d, inds=None):
     increasing order. In other words, indices must have the form
     [i, i+1, i+2, i+3, i+4, ...].
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
@@ -743,7 +743,7 @@ def ndisty_penalty_derivative(x, y, y0, dmin, delta_d, inds=None):
     increasing order. In other words, indices must have the form
     [i, i+1, i+2, i+3, i+4, ...].
 
-    Paramters
+    Parameters
     ---------
     x : list or np.array
         X coordinates of polygon
