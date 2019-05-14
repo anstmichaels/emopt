@@ -1622,15 +1622,6 @@ class FDFD_TM(FDFD_TE):
         shifted in the negative x direction by half of a grid cell.  It is
         important to take this into account when defining the current sources.
 
-        Notes
-        -----
-        Like the underlying fields, the current sources are represented on a
-        set of shifted grids.  In particular, :math:`J_z`'s are all located at
-        the center of a grid cell, the :math:`M_x`'s are shifted in the
-        positive y direction by half a grid cell, and the :math:`M_y`'s are
-        shifted in the negative x direction by half of a grid cell.  It is
-        important to take this into account when defining the current sources.
-
         Todo
         ----
         1. Implement a more user-friendly version of these sources (so that you do
