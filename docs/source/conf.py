@@ -40,7 +40,7 @@ for mod_name in MOCK_MODULES:
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
-    'numpydoc',
+    'sphinx.ext.napoleon',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
@@ -71,7 +71,7 @@ author = u'Andrew Michaels'
 # built documents.
 #
 # The short X.Y version.
-version = u'0.2.3'
+version = u'2019.5.6'
 # The full version, including alpha/beta/rc tags.
 release = u'0.2.3'
 
