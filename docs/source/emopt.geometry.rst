@@ -1,7 +1,7 @@
 emopt\.geometry
 ===============
 
-.. automodule:: geometry
+.. automodule:: emopt.geometry
    :members:
    :undoc-members:
    :show-inheritance:

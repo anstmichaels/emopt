@@ -1,7 +1,7 @@
 emopt\.defs
 ===========
 
-.. automodule:: defs
+.. automodule:: emopt.defs
    :members:
    :undoc-members:
    :show-inheritance:

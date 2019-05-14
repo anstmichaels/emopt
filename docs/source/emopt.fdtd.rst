@@ -1,7 +1,7 @@
 emopt\.fdtd
 ===========
 
-.. automodule:: fdtd
+.. automodule:: emopt.fdtd
    :members:
    :undoc-members:
    :show-inheritance:

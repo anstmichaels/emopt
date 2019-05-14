@@ -1,7 +1,7 @@
 emopt\.misc
 ===========
 
-.. automodule:: misc
+.. automodule:: emopt.misc
    :members:
    :undoc-members:
    :show-inheritance:

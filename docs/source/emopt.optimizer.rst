@@ -1,7 +1,7 @@
 emopt\.optimizer
 ================
 
-.. automodule:: optimizer
+.. automodule:: emopt.optimizer
    :members:
    :undoc-members:
    :show-inheritance:

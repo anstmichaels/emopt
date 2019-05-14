@@ -18,7 +18,7 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../emopt/'))
+sys.path.insert(0, os.path.abspath('../../'))
 
 import mock
 MOCK_MODULES = ['numpy', 'scipy', 'petsc4py', 'mpi4py', 'matplotlib',
