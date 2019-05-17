@@ -255,7 +255,7 @@ if __name__ == '__main__':
     # define the system parameters
     ####################################################################################
     wavelength = 1.55
-    W = 28.0
+    W = 25.0
     H = 8.0
     dx = 0.03
     dy = dx
@@ -264,7 +264,7 @@ if __name__ == '__main__':
 
     # create the simulation object.
     sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wavelength)
-    sim.w_pml = [0.5, 0.5, 0.5, 0.5]
+    sim.w_pml = [dx*15, dx*15, dx*15, dx*15]
 
     # Get the actual width and height
     X = sim.X
@@ -430,14 +430,14 @@ if __name__ == '__main__':
     design_params[-1] = -shift_bot -(1-df)*period
     design_params[-2] = -(1-df)*period
 
-    am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
+    #am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
 
     fom_list = []
     callback = lambda x : plot_update(x, fom_list, sim, am)
 
     # setup and run the optimization!
     opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
-                                    callback_func=callback, Nmax=80)
+                                    callback_func=callback, Nmax=100)
 
     # Run the optimization
     # A good thing to do would be to save the results of the optimization. This

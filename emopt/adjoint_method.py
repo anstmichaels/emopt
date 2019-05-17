@@ -332,8 +332,7 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
 
         See Also
         --------
-        emopt.fdfd.FDFD
-            Base class for simulators which generate :math:`x`
+        emopt.fdfd.FDFD : Base class for simulators which generate :math:`x`
         """
         pass
 
@@ -791,8 +790,7 @@ class AdjointMethodMO(with_metaclass(ABCMeta, AdjointMethod)):
 
         See Also
         --------
-        :ref:`emopt.fomutils` for functions which may be useful for
-        combining figures of merit
+        :ref:`emopt.fomutils` : functions which may be useful for combining figures of merit
 
         Parameters
         ----------
@@ -817,8 +815,7 @@ class AdjointMethodMO(with_metaclass(ABCMeta, AdjointMethod)):
 
         See Also
         --------
-        :ref:`emopt.fomutils` for functions which may be useful for combining
-        figures of merit and their gradients.
+        :ref:`emopt.fomutils` : functions which may be useful for combining figures of merit and their gradients.
 
         Parameters
         ----------

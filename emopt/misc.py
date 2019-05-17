@@ -588,7 +588,9 @@ def gaussian_fields(x, z, prop_dist, w0, theta, wavelength, n0):
     2. A single E component and two H components is returned.
     These can be projected onto any desired polarization.
     3. The fields are calculated in the x,z plane at the specified y position.
-    4. The amplitude is equal to 1.0
+    4. The fields are NOT normalized to unity power.
+    5. These fields are highly apporximate, and may not be accurate for very small
+       waist sizes.
 
     Parameters
     ----------
@@ -637,7 +639,7 @@ def gaussian_mode(x, z, w0, theta, wavelength, n0):
 
     This differs from gaussian_fields in that it assumes the generated field
     consists of only a single wave vector. This mimics the mode of an optical
-    fiber.
+    fiber. The electric field is assumed to point along the z direction.
 
     Notes
     -----
@@ -647,6 +649,7 @@ def gaussian_mode(x, z, w0, theta, wavelength, n0):
     These can be projected onto any desired polarization.
     3. The fields are calculated in the x,z plane.
     4. The amplitude is equal to 1.0
+    5. Currently, the relative permeability is assumed to be 1.0
 
     Parameters
     ----------
@@ -677,7 +680,8 @@ def gaussian_mode(x, z, w0, theta, wavelength, n0):
 
     Ez = np.exp(-r**2/w0**2) * np.exp(1j*k0*yG)
 
-    Hx = Ez*np.cos(theta) * n0
-    Hy = -1*Ez*np.sin(theta) * n0
+    # Note: only n0 comes out front due to non-dimensionalization
+    Hx = (n0*np.cos(theta) + 2*xG*np.sin(theta)/(1j*w0**2)) * Ez
+    Hy = (2*xG*np.cos(theta)/(1j*w0**2) - n0*np.sin(theta)) * Ez
 
     return (Ez, Hx, Hy)
