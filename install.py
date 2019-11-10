@@ -40,7 +40,8 @@ emopt_dep_file = ".emopt_deps"
 # Package Parameters
 EIGEN_VERSION = "3.3.7"
 BOOST_VERSION = "master"
-SLEPC_VERSION = "3.11.0"
+PETSC_VERSION = "3.12.1"
+SLEPC_VERSION = "3.12.1"
 
 
 class Logger(object):
@@ -144,11 +145,19 @@ def install_petsc(install_dir):
     if('PETSC_ARCH' in os.environ): del os.environ['PETSC_ARCH']
 
     # get PETSc
-    print_message('Retrieving PETSc...')
-    call(['git', 'clone', '-b', 'maint', 'https://bitbucket.org/petsc/petsc',
-          'petsc'])
+    print_message('Downloading PETSc...')
+    petsc_url = "http://ftp.mcs.anl.gov/pub/petsc/release-snapshots/petsc-" + PETSC_VERSION + \
+                ".tar.gz"
+    petsc_fname = "petsc-" + PETSC_VERSION + ".tar.gz"
+    r = requests.get(petsc_url, allow_redirects=True)
+    with open(petsc_fname, 'wb') as fsave:
+        fsave.write(r.content)
 
-    os.chdir('petsc')
+    # unzip package
+    call(['tar', 'xvzf', petsc_fname])
+
+    petsc_folder = "petsc-" + PETSC_VERSION
+    os.chdir(petsc_folder)
 
     # compile
     print_message('Compiling PETSc...')
@@ -165,7 +174,7 @@ def install_petsc(install_dir):
     # cleanup
     print_message('Cleaning up working directory...')
     os.chdir('../')
-    shutil.rmtree('petsc')
+    shutil.rmtree(petsc_folder)
 
 def install_slepc(install_dir):
     """Compile and install SLEPc."""
