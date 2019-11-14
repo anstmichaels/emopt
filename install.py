@@ -87,7 +87,7 @@ def write_deps_file(home_dir, include_dir, install_dir):
     to install EMopt.
     """
     dep_fname = home_dir + '/' + emopt_dep_file
-    with open(dep_fname, 'wb') as fdep:
+    with open(dep_fname, 'w') as fdep:
         fdep.write('EIGEN_DIR=' + include_dir + '\n')
         fdep.write('BOOST_DIR=' + include_dir + '\n')
         fdep.write('PETSC_DIR=' + install_dir + '\n')
