@@ -554,16 +554,24 @@ def ndisty(x, y, y0):
 
     return dists
 
-def d_ndisty_dx1(x, y, y0):
+def d_ndisty_dx1(x1, x2, x3, y1, y2, y3, y0):
     """Calculate the derivative of ndisty with respect the the x coordinate of
     the 'previous' point.
 
     Parameters
     ---------
-    x : list or np.array
-        X coordinates of polygon
-    y : list or np.array
-        Y coordinates of polygon
+    x1 : float or list or np.array
+        X coordinate(s) of "previous" point
+    x2 : float or list or np.array
+        X coordinate(s) of "current" point
+    x3 : float or list or np.array
+        X coordinate(s) of "next" point
+    y1 : float or list or np.array
+        Y coordinate(s) of "previous" point
+    y2 : float or list or np.array
+        Y coordinate(s) of "current" point
+    y3 : float or list or np.array
+        Y coordinate(s) of "next" point
     y0 : float
         The y position to which the distance is calculated.
 
@@ -572,19 +580,27 @@ def d_ndisty_dx1(x, y, y0):
     np.array
         List of derivatives with length N-2 where N=len(x)
     """
-    return -(y0 - y2)**2*(y1 - y3)**2/(sqrt((y0 - y2)**2*((x1 - x3)**2 + \
+    return -(y0 - y2)**2*(y1 - y3)**2/(np.sqrt((y0 - y2)**2*((x1 - x3)**2 + \
             (y1 - y3)**2)/(x1 - x3)**2)*(x1 - x3)**3)
 
-def d_ndisty_dx2(x, y, y0):
+def d_ndisty_dx2(x1, x2, x3, y1, y2, y3, y0):
     """Calculate the derivative of ndisty with respect the the x coordinate of
     the 'current' point.
 
     Parameters
     ---------
-    x : list or np.array
-        X coordinates of polygon
-    y : list or np.array
-        Y coordinates of polygon
+    x1 : float or list or np.array
+        X coordinate(s) of "previous" point
+    x2 : float or list or np.array
+        X coordinate(s) of "current" point
+    x3 : float or list or np.array
+        X coordinate(s) of "next" point
+    y1 : float or list or np.array
+        Y coordinate(s) of "previous" point
+    y2 : float or list or np.array
+        Y coordinate(s) of "current" point
+    y3 : float or list or np.array
+        Y coordinate(s) of "next" point
     y0 : float
         The y position to which the distance is calculated.
 
@@ -595,16 +611,24 @@ def d_ndisty_dx2(x, y, y0):
     """
     return 0.0
 
-def d_ndisty_dx3(x, y, y0):
+def d_ndisty_dx3(x1, x2, x3, y1, y2, y3, y0):
     """Calculate the derivative of ndisty with respect the the x coordinate of
     the 'next' point.
 
     Parameters
     ---------
-    x : list or np.array
-        X coordinates of polygon
-    y : list or np.array
-        Y coordinates of polygon
+    x1 : float or list or np.array
+        X coordinate(s) of "previous" point
+    x2 : float or list or np.array
+        X coordinate(s) of "current" point
+    x3 : float or list or np.array
+        X coordinate(s) of "next" point
+    y1 : float or list or np.array
+        Y coordinate(s) of "previous" point
+    y2 : float or list or np.array
+        Y coordinate(s) of "current" point
+    y3 : float or list or np.array
+        Y coordinate(s) of "next" point
     y0 : float
         The y position to which the distance is calculated.
 
@@ -613,19 +637,27 @@ def d_ndisty_dx3(x, y, y0):
     np.array
         List of derivatives with length N-2 where N=len(x)
     """
-    return (y0 - y2)**2*(y1 - y3)**2/(sqrt((y0 - y2)**2*((x1 - x3)**2 + \
+    return (y0 - y2)**2*(y1 - y3)**2/(np.sqrt((y0 - y2)**2*((x1 - x3)**2 + \
            (y1 - y3)**2)/(x1 - x3)**2)*(x1 - x3)**3)
 
-def d_ndisty_dy1(x, y, y0):
+def d_ndisty_dy1(x1, x2, x3, y1, y2, y3, y0):
     """Calculate the derivative of ndisty with respect the the y coordinate of
     the 'previous' point.
 
     Parameters
     ---------
-    x : list or np.array
-        X coordinates of polygon
-    y : list or np.array
-        Y coordinates of polygon
+    x1 : float or list or np.array
+        X coordinate(s) of "previous" point
+    x2 : float or list or np.array
+        X coordinate(s) of "current" point
+    x3 : float or list or np.array
+        X coordinate(s) of "next" point
+    y1 : float or list or np.array
+        Y coordinate(s) of "previous" point
+    y2 : float or list or np.array
+        Y coordinate(s) of "current" point
+    y3 : float or list or np.array
+        Y coordinate(s) of "next" point
     y0 : float
         The y position to which the distance is calculated.
 
@@ -634,19 +666,27 @@ def d_ndisty_dy1(x, y, y0):
     np.array
         List of derivatives with length N-2 where N=len(x)
     """
-    return (y0 - y2)**2*(y1 - y3)/(sqrt((y0 - y2)**2*((x1 - x3)**2 + \
+    return (y0 - y2)**2*(y1 - y3)/(np.sqrt((y0 - y2)**2*((x1 - x3)**2 + \
            (y1 - y3)**2)/(x1 - x3)**2)*(x1 - x3)**2)
 
-def d_ndisty_dy2(x, y, y0):
+def d_ndisty_dy2(x1, x2, x3, y1, y2, y3, y0):
     """Calculate the derivative of ndisty with respect the the y coordinate of
     the 'current' point.
 
     Parameters
     ---------
-    x : list or np.array
-        X coordinates of polygon
-    y : list or np.array
-        Y coordinates of polygon
+    x1 : float or list or np.array
+        X coordinate(s) of "previous" point
+    x2 : float or list or np.array
+        X coordinate(s) of "current" point
+    x3 : float or list or np.array
+        X coordinate(s) of "next" point
+    y1 : float or list or np.array
+        Y coordinate(s) of "previous" point
+    y2 : float or list or np.array
+        Y coordinate(s) of "current" point
+    y3 : float or list or np.array
+        Y coordinate(s) of "next" point
     y0 : float
         The y position to which the distance is calculated.
 
@@ -655,19 +695,27 @@ def d_ndisty_dy2(x, y, y0):
     np.array
         List of derivatives with length N-2 where N=len(x)
     """
-    return (-y0 + y2)*((x1 - x3)**2 + (y1 - y3)**2)/(sqrt((y0 - y2)**2 * \
+    return (-y0 + y2)*((x1 - x3)**2 + (y1 - y3)**2)/(np.sqrt((y0 - y2)**2 * \
            ((x1 - x3)**2 + (y1 - y3)**2)/(x1 - x3)**2)*(x1 - x3)**2)
 
-def d_ndisty_dy3(x, y, y0):
+def d_ndisty_dy3(x1, x2, x3, y1, y2, y3, y0):
     """Calculate the derivative of ndisty with respect the the y coordinate of
     the 'next' point.
 
     Parameters
     ---------
-    x : list or np.array
-        X coordinates of polygon
-    y : list or np.array
-        Y coordinates of polygon
+    x1 : float or list or np.array
+        X coordinate(s) of "previous" point
+    x2 : float or list or np.array
+        X coordinate(s) of "current" point
+    x3 : float or list or np.array
+        X coordinate(s) of "next" point
+    y1 : float or list or np.array
+        Y coordinate(s) of "previous" point
+    y2 : float or list or np.array
+        Y coordinate(s) of "current" point
+    y3 : float or list or np.array
+        Y coordinate(s) of "next" point
     y0 : float
         The y position to which the distance is calculated.
 
@@ -676,7 +724,7 @@ def d_ndisty_dy3(x, y, y0):
     np.array
         List of derivatives with length N-2 where N=len(x)
     """
-    return (y0 - y2)**2*(-y1 + y3)/(sqrt((y0 - y2)**2*((x1 - x3)**2 + \
+    return (y0 - y2)**2*(-y1 + y3)/(np.sqrt((y0 - y2)**2*((x1 - x3)**2 + \
            (y1 - y3)**2)/(x1 - x3)**2)*(x1 - x3)**2)
 
 def ndisty_penalty(x, y, y0, dmin, delta_d, inds=None):
@@ -694,9 +742,8 @@ def ndisty_penalty(x, y, y0, dmin, delta_d, inds=None):
 
     Notes
     -----
-    This function assumes that the supplied indices are contiguous in
-    increasing order. In other words, indices must have the form
-    [i, i+1, i+2, i+3, i+4, ...].
+    The inds parameter may not contain 0 or N-1 where N is the length of x and
+    y.
 
     Parameters
     ---------
@@ -720,17 +767,14 @@ def ndisty_penalty(x, y, y0, dmin, delta_d, inds=None):
     float
         The value of the penalty.
     """
-    if(inds == None):
+    if(inds is None):
         inds = np.arange(1,len(x)-1)
     else:
         inds = np.array(inds)
 
-    indices = np.concatenate([inds[0:1]-1, inds, inds[-1:]+1])
-    xs = x[indices]
-    ys = y[indices]
-    ndist = ndisty(xs, ys, y0)
+    ndist = ndisty(x, y, y0)
 
-    penalties = rect(ndist, dmin*2, delta_d)
+    penalties = rect(ndist[inds-1], dmin*2, delta_d)
     return np.sum(penalties)
 
 def ndisty_penalty_derivative(x, y, y0, dmin, delta_d, inds=None):
@@ -739,9 +783,8 @@ def ndisty_penalty_derivative(x, y, y0, dmin, delta_d, inds=None):
 
     Notes
     -----
-    This function assumes that the supplied indices are contiguous in
-    increasing order. In other words, indices must have the form
-    [i, i+1, i+2, i+3, i+4, ...].
+    The inds parameter may not contain 0 or N-1 where N is the length of x and
+    y.
 
     Parameters
     ---------
@@ -765,10 +808,38 @@ def ndisty_penalty_derivative(x, y, y0, dmin, delta_d, inds=None):
     numpy.ndarray, numpy.ndarray
         The derivatives with respect to the x and y coordinates, respectively.
     """
-    if(inds == None):
+    if(inds is None):
         inds = np.arange(1,len(x)-1)
     else:
         inds = np.array(inds)
+
+    Ni = len(inds)
+    dPdx = np.zeros(Ni)
+    dPdy = np.zeros(Ni)
+
+    # Currently using a for loop in order to allow indices to be supplied in
+    # any order. If points were supplied in increasing order, the we could
+    # vectorize it :S
+    for i in range(Ni):
+        j = inds[i]
+        x1 = x[j-1]; x2 = x[j]; x3 = x[j+1]
+        y1 = y[j-1]; y2 = y[j]; y3 = y[j+1]
+
+        ndist = ndisty([x1, x2, x3], [y1, y2, y3], y0)
+        rect_deriv = rect_derivative(ndist, 2*dmin, delta_d)
+
+        dPdx[i] += rect_deriv * d_ndisty_dx2(x1, x2, x3, y1, y2, y3, y0)
+        dPdy[i] += rect_deriv * d_ndisty_dy2(x1, x2, x3, y1, y2, y3, y0)
+
+        if(i > 0 and j-1 == inds[i-1]):
+            dPdx[i-1] += rect_deriv * d_ndisty_dx1(x1, x2, x3, y1, y2, y3, y0)
+            dPdy[i-1] += rect_deriv * d_ndisty_dy1(x1, x2, x3, y1, y2, y3, y0)
+
+        if(i < Ni-1 and j+1 == inds[i+1]):
+            dPdx[i+1] += rect_deriv * d_ndisty_dx3(x1, x2, x3, y1, y2, y3, y0)
+            dPdy[i+1] += rect_deriv * d_ndisty_dy3(x1, x2, x3, y1, y2, y3, y0)
+
+    return np.nan_to_num(dPdx), np.nan_to_num(dPdy)
 
 def dist_to_edges(x1, x2, x3, y1, y2, y3, xe, ye):
     """Calculate the signed distance to a set of edges.

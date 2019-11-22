@@ -414,6 +414,10 @@ class FDTD(MaxwellSolver):
         # the fields between processors
         self._gc = GhostComm(k0, j0, i0, K, J, I, Nx, Ny, Nz)
 
+        # keep track of number of simulations
+        self.forward_count = 0
+        self.adjoint_count = 0
+
     @property
     def wavelength(self):
         self._wavelength = wavelength
@@ -1234,6 +1238,9 @@ class FDTD(MaxwellSolver):
         else:
             self._source_power = MathDummy()
 
+        # update count (for diagnostics)
+        self.forward_count += 1
+
     def solve_adjoint(self):
         """Run an adjoint simulation.
 
@@ -1280,6 +1287,9 @@ class FDTD(MaxwellSolver):
                                     False)
 
         self.__solve()
+
+        # update count (for diagnostics)
+        self.adjoint_count += 1
 
     def update_saved_fields(self):
         """Update the fields contained in the regions specified by
