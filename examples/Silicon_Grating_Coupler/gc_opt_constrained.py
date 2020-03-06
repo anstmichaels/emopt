@@ -139,7 +139,7 @@ class SiliconGratingAM(AdjointMethodPNF2D):
 
         for i in range(self.Ng):
             w_etch = params[i]
-            period = params[i+Ng]
+            period = params[i+self.Ng]
 
             # update the rectangles
             self.grating_etch[i].width  = w_etch
