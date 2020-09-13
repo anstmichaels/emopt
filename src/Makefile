@@ -4,19 +4,21 @@ ifeq ($(UNAME), Linux)
 # Linux
 	CC = g++
 	SHARED_FLAG = -shared
+	CXXFLAGS = -Wall -fopenmp -O3 -march=native -DNDEBUG -std=c++11
+	INCLUDES = -I/usr/include -I/usr/include/eigen3
 else
 	ifeq ($(UNAME), Darwin)
 # OS X
-		CC = g++
+		CC = g++-9
 		SHARED_FLAG = -dynamiclib
+		CXXFLAGS = -Wall -Xpreprocessor -fopenmp -L/usr/local/lib -lomp -O3 -march=native -DNDEBUG -std=c++11
+		INCLUDES = -I/usr/local/include/ -I/usr/local/include/eigen3
 	else
 		CC = g++
 	endif
 endif
 
-CXXFLAGS = -Wall -fopenmp -O3 -march=native -DNDEBUG -std=c++11
 
-INCLUDES = -I${EIGEN_DIR} -I${BOOST_DIR}
 LDFLAGS = -lpthread
 
 all: Grid.o Grid_ctypes.o FDTD.o Grid.cpp Grid.hpp Grid_ctypes.cpp Grid_ctypes.hpp fdtd.cpp fdtd.hpp

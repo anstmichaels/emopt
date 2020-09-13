@@ -1,10 +1,8 @@
 """A script which downloads, compiles, and installs the dependencies needed to
 install and run EMopt.
 
-EMopt depends on 4 core open source software packages:
+EMopt depends on 2 core open source software packages:
 
-    1. Eigen -- Linear algebra/matrix/array library
-    2. Boost.geometry -- polygon operations
     3. PETSc -- solving large Ax=b problems, parallel computing
     4. SLEPc -- solving large eigenvalue problems in parallel
 
@@ -251,8 +249,8 @@ def install_deps():
     # install dependencies
     install_begin(build_dir)
     try:
-        install_eigen(include_dir)
-        install_boost(include_dir)
+        #install_eigen(include_dir)
+        #install_boost(include_dir)
         install_petsc(install_dir)
         install_slepc(install_dir)
         install_end(current_dir, build_dir)
