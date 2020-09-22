@@ -296,8 +296,6 @@ class FDTD(MaxwellSolver):
         k0, j0, i0 = pos
         K, J, I = lens
 
-        print(pos, lens)
-
         # field arrays
         self._Ex = np.zeros(((K+2)*(J+2)*(I+2),), dtype=np.double)
         self._Ey = np.zeros(((K+2)*(J+2)*(I+2),), dtype=np.double)
