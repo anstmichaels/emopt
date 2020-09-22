@@ -155,6 +155,11 @@ class FDTD(MaxwellSolver):
     complex_eps : boolean (optional)
         Tells the solver if the permittivity is complex-valued. Setting this to
         False can speed up the solver when run on fewer cores (default = False)
+    dist_method : str
+        Method for distributing the underlying field arrays. Options are: 'auto', 'x', 'y',
+        'z'. 'auto' will automatically determine the optimal distribution of the arrays
+        between the processors. 'x', 'y', and 'z' will force the array to be distributed as
+        slices arranged along the x, y, or z axis respectively.
 
     Attributes
     ----------
@@ -229,7 +234,7 @@ class FDTD(MaxwellSolver):
     """
 
     def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=None,
-                 min_rindex=1.0, complex_eps=False):
+                 min_rindex=1.0, complex_eps=False, dist_method='auto'):
         super(FDTD, self).__init__(3)
 
         if(nconv is None):
@@ -265,8 +270,21 @@ class FDTD(MaxwellSolver):
         # stencil_type=1 => box
         # stencil_width=1 => 1 element ghosted region
         # boundary_type=1 => ghosted simulation boundary (padded everywhere)
-        da = PETSc.DA().create(sizes=[Nx, Ny, Nz], dof=1, stencil_type=0,
-                               stencil_width=1, boundary_type=1)
+        if(dist_method == 'auto'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
+        elif(dist_method == 'x'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], proc_sizes=[1,1,N_PROC],
+                                   dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
+        elif(dist_method == 'y'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], proc_sizes=[1,N_PROC,1],
+                                   dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
+        elif(dist_method == 'z'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], proc_sizes=[N_PROC,1,1],
+                                   dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
 
         self._da = da
         ## Setup the distributed array. Currently, we need 2 for each field
@@ -277,6 +295,8 @@ class FDTD(MaxwellSolver):
         pos, lens = da.getCorners()
         k0, j0, i0 = pos
         K, J, I = lens
+
+        print(pos, lens)
 
         # field arrays
         self._Ex = np.zeros(((K+2)*(J+2)*(I+2),), dtype=np.double)

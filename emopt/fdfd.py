@@ -1198,24 +1198,24 @@ class FDFD_TE(FDFD):
             (Master node only) A 2D numpy.ndarray containing the desired field
             component
         """
-        if(RANK is not 0):
+        if(RANK != 0):
             return MathDummy()
 
         if(domain is not None):
             j = domain.j
             k = domain.k
 
-        if(component is 'Ez'):
+        if(component == 'Ez'):
             if(domain is not None):
                 return self.Ez[j,k]
             else:
                 return np.copy(self.Ez)
-        elif(component is 'Hx'):
+        elif(component == 'Hx'):
             if(domain is not None):
                 return self.Hx[j,k]
             else:
                 return np.copy(self.Hx)
-        elif(component is 'Hy'):
+        elif(component == 'Hy'):
             if(domain is not None):
                 return self.Hy[j,k]
             else:
@@ -1258,19 +1258,19 @@ class FDFD_TE(FDFD):
             component
         """
         bc = self._bc
-        if(RANK is not 0):
+        if(RANK != 0):
             return MathDummy()
 
         if(domain is not None):
             j = domain.j
             k = domain.k
 
-        if(component is 'Ez'):
+        if(component == 'Ez'):
             if(domain is not None):
                 return self.Ez[j, k]
             else:
                 return np.copy(self.Ez)
-        elif(component is 'Hx'):
+        elif(component == 'Hx'):
             Hx = np.pad(self.Hx, 1, 'constant', constant_values=0)
             if(bc[1] == 'E'):
                 Hx[0,:] = -1*Hx[1,:]
@@ -1288,7 +1288,7 @@ class FDFD_TE(FDFD):
                 return Hx0[j, k]/2.0
             else:
                 return Hx0 / 2.0
-        elif(component is 'Hy'):
+        elif(component == 'Hy'):
             Hy = np.pad(self.Hy, 1, 'constant', constant_values=0)
             if(bc[0] == 'E'):
                 Hy[:,0] = -1*Hy[:,1]
@@ -1335,24 +1335,24 @@ class FDFD_TE(FDFD):
         numpy.ndarray
             (Master node only) A numpy.ndarray containing the desired field component
         """
-        if(RANK is not 0):
+        if(RANK != 0):
             return MathDummy()
 
         if(domain is not None):
             j = domain.j
             k = domain.k
 
-        if(component is 'Ez'):
+        if(component == 'Ez'):
             if(domain is not None):
                 return self.Ez_adj[j, k]
             else:
                 return self.Ez_adj
-        elif(component is 'Hx'):
+        elif(component == 'Hx'):
             if(domain is not None):
                 return self.Hx_adj[j, k]
             else:
                 return self.Hx_adj
-        elif(component is 'Hy'):
+        elif(component == 'Hy'):
             if(domain is not None):
                 return self.Hy_adj[j, k]
             else:
@@ -1392,7 +1392,7 @@ class FDFD_TE(FDFD):
         Hx = self.get_field_interp('Hx')
         Hy = self.get_field_interp('Hy')
 
-        if(RANK is not 0):
+        if(RANK != 0):
             return MathDummy()
 
         # calculate the Poynting vectors around the boundaries of the sytem
@@ -1876,7 +1876,7 @@ class FDFD_TM(FDFD_TE):
         Ex = self.get_field_interp('Ex')
         Ey = self.get_field_interp('Ey')
 
-        if(RANK is not 0):
+        if(RANK != 0):
             return MathDummy()
 
         # calculate the Poynting vectors around the boundaries of the sytem
