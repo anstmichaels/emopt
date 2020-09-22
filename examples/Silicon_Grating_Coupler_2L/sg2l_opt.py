@@ -46,7 +46,7 @@ class SiliconGrating2LAM(AdjointMethodPNF2D):
 
     Parameters
     ----------
-    sim : emopt.fdfd.FDFD
+    sim : emopt.solvers.MaxwellSolver
         The simulation object
     grating_top : list of Rectangle
         The list of rectangles which form the top half of the grating.
@@ -257,13 +257,13 @@ if __name__ == '__main__':
     wavelength = 1.55
     W = 24.0
     H = 8.0
-    dx = 0.03
+    dx = 0.06
     dy = dx
     w_pml = 1.0
     w_src= 5.0
 
     # create the simulation object.
-    sim = emopt.fdfd.FDFD_TE(W, H, dx, dy, wavelength)
+    sim = emopt.solvers.Maxwell2DTE(W, H, dx, dy, wavelength)
     sim.w_pml = [dx*15, dx*15, dx*15, dx*15]
 
     # Get the actual width and height
@@ -280,7 +280,7 @@ if __name__ == '__main__':
     eps_clad = 1.444**2
 
     # the effective indices are precomputed for simplicity.  We can compute
-    # these values using emopt.modes
+    # these values using emopt.solvers.Mode1DTM
     neff = 2.849
     neff_etched = 2.271
 
@@ -376,7 +376,7 @@ if __name__ == '__main__':
                                             Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver.
-    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
+    mode = emopt.solvers.Mode1DTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
     mode.build()
     mode.solve()
 
@@ -430,7 +430,7 @@ if __name__ == '__main__':
     design_params[-1] = -shift_bot -(1-df)*period
     design_params[-2] = -(1-df)*period
 
-    #am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
+    am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
 
     fom_list = []
     callback = lambda x : plot_update(x, fom_list, sim, am)

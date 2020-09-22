@@ -44,7 +44,7 @@ wavelength = 1.55
 #####################################################################################
 # Setup simulation
 #####################################################################################
-sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5)
+sim = emopt.solvers.Maxwell3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5)
 w_pml = dx * 15
 sim.w_pml = [w_pml, w_pml, w_pml, w_pml, w_pml, w_pml]
 
@@ -79,7 +79,7 @@ sim.build()
 #####################################################################################
 mode_slice = emopt.misc.DomainCoordinates(0.8, 0.8, w_pml, Y-w_pml, w_pml, Z-w_pml, dx, dy, dz)
 
-mode = emopt.modes.ModeFullVector(wavelength, eps, mu, mode_slice, n0=3.45,
+mode = emopt.solvers.Mode2D(wavelength, eps, mu, mode_slice, n0=3.45,
                                    neigs=4)
 mode.build()
 mode.solve()

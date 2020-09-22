@@ -40,9 +40,6 @@ from emopt.misc import NOT_PARALLEL, RANK, run_on_master
 from emopt.adjoint_method import AdjointMethodPNF2D
 
 import numpy as np
-from math import pi
-
-from mpi4py import MPI
 
 class WGCrossAM_TM(AdjointMethodPNF2D):
     """Define an adjoint method class which calculates the figure of merit and
@@ -270,7 +267,7 @@ if __name__ == '__main__':
     Y = 8.0
     dx = 0.04
     dy = 0.03
-    sim = emopt.fdfd.FDFD_TM(X, Y, dx, dy, wlen)
+    sim = emopt.solvers.Maxwell2DTM(X, Y, dx, dy, wlen)
     pmls = [0.5,0.5,0.5,0.5]
     sim.w_pml = pmls
 
@@ -380,7 +377,7 @@ if __name__ == '__main__':
                                             Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # setup, build the system, and solve for the modes of the input waveguide
-    mode = emopt.modes.ModeTM(wlen, eps, mu, src_line, n0=3.5, neigs=8)
+    mode = emopt.solvers.Mode1DTM(wlen, eps, mu, src_line, n0=3.5, neigs=8)
     mode.build()
     mode.solve()
 

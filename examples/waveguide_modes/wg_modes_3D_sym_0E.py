@@ -57,7 +57,7 @@ domain = emopt.misc.DomainCoordinates(0, W, 0, H, 0, 0, dx, dy, 1.0)
 # setup the mode solver
 ####################################################################################
 neigs = 4
-modes = emopt.modes.ModeFullVector(wavelength, eps, mu, domain, n0=np.sqrt(eps_Si), neigs=neigs)
+modes = emopt.solvers.Mode2D(wavelength, eps, mu, domain, n0=np.sqrt(eps_Si), neigs=neigs)
 modes.bc = '0E'
 modes.build() # build the eigenvalue problem internally
 modes.solve() # solve for the effective indices and mode profiles

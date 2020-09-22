@@ -1,6 +1,7 @@
 """Various functions associated loading and saving files.
 """
 from .misc import run_on_master, warning_message, NOT_PARALLEL, COMM
+from .geometry import Polygon
 import numpy as np
 
 __author__ = "Andrew Michaels"
@@ -368,3 +369,74 @@ def load_results(fname, bcast=True):
 
     return data
 
+def load_gds_txt(fname, unit_mult=1e-3):
+    """Load a very simple text-format GDS file exported from klayout.
+
+    Notes
+    -----
+    This function is not really optimized, so don't use it for very large GDS
+    files. It is really only meant for simpler structures (i.e. not entire
+    complicated layouts).
+
+    Parameters
+    ----------
+    fname : str
+        The path/name of the GDS file to load.
+    unit_mult : float
+        The multiplicative factor which yields numbers in the desired
+        unit system. For example, if you do everything in um but klayout
+        exports in nm, then unit_mult=1e-3
+
+    Returns
+    -------
+    dict
+        A dictionary containing lists of polygons. The keys of the dictionary are
+        the layer numbers used in klayout. The values of the dictionary are
+        lists containing the shapes that make up each layer.
+    """
+
+    # load contents
+    contents = ''
+    with open(fname, 'r') as fin:
+        contents = fin.read()
+
+    # clean up klayout weirdness
+    contents = contents.replace('XY ', 'XY\n')
+
+    # break up lines
+    lines = contents.split('\n')
+    lines = [line.strip() for line in lines]
+
+    # find blocks of boundaries
+    iB = [i for i,x in enumerate(lines) if x == 'BOUNDARY']
+    iE = [i for i,x in enumerate(lines) if x == 'ENDEL']
+
+    # loop through all boundaries and create Polygons :)
+    polys = []
+    layers = []
+    for i,j in zip(iB, iE):
+        layer_str = lines[i+1]
+        layer = float(layer_str.split(' ')[1])
+        layers.append(layer)
+
+        xs = []
+        ys = []
+        for k in range(i+4, j):
+            coordinate = lines[k]
+            xy = coordinate.split(': ')
+            xs.append(float(xy[0])*unit_mult)
+            ys.append(float(xy[1])*unit_mult)
+
+        p = Polygon()
+        p.set_points(xs, ys)
+        polys.append(p)
+
+    # store everythin in a dictionary
+    polygons = {}
+    for p,l in zip(polys, layers):
+        if(l in polygons):
+            polygons[l].append(p)
+        else:
+            polygons[l] = [p]
+
+    return polygons

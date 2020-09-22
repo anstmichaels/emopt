@@ -1,257 +1,656 @@
-from __future__ import absolute_import
-from builtins import zip
-from builtins import range
-from builtins import object
 import numpy as np
-import scipy
 from math import pi
 from .misc import warning_message, error_message, NOT_PARALLEL
+from ._grid_ctypes import libGrid, c_int
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
-def fillet(x, y, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
-           ignore_roc_lim=False, points_per_bend=None):
-    """Round corners of a polygon.
+class MaterialPrimitive(object):
+    """Define any primitive object that contains a material.
 
-    This function replaces sharp corners with circular arcs. The radius of
-    these arcs will be equal to the specified radius as long as the line
-    segments which make up the corner are sufficiently long. If they are too
-    short, the arc will be made with a smaller radius.
+    Common examples include shapes like rectangles, circles, or more generally polygons that
+    are filled with a specified material.
 
-    If a non-closed polygon is supplied, the end points will be ignored. A
-    polygon is considered closed if the first and last point in the provided
-    x,y coordinate lists are the same.
-
-    Parameters
-    ----------
-    x : list
-        The x coordinates of the chain of line segments to round.
-    y : list
-        The y coordinates of the chain of line segments to round.
-    R : float
-        The desired fillet radius
-    make_round : list or None (optional)
-        A list of boolean values which specifies which points should be
-        rounded. If None, then all roundable points are rounded. If supplying a
-        list, the list must have the same length as x and y. (default = None)
-    points_per_90 : int (optional)
-        The number of points to generate per 90 degrees of the arc. (default =
-        10)
-    equal_thresh : float
-        The threshold used for comparing values. If the |difference| between
-        two values is less than this value, they are considered equal.
-    points_per_bend : int (optional)
-        The number of points to use to define the bend. This parameter
-        overrides points_per_90. Use this if you need the number of points in a
-        fillet to remain fixed regardless of the corner angle.
-
-    Returns
+    Methods
     -------
-    list, list
-        The x and y coordinates of the new set of lines segments or polygon.
+    contains_point(self, x, y)
+        Check if a material primitive contains the supplied (x,y) coordinate
+
+    Attributes
+    ----------
+    layer : int
+        The layer of the material primitive. Lower means higher priority in
+        terms of visibility.
     """
-    xn = []
-    yn = []
-    i = 0
-    N = len(x)
-    N0 = N
 
-    # we always ignore the last point
-    N -= 1
+    def __init__(self, label=None):
+        self._object = None
+        self._layer = 1
 
-    closed = True
-    i = 0
-    if(x[0] != x[-1] or y[0] != y[-1]):
-        closed = False
-        xn.append(x[0])
-        yn.append(y[0])
-        i = 1
+        if(label == None):
+            label = 'Primitive'
 
-    while(i < N):
-        if(make_round is None or make_round[i]):
-            # get current and adjacent points
-            x1 = x[i]
-            y1 = y[i]
-            if(i == 0):
-                x0 = x[-2]
-                y0 = y[-2]
+    @property
+    def layer(self):
+        return self._layer
+
+    @layer.setter
+    def layer(self, newlayer):
+        self._layer = newlayer
+        libGrid.MaterialPrimitive_set_layer(self._object, c_int(newlayer))
+
+    @property
+    def label(self): return self._label
+
+    @label.setter
+    def label(self, val): self._label = val
+
+    def get_layer(self):
+        """Get the layer of the primitive.
+
+        Returns
+        -------
+        int
+            The layer.
+        """
+        warning_message('get_layer() is deprecated. Use property ' \
+            'myprim.layer instead.', 'emopt.grid')
+        return libGrid.MaterialPrimitive_get_layer(self._object)
+
+    def set_layer(self, layer):
+        """Set the layer of the primitive.
+
+        Parameters
+        ----------
+        layer : int
+            The new layer.
+        """
+        warning_message('set_layer(...) is deprecated. Use property ' \
+            'myprim.layer=... instead.', 'emopt.grid')
+        libGrid.MaterialPrimitive_set_layer(self._object, c_int(layer))
+
+    def contains_point(self, x, y):
+        """Check if a material primitive contains the supplied (x,y) coordinate
+
+        Parameters
+        ----------
+        x : float
+            The real-space x coordinate
+        y : float
+            The real-space y coordinate
+
+        Returns
+        -------
+        bool
+            True if the (x,y) point is contained within the primitive, false
+            otherwise.
+        """
+        return libGrid.MaterialPrimitive_contains_point(self._object, x, y)
+
+class Polygon(MaterialPrimitive):
+
+    def __init__(self, xs, ys, material_value=1.0, layer=1, label=None):
+        if(label == None):
+            label = 'Polygon'
+        super().__init__(label)
+
+        self._object = libGrid.Polygon_new()
+
+        self.set_points(xs,ys)
+        self.material_value = material_value
+        self.layer = layer
+
+        # Store transformation data -- may be useful
+        self._transformations = []
+
+    @property
+    def xs(self):
+        return np.copy(self._xs)
+
+    @property
+    def ys(self):
+        return np.copy(self._ys)
+
+    @property
+    def Np(self):
+        return self._Np
+
+    @property
+    def material_value(self):
+        return self._value
+
+    @xs.setter
+    def xs(self, vals):
+        warning_message('Polygon.xs cannot be set on its own. Use ' \
+                        'set_points(x,y) instead', 'emopt.grid.Polygon')
+
+    @ys.setter
+    def ys(self, vals):
+        warning_message('Polygon.ys cannot be set on its own. Use ' \
+                        'set_points(x,y) instead', 'emopt.grid.Polygon')
+
+    @Np.setter
+    def Np(self, N):
+        warning_message('Polygon.Np cannot be modified in this way.', \
+                        'emopt.grid.Polygon')
+
+    @material_value.setter
+    def material_value(self, value):
+        libGrid.Polygon_set_material(self._object, value.real, value.imag)
+        self._value = value
+
+    @property
+    def transformations(self): return self._transformations
+
+    def __del__(self):
+        libGrid.Polygon_delete(self._object)
+
+    def add_point(self, x, y):
+        libGrid.Polygon_add_point(self._object, x, y)
+
+        self._Np += 1
+        self._xs = np.concatenate(self._xs, [x])
+        self._ys = np.concatenate(self._ys, [y])
+
+    def add_points(self, x, y):
+        x = np.array(x, dtype=np.float64)
+        y = np.array(y, dtype=np.float64)
+        libGrid.Polygon_add_points(self._object, x, y, len(x))
+
+        self._Np += len(x)
+        self._xs = np.concatenate(self._xs, x)
+        self._ys = np.concatenate(self._ys, y)
+
+    def set_points(self, x, y):
+        x = np.array(x, dtype=np.float64)
+        y = np.array(y, dtype=np.float64)
+        libGrid.Polygon_set_points(self._object, x, y, len(x))
+
+        self._Np = len(x)
+        self._xs = np.copy(x)
+        self._ys = np.copy(y)
+
+    def set_point(self, index, x, y):
+        libGrid.Polygon_set_point(self._object, x, y, index)
+
+        self._xs[index] = x
+        self._ys[index] = y
+
+    def set_material(self, mat):
+        warning_message('set_material(...) is deprecated. Use property ' \
+                        'mypoly.material_value=... instead.', 'emopt.grid')
+        libGrid.Polygon_set_material(self._object, mat.real, mat.imag)
+        self._value = mat
+
+    def refine_edges(self, ds, refine_box=None):
+        """Refine polygon edges by adding additional evenly spaced vertices.
+
+        Parameters
+        ----------
+        ds : float
+            The approximate spacing of the populated points.
+        refine_box : list of tuple
+            Only populate points within the box [xmin, xmax, ymin, ymax]. If None,
+            populate all lines (default = None)
+
+        Returns
+        -------
+        numpy.array, numpy.array
+            The x and y coordinates of the newly populated line segments.
+        """
+        xs = np.copy(self._xs)
+        ys = np.copy(self._ys)
+        Np = len(xs)
+
+        xf = np.array([xs[0]])
+        yf = np.array([ys[0]])
+
+        if(refine_box is not None):
+            xmin, xmax, ymin, ymax = refine_box
+        else:
+            xmin = np.min(xs) - 1
+            xmax = np.max(xs) + 1
+            ymin = np.min(ys) - 1
+            ymax = np.max(ys) + 1
+
+        for i in range(Np-1):
+
+            x2 = xs[i+1]
+            x1 = xs[i]
+            y2 = ys[i+1]
+            y1 = ys[i]
+
+            p1in = x1 >= xmin and x1 <= xmax and y1 >= ymin and y1 <= ymax
+            p2in = x2 >= xmin and x2 <= xmax and y2 >= ymin and y2 <= ymax
+
+            if(not p1in or not p2in):
+                xf = np.concatenate([xf, [x1, x2]])
+                yf = np.concatenate([yf, [y1, y2]])
             else:
-                x0 = x[i-1]
-                y0 = y[i-1]
-            if(i == N0-1):
-                x2 = x[1]
-                y2 = y[1]
-            else:
-                x2 = x[i+1]
-                y2 = y[i+1]
+                s = np.sqrt((x2-x1)**2 + (y2-y1)**2)
+                Ns = np.ceil(s/ds)
+                if(Ns < 2): Ns = 2
 
-            # calc angle
-            dx10 = x0-x1
-            dy10 = y0-y1
-            dx12 = x2-x1
-            dy12 = y2-y1
-            d10 = np.sqrt(dx10**2 + dy10**2)
-            d12 = np.sqrt(dx12**2 + dy12**2)
+                xnew = np.linspace(x1, x2, Ns)
+                ynew = np.linspace(y1, y2, Ns)
 
-            theta = np.arccos((dx10*dx12 + dy10*dy12)/(d10*d12))
+                xf = np.concatenate([xf, xnew])
+                yf = np.concatenate([yf, ynew])
 
-            if(theta != 0 and theta != pi):
-                dxc = (dx10/d10 + dx12/d12)
-                dyc = (dy10/d10 + dy12/d12)
-                dc = np.sqrt(dxc**2 + dyc**2)
-                nxc = dxc/dc
-                nyc = dyc/dc
+        # remove duplicate points
+        x_reduc = []
+        y_reduc = []
+        for x,y in zip(xf, yf):
+            if(len(x_reduc) == 0):
+                x_reduc.append(x)
+                y_reduc.append(y)
+            elif(x != x_reduc[-1] or y != y_reduc[-1]):
+                x_reduc.append(x)
+                y_reduc.append(y)
 
-                nx10 = dx10/d10
-                ny10 = dy10/d10
+        self.set_points(np.array(x_reduc), np.array(y_reduc))
 
-                nx12 = dx12/d12
-                ny12 = dy12/d12
+    def fillet(self, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
+               ignore_roc_lim=False, points_per_bend=None):
+        """Round corners of a polygon.
 
-                # reduce fillet radius if necessary
-                Ri = R
-                iprev = i-1
-                inext = i+1
-                if(iprev < 0): iprev = N0-1
-                if(inext > N0-1): inext = 0
+        This function replaces sharp corners with circular arcs. The radius of
+        these arcs will be equal to the specified radius as long as the line
+        segments which make up the corner are sufficiently long. If they are too
+        short, the arc will be made with a smaller radius.
 
-                if( (d10 < 2*R or d12 < 2*R) and not ignore_roc_lim):
-                    Ri = np.min([d12, d10])/2.0
-                    if(NOT_PARALLEL):
-                        warning_message('Warning: Desired radius of curvature too large at ' \
-                                        'point %d. Reducing to maximum allowed.' % \
-                                        (i), 'emopt.geometry')
+        If a non-closed polygon is supplied, the end points will be ignored. A
+        polygon is considered closed if the first and last point in the provided
+        x,y coordinate lists are the same.
 
-                # figure out where the circle "fits" in the corner
-                S10 = Ri / np.tan(theta/2.0)
-                S12 = S10
-                Sc = np.sqrt(S10**2 + Ri**2)
+        Parameters
+        ----------
+        R : float
+            The desired fillet radius
+        make_round : list or None (optional)
+            A list of boolean values which specifies which points should be
+            rounded. If None, then all roundable points are rounded. If supplying a
+            list, the list must have the same length as x and y. (default = None)
+        points_per_90 : int (optional)
+            The number of points to generate per 90 degrees of the arc. (default =
+            10)
+        equal_thresh : float
+            The threshold used for comparing values. If the |difference| between
+            two values is less than this value, they are considered equal.
+        points_per_bend : int (optional)
+            The number of points to use to define the bend. This parameter
+            overrides points_per_90. Use this if you need the number of points in a
+            fillet to remain fixed regardless of the corner angle.
 
-                # generate the fillet
-                theta1 = np.arctan2((S10*ny10 - Sc*nyc), (S10*nx10 - Sc*nxc))
-                theta2 = np.arctan2((S12*ny12 - Sc*nyc), (S12*nx12 - Sc*nxc))
+        Returns
+        -------
+        list, list
+            The x and y coordinates of the new set of lines segments or polygon.
+        """
+        x = self._xs
+        y = self._ys
 
-                if(theta1 < 0): theta1 += 2*pi
-                if(theta2 < 0): theta2 += 2*pi
+        xn = []
+        yn = []
+        i = 0
+        N = len(x)
+        N0 = N
 
-                theta1 = np.mod(theta1, 2*pi)
-                theta2 = np.mod(theta2, 2*pi)
+        # we always ignore the last point
+        N -= 1
 
-                if(theta2 - theta1 > pi): theta2 -= 2*pi
-                elif(theta1 - theta2 > pi): theta2 += 2*pi
+        closed = True
+        i = 0
+        if(x[0] != x[-1] or y[0] != y[-1]):
+            closed = False
+            xn.append(x[0])
+            yn.append(y[0])
+            i = 1
 
-                if(points_per_bend == None):
-                    Np = int(np.abs(theta2-theta1) / (pi/2) * points_per_90)
+        while(i < N):
+            if(make_round is None or make_round[i]):
+                # get current and adjacent points
+                x1 = x[i]
+                y1 = y[i]
+                if(i == 0):
+                    x0 = x[-2]
+                    y0 = y[-2]
                 else:
-                    Np = points_per_bend
-                if(Np < 1):
-                    Np = 1
-                thetas = np.linspace(theta1, theta2, Np)
-                for t in thetas:
-                    xfil = x[i] + Sc*nxc + Ri*np.cos(t)
-                    yfil = y[i] + Sc*nyc + Ri*np.sin(t)
+                    x0 = x[i-1]
+                    y0 = y[i-1]
+                if(i == N0-1):
+                    x2 = x[1]
+                    y2 = y[1]
+                else:
+                    x2 = x[i+1]
+                    y2 = y[i+1]
 
-                    # only add point if not duplicate (this can happen if
-                    # the desired radis of curvature equals or exceeds the
-                    # maximum allowed)
-                    if(np.abs(xfil - xn[-1]) > equal_thresh or
-                       np.abs(yfil - yn[-1]) > equal_thresh):
-                        xn.append(xfil)
-                        yn.append(yfil)
+                # calc angle
+                dx10 = x0-x1
+                dy10 = y0-y1
+                dx12 = x2-x1
+                dy12 = y2-y1
+                d10 = np.sqrt(dx10**2 + dy10**2)
+                d12 = np.sqrt(dx12**2 + dy12**2)
 
+                theta = np.arccos((dx10*dx12 + dy10*dy12)/(d10*d12))
+
+                if(theta != 0 and theta != pi):
+                    dxc = (dx10/d10 + dx12/d12)
+                    dyc = (dy10/d10 + dy12/d12)
+                    dc = np.sqrt(dxc**2 + dyc**2)
+                    nxc = dxc/dc
+                    nyc = dyc/dc
+
+                    nx10 = dx10/d10
+                    ny10 = dy10/d10
+
+                    nx12 = dx12/d12
+                    ny12 = dy12/d12
+
+                    # reduce fillet radius if necessary
+                    Ri = R
+                    iprev = i-1
+                    inext = i+1
+                    if(iprev < 0): iprev = N0-1
+                    if(inext > N0-1): inext = 0
+
+                    if( (d10 < 2*R or d12 < 2*R) and not ignore_roc_lim):
+                        Ri = np.min([d12, d10])/2.0
+                        if(NOT_PARALLEL):
+                            warning_message('Warning: Desired radius of curvature too large at ' \
+                                            'point %d. Reducing to maximum allowed.' % \
+                                            (i), 'emopt.geometry')
+
+                    # figure out where the circle "fits" in the corner
+                    S10 = Ri / np.tan(theta/2.0)
+                    S12 = S10
+                    Sc = np.sqrt(S10**2 + Ri**2)
+
+                    # generate the fillet
+                    theta1 = np.arctan2((S10*ny10 - Sc*nyc), (S10*nx10 - Sc*nxc))
+                    theta2 = np.arctan2((S12*ny12 - Sc*nyc), (S12*nx12 - Sc*nxc))
+
+                    if(theta1 < 0): theta1 += 2*pi
+                    if(theta2 < 0): theta2 += 2*pi
+
+                    theta1 = np.mod(theta1, 2*pi)
+                    theta2 = np.mod(theta2, 2*pi)
+
+                    if(theta2 - theta1 > pi): theta2 -= 2*pi
+                    elif(theta1 - theta2 > pi): theta2 += 2*pi
+
+                    if(points_per_bend == None):
+                        Np = int(np.abs(theta2-theta1) / (pi/2) * points_per_90)
+                    else:
+                        Np = points_per_bend
+                    if(Np < 1):
+                        Np = 1
+                    thetas = np.linspace(theta1, theta2, Np)
+                    for t in thetas:
+                        xfil = x[i] + Sc*nxc + Ri*np.cos(t)
+                        yfil = y[i] + Sc*nyc + Ri*np.sin(t)
+
+                        # only add point if not duplicate (this can happen if
+                        # the desired radis of curvature equals or exceeds the
+                        # maximum allowed)
+                        if(np.abs(xfil - xn[-1]) > equal_thresh or
+                           np.abs(yfil - yn[-1]) > equal_thresh):
+                            xn.append(xfil)
+                            yn.append(yfil)
+
+                else:
+                    xn.append(x[i])
+                    yn.append(y[i])
             else:
                 xn.append(x[i])
                 yn.append(y[i])
+            i += 1
+
+        if(not closed):
+            xn.append(x[-1])
+            yn.append(y[-1])
         else:
-            xn.append(x[i])
-            yn.append(y[i])
-        i += 1
+            xn.append(xn[0])
+            yn.append(yn[0])
 
-    if(not closed):
-        xn.append(x[-1])
-        yn.append(y[-1])
-    else:
-        xn.append(xn[0])
-        yn.append(yn[0])
+        self.set_points(np.array(xn), np.array(yn)) 
 
-    return np.array(xn), np.array(yn)
 
-def populate_lines(xs, ys, ds, refine_box=None):
-    """Populate a chain of line segments with additional points.
+    def translate(self, dx, dy):
+        """Move the polygon by the specified amount along x and y.
+        """
+        xs = self.xs + dx
+        ys = self.ys + dy
 
-    Given a set of connected line segments, add evenly distributed points to
-    the line segments. This is currently done in a very approximate manner.
+        self.set_points(xs, ys)
 
-    Parameters
-    ----------
-    xs : list or numpy.array
-        The list of x coordinates of the line segments.
-    ys : list or numpy.array
-        The list of y coordinates of the line segments.
-    ds : float
-        The approximate spacing of the populated points.
-    refine_box : list of tuple
-        Only populate points within the box [xmin, xmax, ymin, ymax]. If None,
-        populate all lines (default = None)
+        # update list of transformations
+        self._transformations.append( ('translate', dx, dy) )
 
-    Returns
-    -------
-    numpy.array, numpy.array
-        The x and y coordinates of the newly populated line segments.
+    def rotate(self, angle, x0=0, y0=0):
+        """Rotate the polygon about a point.
+
+        Parameters
+        ----------
+        angle : float
+            Counterclockwise angle of rotation in degrees.
+        """
+        theta = angle / 180 * np.pi
+        x = (self.xs - x0) * np.cos(theta) - (self.ys - y0) * np.sin(theta) + x0
+        y = (self.xs - x0) * np.sin(theta) + (self.ys - y0) * np.cos(theta) + y0
+
+        self.set_points(x, y)
+    
+        self._transformations.append( ('rotate', angle, x0, y0) )
+
+    def scale(self, sx, sy, x0=0, y0=0):
+        """Scale the polygon.
+        """
+        x = (self.xs-x0)*sx + x0
+        y = (self.ys-y0)*sy + y0
+
+        self.set_points(x, y)
+
+        self._transformations( ('scale', sx, sy, x0, y0) )
+
+    def mirror(self, mx, my, x0=0, y0=0):
+        """Mirror the polygon about a point
+        """
+        if(mx):
+            x = x0 - self.xs
+        else:
+            x = self.xs
+
+        if(my):
+            y = y0 - self.ys
+        else:
+            y = self.ys
+
+        self.set_points(x, y)
+
+        self._transformations.append( ('mirror', mx, my, x0, y0) )
+
+class Rectangle(Polygon):
+    """Define a rectangle.
     """
-    Np = len(xs)
+    def __init__(self, x0, y0, w, h, mat_val=1.0, layer=1, label=None):
+        if(label == None):
+            label = 'Rectangle'
+        super().__init__([], [], mat_val, layer=1, label=label)
 
-    xf = np.array([xs[0]])
-    yf = np.array([ys[0]])
+        self._x0 = x0
+        self._y0 = y0
+        self._w = w
+        self._h = h
 
-    if(refine_box is not None):
-        xmin, xmax, ymin, ymax = refine_box
-    else:
-        xmin = np.min(xs) - 1
-        xmax = np.max(xs) + 1
-        ymin = np.min(ys) - 1
-        ymax = np.max(ys) + 1
+        self._update_points()
 
-    for i in range(Np-1):
+    @property
+    def x0(self): return self._x0
 
-        x2 = xs[i+1]
-        x1 = xs[i]
-        y2 = ys[i+1]
-        y1 = ys[i]
+    @x0.setter
+    def x0(self, x):
+        self._x0 = x
+        self._update_points()
 
-        p1in = x1 >= xmin and x1 <= xmax and y1 >= ymin and y1 <= ymax
-        p2in = x2 >= xmin and x2 <= xmax and y2 >= ymin and y2 <= ymax
+    @property
+    def y0(self): return self._y0
 
-        if(not p1in or not p2in):
-            xf = np.concatenate([xf, [x1, x2]])
-            yf = np.concatenate([yf, [y1, y2]])
-        else:
-            s = np.sqrt((x2-x1)**2 + (y2-y1)**2)
-            Ns = np.ceil(s/ds)
-            if(Ns < 2): Ns = 2
+    @y0.setter
+    def y0(self, val):
+        self._y0 = val
+        self._update_points()
 
-            xnew = np.linspace(x1, x2, Ns)
-            ynew = np.linspace(y1, y2, Ns)
+    @property
+    def w(self): return self._w
 
-            xf = np.concatenate([xf, xnew])
-            yf = np.concatenate([yf, ynew])
+    @w.setter
+    def w(self, val):
+        self._w = val
+        self._update_points()
 
-    # remove duplicate points
-    x_reduc = []
-    y_reduc = []
-    for x,y in zip(xf, yf):
-        if(len(x_reduc) == 0):
-            x_reduc.append(x)
-            y_reduc.append(y)
-        elif(x != x_reduc[-1] or y != y_reduc[-1]):
-            x_reduc.append(x)
-            y_reduc.append(y)
+    @property
+    def h(self): return self._h
 
-    return np.array(x_reduc), np.array(y_reduc)
+    @h.setter
+    def h(self, val):
+        self._h = val
+        self._update_points()
+
+    def _update_points(self):
+        x0 = self._x0
+        y0 = self._y0
+        w = self._w
+        h = self._h
+        x = [x0-w/2, x0+w/2, x0+w/2, x0-w/2, x0-w/2]
+        y = [y0-h/2, y0-h/2, y0+h/2, y0+h/2, y0-h/2]
+
+        super().set_points(x, y)
+
+
+class Circle(Polygon):
+    """Define a circle filled with a particular material
+    """
+    def __init__(self, x0, y0, r, mat_val=1.0, layer=1, resolution=72, label=None):
+        if(label == None):
+            label = 'Circle'
+        super().__init__([], [], mat_val, layer, label=label)
+
+
+        self._x0 = x0
+        self._y0 = y0
+        self._r = r
+        self._res = resolution
+
+        self._update_points()
+
+    @property
+    def x0(self): return self._x0
+
+    @x0.setter
+    def x0(self, x):
+        self._x0 = x
+        self._update_points()
+
+    @property
+    def y0(self): return self._y0
+
+    @y0.setter
+    def y0(self, val):
+        self._y0 = val
+        self._update_points()
+
+    @property
+    def r(self): return self._r
+
+    @r.setter
+    def r(self, val):
+        self._r = val
+        self._update_points()
+
+    @property
+    def resolution(self): return self._resolution
+
+    @resolution.setter
+    def resolution(self, val):
+        self._resolution = val
+        self._update_points()
+
+    def _update_points(self):
+        theta = np.linspace(0,2*pi,self._res+1)
+        x = self._r*np.cos(theta) + self._x0
+        y = self._r*np.sin(theta) + self._y0
+
+        super().set_points(x, y)
+
+
+class Ellipse(Polygon):
+    """Define a circle filled with a particular material
+    """
+    def __init__(self, x0, y0, a, b, mat_val=1.0, layer=1, resolution=72, label=None):
+        if(label == None):
+            label = 'Ellipse'
+        super().__init__([], [], mat_val, layer, label=label)
+
+        self._x0 = x0
+        self._y0 = y0
+        self._a = a
+        self._b = b
+        self._res = resolution
+
+        # Rectangle is internally repesented as a polygon
+        self._object = libGrid.Polygon_new()
+
+        self._update_points()
+
+    @property
+    def x0(self): return self._x0
+
+    @x0.setter
+    def x0(self, x):
+        self._x0 = x
+        self._update_points()
+
+    @property
+    def y0(self): return self._y0
+
+    @y0.setter
+    def y0(self, val):
+        self._y0 = val
+        self._update_points()
+
+    @property
+    def a(self): return self._a
+
+    @a.setter
+    def a(self, val):
+        self._a = val
+        self._update_points()
+
+    @property
+    def b(self): return self._b
+
+    @b.setter
+    def b(self, val):
+        self._b = val
+        self._update_points()
+
+    @property
+    def resolution(self): return self._resolution
+
+    @resolution.setter
+    def resolution(self, val):
+        self._resolution = val
+        self._update_points()
+
+    def _update_points(self):
+        theta = np.linspace(0,2*pi,self._res+1)
+        x = self._a*np.cos(theta) + self._x0
+        y = self._b*np.sin(theta) + self._y0
+
+        super().set_points(x,y)
 
 class IndexSet(object):
 
@@ -265,11 +664,11 @@ class IndexSet(object):
 
     @property
     def x(self):
-        return x
+        return self._x
 
     @property
     def y(self):
-        return y
+        return self._y
 
     @property
     def indices(self):
@@ -277,11 +676,11 @@ class IndexSet(object):
 
     @x.setter
     def x(self, newx):
-        x = newx
+        self._x = newx
 
     @y.setter
     def y(self, newy):
-        y = newy
+        self._y = newy
 
     def append(self, xmin, xmax, ymin, ymax, reverse=False):
         x = self._x
@@ -313,108 +712,6 @@ class IndexSet(object):
 
     def clear(self):
         self._indices = []
-
-class FourierDisplacer(object):
-    """Displace a points which define a path using a radius-of-curvature-limited
-    Fourier series.
-    """
-
-    def __init__(self, xs, ys, Rmin):
-        self._xs = xs
-        self._ys = ys
-        self._Npts = len(xs)
-        self._Rmin = Rmin
-
-        # calculate path lengths
-        ts = [0]
-        for i in range(i, self._Npts):
-            t_tot = ts[i-1]
-            t_next = np.sqrt((xs[i]-xs[i-1])**2 + (ys[i]-ys[i-1])**2)
-            ts.append(t_tot+t_next)
-
-        self._ts = ts
-        Tmax = ts[-1]
-        self._Tmax = Tmax
-
-        # calculate number of Fourier sin coefficients = # half periods which
-        # fit along path
-        Nf = np.floor(Tmax/(2*Rmin))
-        self._Nf
-
-        # calculate the fourier periods
-        indices = np.arange(0, Nf, 1) + 1
-        periods = Tmax/indices
-        self._P = periods
-
-        # generate the x and y Fourier coefficients
-        self._Ax = np.zeros(Nf)
-        self._Ay = np.zeros(Nf)
-
-        # calculate the Fourier amplitude limits based on radius of curvature.
-        # Note: this is approximate
-        self._Amax = (periods/pi)**2 / Rmin
-
-    @property
-    def xs(self):
-        return self._xs
-
-    @property
-    def ys(self):
-        return self._ys
-
-    @property
-    def Nf(self):
-        return self._Nf
-
-    @property
-    def periods(self):
-        return self._P
-
-    @property
-    def max_amplitude(self):
-        return self._Amax
-
-    def get_x(self, Ax):
-        """Calculate the displaced x coordinates.
-
-        Parameters
-        ----------
-        Ax : numpy.ndarray
-            The list of Fourier coefficients used for x displacements. This
-            list should have length equal to Nf.
-
-        Returns
-        -------
-        numpy.ndarray
-            The list of displaced x coordinates.
-        """
-        xs = np.copy(self._xs)
-
-        for i in range(self._Nf):
-            xs = xs + Ax[i] * np.sin(pi*self._ts/self._P[i])
-
-        return xs
-
-    def get_y(self, Ay):
-        """Calculate the displaced y coordinates.
-
-        Parameters
-        ----------
-        Ay : numpy.ndarray
-            The list of Fourier coefficients used for y displacements. This
-            list should have length equal to Nf.
-
-        Returns
-        -------
-        numpy.ndarray
-            The list of displaced y coordinates.
-        """
-        ys = np.copy(self._ys)
-
-        for i in range(self._Nf):
-            ys = ys + Ay[i] * np.sin(pi*self._ts/self._P[i])
-
-        return ys
 
 class NURBS(object):
     """Create a NURBS curve.

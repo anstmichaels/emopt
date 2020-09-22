@@ -1,31 +1,30 @@
 """Provides a ctypes interface between C++ FDTD library and python."""
 
-from ctypes import *
+from ctypes import cdll, c_void_p, c_int, c_double, c_bool, c_char_p
 import os
 import numpy as np
 from numpy.ctypeslib import ndpointer
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 so_path = ''.join([dir_path, '/FDTD.so'])
 libFDTD = cdll.LoadLibrary(so_path)
 
-# useful defs
+# define type compatible with numpy arrays
 c_complex_p = ndpointer(np.complex128, ndim=1, flags='C')
 c_double_p = ndpointer(np.double, ndim=1, flags='C')
 
 #######################################################
 # ctypes interface definition
 #######################################################
+# FDTD_new() -> FDTD*
 libFDTD.FDTD_new.argtypes = []
 libFDTD.FDTD_new.restype = c_void_p
 
+# FDTD_set_wavelength(Fdtd*, double)
 libFDTD.FDTD_set_wavelength.argtypes = [c_void_p, c_double]
 libFDTD.FDTD_set_wavelength.restype = None
 

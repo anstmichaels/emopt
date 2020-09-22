@@ -38,19 +38,14 @@ References
 Modesolver for Anisotropic Dielectric Waveguides", J. Lightwave Technol. 26(11),
 1423-1431, (2008).
 """
-from __future__ import absolute_import
-# Initialize petsc first
-from builtins import range
-from builtins import object
 import sys, slepc4py
-from future.utils import with_metaclass
 slepc4py.init(sys.argv)
 
-from .defs import FieldComponent
-from .misc import info_message, warning_message, error_message, \
+from ..defs import FieldComponent
+from ..misc import info_message, warning_message, error_message, \
 NOT_PARALLEL, run_on_master, MathDummy
 
-from . import grid
+from .. import grid
 
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
@@ -60,11 +55,8 @@ import numpy as np
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
-class ModeSolver(with_metaclass(ABCMeta, object)):
+class ModeSolver(metaclass=ABCMeta):
     """A generic interface for electromagnetic mode solvers.
 
     At a minimum, a mode solver must provide functions for solving for the
@@ -192,7 +184,7 @@ class ModeSolver(with_metaclass(ABCMeta, object)):
         """
         pass
 
-class ModeTE(ModeSolver):
+class Mode1DTE(ModeSolver):
     """Solve for the TE polarized modes of a 1D slice of a 2D structure.
 
     The TE polarization consists of a non-zeros :math:`E_z`, :math:`H_x`,
@@ -274,7 +266,7 @@ class ModeTE(ModeSolver):
 
     def __init__(self, wavelength, eps, mu, domain, n0=1.0, neigs=1, \
                  backwards=False):
-        super(ModeTE, self).__init__(wavelength, n0, neigs)
+        super().__init__(wavelength, n0, neigs)
 
         # Generated fields/source will be reshaped to match input eps
         self.domain = domain
@@ -837,7 +829,7 @@ class ModeTE(ModeSolver):
         My = np.reshape(My, self._fshape)
         return (Jz, Mx, My)
 
-class ModeTM(ModeTE):
+class Mode1DTM(Mode1DTE):
     """Solve for the TM polarized modes of a 1D slice of a 2D structure.
 
     The TM polarization consists of a non-zeros :math:`H_z`, :math:`E_x`,
@@ -912,7 +904,7 @@ class ModeTM(ModeTE):
         # A TM mode source is the same as a TE mode source except with the
         # permittivity and permeability smapped and the E and H and J and M
         # components swapped around.
-        super(ModeTM, self).__init__(wavelength, mu, eps, domain, n0, neigs, \
+        super().__init__(wavelength, mu, eps, domain, n0, neigs, \
                                       backwards)
 
         self.bc = 'M' # really PEC since we use TE mode solver
@@ -956,12 +948,12 @@ class ModeTM(ModeTE):
 
         Use this function with care: Hz/Ey and Ex are specified at different
         points in space (separated by half of a grid cell).  In general
-        :func:`.ModeTM.get_field_interp` should be prefered.
+        :func:`.Mode1DTM.get_field_interp` should be prefered.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.ModeTM.find_mode_index` may be used to determine the index of
+        :func:`.Mode1DTM.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -971,9 +963,9 @@ class ModeTM(ModeTE):
 
         See Also
         --------
-        :func:`.ModeTM.get_field_interp`
+        :func:`.Mode1DTM.get_field_interp`
 
-        :func:`.ModeTM.find_mode_index`
+        :func:`.Mode1DTM.find_mode_index`
 
         Parameters
         ----------
@@ -994,7 +986,7 @@ class ModeTM(ModeTE):
         elif(component == 'Ey'): te_comp = 'Hy'
         else: te_comp = 'invalid'
 
-        field = super(ModeTM, self).get_field(i, te_comp)
+        field = super(Mode1DTM, self).get_field(i, te_comp)
 
         if(component == 'Hz'):
             return field*-1
@@ -1006,12 +998,12 @@ class ModeTM(ModeTE):
         """Get the desired interpolated field component of the i'th mode.
 
         In general, this function should be preferred over
-        :func:`.ModeTM.get_field`.
+        :func:`.Mode1DTM.get_field`.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.ModeTM.find_mode_index` may be used to determine the index of
+        :func:`.Mode1DTM.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -1021,9 +1013,9 @@ class ModeTM(ModeTE):
 
         See Also
         --------
-        :func:`.ModeTM.get_field`
+        :func:`.Mode1DTM.get_field`
 
-        :func:`.ModeTM.find_mode_index`
+        :func:`.Mode1DTM.find_mode_index`
 
         Parameters
         ----------
@@ -1044,7 +1036,7 @@ class ModeTM(ModeTE):
         elif(component == 'Ey'): te_comp = 'Hy'
         else: te_comp = 'invalid'
 
-        field = super(ModeTM, self).get_field_interp(i, te_comp)
+        field = super(Mode1DTM, self).get_field_interp(i, te_comp)
 
         if(component == 'Hz'):
             return field*-1
@@ -1090,13 +1082,13 @@ class ModeTM(ModeTE):
             source distributions.  In 2D, these source distributions are N x 1
             arrays.
         """
-        src = super(ModeTM, self).get_source(dx, dy, dz)
+        src = super(Mode1DTM, self).get_source(dx, dy, dz)
 
         # In order to make use of the TE subclass, we need to flip the sign of
         # the Jx and Jy sources
         return (src[0], -1*src[1], -1*src[2])
 
-class ModeFullVector(ModeSolver):
+class Mode2D(ModeSolver):
     """Solve for the modes for a 2D slice of a 3D structure.
 
     Parameters
@@ -1153,7 +1145,7 @@ class ModeFullVector(ModeSolver):
 
     def __init__(self, wavelength, eps, mu, domain, n0=1.0, neigs=1, \
                  backwards=False, verbose=True):
-        super(ModeFullVector, self).__init__(wavelength, n0, neigs)
+        super().__init__(wavelength, n0, neigs)
 
         self.eps = eps
         self.mu = mu
@@ -1658,9 +1650,9 @@ class ModeFullVector(ModeSolver):
 
         See Also
         --------
-        :func:`.ModeFullVector.get_field_interp`
+        :func:`.Mode2D.get_field_interp`
 
-        :func:`.ModeFullVector.find_mode_index`
+        :func:`.Mode2D.find_mode_index`
 
         Parameters
         ----------
@@ -1790,12 +1782,12 @@ class ModeFullVector(ModeSolver):
         """Get the desired interpolated field component of the i'th mode.
 
         In general, this function should be preferred over
-        :func:`.ModeFullVector.get_field`.
+        :func:`.Mode2D.get_field`.
 
         In general, you may wish to solve for more than one mode.  In order to
         get the desired mode, you must specify its index.  If you do not know
         the index but you do know the desired mode number, then
-        :func:`.ModeFullVector.find_mode_index` may be used to determine the index of
+        :func:`.Mode2D.find_mode_index` may be used to determine the index of
         the desired mode.
 
         Notes
@@ -1809,9 +1801,9 @@ class ModeFullVector(ModeSolver):
 
         See Also
         --------
-        :func:`.ModeFullVector.get_field`
+        :func:`.Mode2D.get_field`
 
-        :func:`.ModeFullVector.find_mode_index`
+        :func:`.Mode2D.find_mode_index`
 
         Parameters
         ----------
@@ -1935,7 +1927,7 @@ class ModeFullVector(ModeSolver):
         # All field components are interpolated onto the Ez grid.
         if(NOT_PARALLEL):
             if(component == FieldComponent.Ex): # Ex --> don't average
-                return fraw[1:-1, 1:-1]
+                return f_raw[1:-1, 1:-1]
 
             elif(component == FieldComponent.Ey): # Ey --> average x & y
                 Ey = np.copy(f_raw)

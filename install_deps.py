@@ -8,17 +8,17 @@ EMopt depends on 2 core open source software packages:
 
 To run this script, simply call:
 
-    $ python install.py
+    $ python3 install.py
 
 By default, this will create the directory ~/.emopt and install all of the
 libraries there. If you want to install these files elsewhere, you can use the
 prefix flag:
 
-    $ python install.py --prefix=/custom/install/path
+    $ python3 install.py --prefix=/custom/install/path
 
 For example, for a system-wide install, we might use:
 
-    $ python install.py --prefix=/opt/local
+    $ python3 install.py --prefix=/opt/local
 
 where /opt/local is an existing directory.
 
@@ -28,7 +28,7 @@ of what went wrong. In most cases, the issue will be related to not having the
 appropriate prerequisite software packages installed.
 """
 
-import os, sys, shutil, glob, requests
+import os, sys, shutil, glob, requests, pathlib
 from subprocess import call
 from argparse import ArgumentParser
 
@@ -80,11 +80,12 @@ def install_end(start_dir, build_dir):
 def write_deps_file(home_dir, include_dir, install_dir):
     """Generate the dependency file.
 
-    The dependency file, which is stored at ~/.emopt_deps, contains the paths
+    The dependency file, which is stored at ./.emopt_deps, contains the paths
     of the installed dependencies. This is loaded by the setup.py script used
     to install EMopt.
     """
-    dep_fname = home_dir + '/' + emopt_dep_file
+    base_path = os.path.dirname(os.path.realpath(__file__))
+    dep_fname = base_path + '/' + emopt_dep_file
     with open(dep_fname, 'w') as fdep:
         fdep.write('EIGEN_DIR=' + include_dir + '\n')
         fdep.write('BOOST_DIR=' + include_dir + '\n')
@@ -205,20 +206,13 @@ def install_slepc(install_dir):
     shutil.rmtree(slepc_folder)
     os.remove(slepc_fname)
 
-def install_deps():
+def install_deps(prefix=None):
     # setup logging
     sys.stdout = Logger("install.log")
 
-    # Do Argument parsing
-    parser = ArgumentParser()
-    parser.add_argument("--prefix=", metavar='filepath', type=str, dest='prefix', 
-                        help='Set the installation directory for EMopt dependencies')
-
-    args = parser.parse_args()
-
     # setup install directory
     home_dir = os.path.expanduser('~')
-    if(args.prefix == None):
+    if(prefix == None):
         install_dir = home_dir + '/.emopt/'
     else:
         install_dir = args.prefix
@@ -249,8 +243,6 @@ def install_deps():
     # install dependencies
     install_begin(build_dir)
     try:
-        #install_eigen(include_dir)
-        #install_boost(include_dir)
         install_petsc(install_dir)
         install_slepc(install_dir)
         install_end(current_dir, build_dir)
@@ -262,5 +254,12 @@ def install_deps():
     print_message('Finished installing EMOpt dependencies!')
 
 if __name__ == '__main__':
-    install_deps()
+    # Do Argument parsing
+    parser = ArgumentParser()
+    parser.add_argument("--emopt-prefix=", metavar='filepath', type=str, dest='emopt_prefix', 
+                        help='Set the installation directory for EMopt dependencies')
+
+    args = parser.parse_args()
+
+    install_deps(args.emopt_prefix)
 

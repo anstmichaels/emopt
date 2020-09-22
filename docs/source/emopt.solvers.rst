@@ -1,7 +1,8 @@
-emopt\.fdtd
+emopt\.solvers
 ===========
 
-.. automodule:: emopt.fdtd
+.. automodule:: emopt.solvers
    :members:
    :undoc-members:
    :show-inheritance:
+

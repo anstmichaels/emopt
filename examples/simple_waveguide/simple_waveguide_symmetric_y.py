@@ -14,7 +14,6 @@ import emopt
 from emopt.misc import NOT_PARALLEL
 
 import numpy as np
-from math import pi
 
 ####################################################################################
 #Simulation Region parameters
@@ -22,9 +21,9 @@ from math import pi
 X = 10.0
 Y = 3.5
 wlen = 1.55
-dx = wlen/60
-dy = wlen/60
-sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
+dx = 0.03
+dy = 0.03
+sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wlen)
 sim.w_pml = [0.75, 0.75, 0.75, 0]
 sim.bc = '0E'
 

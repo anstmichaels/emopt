@@ -38,25 +38,14 @@ The :class:`.Optimizer` is used approximately as follows:
     # run the optimization
     opt.run()
 """
-from __future__ import absolute_import
-
-from builtins import object
-from . import fdfd # this needs to come first
-from .misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, COMM
+from .misc import RANK, COMM
 
 import numpy as np
-from math import pi
-from abc import ABCMeta, abstractmethod
-from petsc4py import PETSc
 from mpi4py import MPI
 from scipy.optimize import minimize
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
 class Optimizer(object):
     """Handles the optimization of an electromagnetic structure.

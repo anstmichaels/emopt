@@ -1,5 +1,4 @@
-"""Demonstrates how optimize an MMI 1x2 splitter in 3D using the CW-FDTD
-solver.
+"""Demonstrates how optimize an MMI 1x2 splitter in 3D using EMopt's 3D Maxwell solver
 
 This optimization involves varying the width and height of a silicon slab in
 order to fine tune multimode interference with the ultimate goal of splitting
@@ -39,10 +38,6 @@ from emopt.misc import NOT_PARALLEL, run_on_master
 from emopt.adjoint_method import AdjointMethodPNF3D
 
 import numpy as np
-from math import pi
-
-from petsc4py import PETSc
-from mpi4py import MPI
 
 class MMISplitterAdjointMethod(AdjointMethodPNF3D):
     """Define a figure of merit and its derivative for adjoint sensitivity
@@ -141,10 +136,13 @@ wavelength = 1.55
 #####################################################################################
 # Setup simulation
 #####################################################################################
-# Setup the simulation--rtol tells the iterative solver when to stop. 5e-5
-# yields reasonably accurate results/gradients
-sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44,
-                      nconv=200)
+# Setup the simulation
+# rtol tells the iterative solver when to stop. 5e-5 yields reasonably accurate
+# results/gradients
+# min_rindex is the minimum refractive index in the simulation. In simulations where this is 
+# greater than 1, setting this appropriately can speed up those simulation significantly.
+sim = emopt.solvers.Maxwell3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44,
+                              nconv=200)
 sim.Nmax = 1000*sim.Ncycle
 w_pml = dx * 15 # set the PML width
 
@@ -200,7 +198,7 @@ sim.build()
 # We excite the system by injecting the fundamental mode of the input waveguide
 input_slice = emopt.misc.DomainCoordinates(16*dx, 16*dx, 0, Y-w_pml, w_pml, Z-w_pml, dx, dy, dz)
 
-mode = emopt.modes.ModeFullVector(wavelength, eps, mu, input_slice, n0=3.45,
+mode = emopt.solvers.Mode2D(wavelength, eps, mu, input_slice, n0=3.45,
                                    neigs=4)
 
 # The mode boundary conditions should match the simulation boundary conditins.
@@ -220,7 +218,7 @@ sim.set_sources(mode, input_slice)
 fom_slice = emopt.misc.DomainCoordinates(X-w_pml-4*dx, X-w_pml-4*dx, 0, Y-w_pml,
                                          w_pml, Z-w_pml, dx, dy, dz)
 
-fom_mode = emopt.modes.ModeFullVector(wavelength, eps, mu, fom_slice, n0=3.45,
+fom_mode = emopt.solvers.Mode2D(wavelength, eps, mu, fom_slice, n0=3.45,
                                    neigs=4)
 
 # Need to be consistent with boundary conditions!

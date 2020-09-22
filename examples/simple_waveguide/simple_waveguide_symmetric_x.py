@@ -22,9 +22,9 @@ from math import pi
 X = 3.5
 Y = 10.0
 wlen = 1.55
-dx = wlen/60
-dy = wlen/60
-sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
+dx = 0.02
+dy = 0.02
+sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wlen)
 sim.w_pml = [0, 0.75, 0.75, 0.75]
 sim.bc = 'E0'
 

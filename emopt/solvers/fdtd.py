@@ -18,18 +18,12 @@ considerably less RAM, making it useful for optimizing much larger devices at mu
 higher resolutions.
 
 """
-from __future__ import print_function
-from __future__ import absolute_import
-
-from builtins import zip
-from builtins import range
-from builtins import object
 from .simulation import MaxwellSolver
-from .defs import FieldComponent
-from .misc import DomainCoordinates, RANK, MathDummy, NOT_PARALLEL, COMM, \
+from ..defs import FieldComponent
+from ..misc import DomainCoordinates, RANK, MathDummy, NOT_PARALLEL, COMM, \
 info_message, warning_message, N_PROC, run_on_master
-from .fdtd_ctypes import libFDTD
-from .modes import ModeFullVector
+from ._fdtd_ctypes import libFDTD
+from .modes import Mode2D
 import petsc4py
 import sys
 petsc4py.init(sys.argv)
@@ -37,14 +31,10 @@ petsc4py.init(sys.argv)
 from petsc4py import PETSc
 import numpy as np
 from math import pi
-from mpi4py import MPI
 import sys
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
 class SourceArray(object):
     """A container for source arrays and its associated parameters.
@@ -90,8 +80,9 @@ class SourceArray(object):
         self.J  = J
         self.K  = K
 
-class FDTD(MaxwellSolver):
-    """A 3D continuous-wave finite difference time domain (CW-FDTD) solver.
+class Maxwell3D(MaxwellSolver):
+    """A 3D continuous-wave finite difference time domain (CW-FDTD) solver for Maxwell's
+    equations.
 
     This class implements a continuous-wave finite difference time domain
     solver which solves for the freqeuncy-domain fields using the finite
@@ -230,7 +221,7 @@ class FDTD(MaxwellSolver):
 
     def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=None,
                  min_rindex=1.0, complex_eps=False):
-        super(FDTD, self).__init__(3)
+        super().__init__(3)
 
         if(nconv is None):
             nconv = N_PROC*10
@@ -420,7 +411,7 @@ class FDTD(MaxwellSolver):
 
     @property
     def wavelength(self):
-        self._wavelength = wavelength
+        self._wavelength = self._wavelength
 
     @wavelength.setter
     def wavelength(self, wlen):
@@ -732,7 +723,7 @@ class FDTD(MaxwellSolver):
         """Set a simulation source.
 
         Simulation sources can be set either using a set of 6 arrays (Jx, Jy,
-        Jz, Mx, My, Mz) or a :class:`modes.ModeFullVector` object. In either
+        Jz, Mx, My, Mz) or a :class:`modes.Mode2D` object. In either
         case, a domain must be provided which tells the simulation where to put
         those sources.
 
@@ -742,15 +733,15 @@ class FDTD(MaxwellSolver):
 
         Parameters
         ----------
-        src : tuple or modes.ModeFullVector
+        src : tuple or modes.Mode2D
             The source arrays or mode object containing source data
         domain : misc.DomainCoordinates
             The domain which specifies where the source is located
         mindex : int (optional)
             The mode source index. This is only relevant if using a
-            ModeFullVector object to set the sources. (default = 0)
+            Mode2D object to set the sources. (default = 0)
         """
-        if(type(src) == ModeFullVector):
+        if(type(src) == Mode2D):
             Jxs, Jys, Jzs, Mxs, Mys, Mzs = src.get_source(mindex, self._dx,
                                                                   self._dy,
                                                                   self._dz)

@@ -1,19 +1,14 @@
 """
 Common functions useful for calculating figures of merit and their derivatives.
 """
-from __future__ import absolute_import
-from builtins import range
-from builtins import object
-from . import fdfd, misc
+from . import solvers
+from . import misc
 from .misc import NOT_PARALLEL
 from .defs import FieldComponent
 import numpy as np
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
 #####################################################################################
 # Step and Rect Functions
@@ -1256,22 +1251,22 @@ def interpolated_dFdx_2D(sim, dFdEzi, dFdHxi, dFdHyi):
     # Unfortunately, special boundary conditions complicate matters
     # It is easiest to handle this separately
     # Note only the first condition below has been tested..
-    if(type(sim) == fdfd.FDFD_TM):
-        if((sim.bc[1] == 'H' and type(sim) == fdfd.FDFD_TM) or \
-           (sim.bc[1] == 'E' and type(sim) == fdfd.FDFD_TE)):
+    if(type(sim) == solvers.Maxwell2DTM):
+        if((sim.bc[1] == 'H' and type(sim) == solvers.Maxwell2DTM) or \
+           (sim.bc[1] == 'E' and type(sim) == solvers.Maxwell2DTE)):
             dFdHx[0,:] = 0.0
-        elif((sim.bc[1] == 'E' and type(sim) == fdfd.FDFD_TM) or \
-             (sim.bc[1] == 'H' and type(sim) == fdfd.FDFD_TE)):
+        elif((sim.bc[1] == 'E' and type(sim) == solvers.Maxwell2DTM) or \
+             (sim.bc[1] == 'H' and type(sim) == solvers.Maxwell2DTE)):
             dFdHx[0,:] = dFdHx[0,:]*2.0
         elif(sim.bc[1] == 'P'):
             dFdHx[0,:] += dFdHx[-1,:]/2.0
             dFdHx[-1,:] += dFdHx[0,:]/2.0
 
-        if((sim.bc[0] == 'H' and type(sim) == fdfd.FDFD_TM) or \
-           (sim.bc[0] == 'E' and type(sim) == fdfd.FDFD_TE)):
+        if((sim.bc[0] == 'H' and type(sim) == solvers.Maxwell2DTM) or \
+           (sim.bc[0] == 'E' and type(sim) == solvers.Maxwell2DTE)):
             dFdHy[:,-1] = 0.0
-        elif((sim.bc[0] == 'E' and type(sim) == fdfd.FDFD_TM) or \
-             (sim.bc[0] == 'H' and type(sim) == fdfd.FDFD_TE)):
+        elif((sim.bc[0] == 'E' and type(sim) == solvers.Maxwell2DTM) or \
+             (sim.bc[0] == 'H' and type(sim) == solvers.Maxwell2DTE)):
             dFdHy[:,-1] = dFdHy[:,-1]*2.0
         elif(sim.bc[0] == 'P'):
             dFdHy[:,-1] += dFdHy[:,0]/2.0
@@ -1460,7 +1455,7 @@ def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
 
     Parameters
     ----------
-    sim : emopt.fdfd.FDFD_TE
+    sim : emopt.solvers.Maxwell2DTE
         simulation object which is needed in order to access field components
         as well as grid parameters
     f : float
@@ -1571,7 +1566,7 @@ def power_norm_dFdx_TM(sim, f, dfdHz, dfdEx, dfdEy):
 
     Parameters
     ----------
-    sim : emopt.fdfd.FDFD_TM
+    sim : emopt.solvers.Maxwell2DTM
         simulation object which is needed in order to access field components
         as well as grid parameters
     f : float
@@ -1919,8 +1914,9 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
 
     return [adj_sources, adj_domains]
 
+# TODO: Remove this?
 def power_norm_dFdx(sim, f, dfdA1, dfdA2, dfdA3):
-    if(type(sim) == fdfd.FDFD_TM):
-        power_norm_dFdx_TM(sim, f, dfdAi, dfdA2, dfdA3)
-    elif(type(sim) == fdfd.FDFD_TE):
-        power_norm_dFdx_TE(sim, f, dfdAi, dfdA2, dfdA3)
+    if(type(sim) == solvers.Maxwell2DTM):
+        power_norm_dFdx_TM(sim, f, dfdA1, dfdA2, dfdA3)
+    elif(type(sim) == solvers.Maxwell2DTE):
+        power_norm_dFdx_TE(sim, f, dfdA1, dfdA2, dfdA3)

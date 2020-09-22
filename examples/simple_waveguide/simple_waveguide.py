@@ -23,7 +23,7 @@ Y = 7.0
 dx = 0.02
 dy = 0.02
 wlen = 1.55
-sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
+sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wlen)
 
 # by default, PML size is chosen for you. If you want to specify your own PML
 # sizes you can set them using the sim.w_pml attribute which is an array with 4

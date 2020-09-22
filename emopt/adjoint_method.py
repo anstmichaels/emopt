@@ -139,7 +139,7 @@ implemented in the :class:`.AdjointMethodPNF2D` and
 
 See Also
 --------
-emopt.fdfd.FDFD : Base class for simulators supported by :class:`.AdjointMethod`.
+emopt.solvers.MaxwellSolver : Base class for simulators supported by :class:`.AdjointMethod`.
 
 emopt.optimizer.Optimizer : Primary application of :class:`.AdjointMethod` to optimization.
 
@@ -147,31 +147,19 @@ References
 ----------
 .. [1] A. Michaels and E. Yablonovitch, "Leveraging continuous material averaging for inverse electromagnetic design," Opt. Express 26, 31717-31737 (2018)
 """
-from __future__ import print_function
-from __future__ import absolute_import
-
-from builtins import range
-from builtins import object
-from . import fdfd
-from . import fdtd
-from .misc import info_message, warning_message, error_message, RANK, \
-NOT_PARALLEL, run_on_master, N_PROC, COMM
+from .misc import info_message, warning_message, RANK, NOT_PARALLEL, N_PROC, COMM
 from . import fomutils
+from . import solvers
 
 import numpy as np
-from math import pi
 from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
 from mpi4py import MPI
-from future.utils import with_metaclass
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
-class AdjointMethod(with_metaclass(ABCMeta, object)):
+class AdjointMethod(metaclass=ABCMeta):
     """Adjoint Method Class
 
     Defines the core functionality needed to compute the gradient of a function
@@ -304,7 +292,7 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             Simulation object
         params : numpy.ndarray
             1D vector containing design parameter values.
@@ -327,12 +315,12 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
         of the figure of merit defined in :func:`calc_fom`.
 
         The exact format of :math:`x` depends on the exact type of
-        :class:`emopt.fdfd.FDFD` object which generated it.  Consult
-        :mod:`emopt.fdfd` for details.
+        :class:`emopt.solvers.MaxwellSolver` object which generated it.  Consult
+        :mod:`emopt.solvers` for details.
 
         See Also
         --------
-        emopt.fdfd.FDFD : Base class for simulators which generate :math:`x`
+        emopt.solvers.MaxwellSolver : Base class for simulators which generate :math:`x`
         """
         pass
 
@@ -362,7 +350,7 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
 
         Parameters
         ----------
-        sim : emoptg.fdfd.FDFD
+        sim : emoptg.solver.MaxwellSolver
             The FDFD object
         params : numpy.ndarray
             The array containing the current set of design parameters
@@ -579,9 +567,9 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
         # This should return only non-null on RANK=0
         dFdx = self.calc_dFdx(self.sim, params)
 
-        #if(isinstance(self.sim, fdfd.FDFD_TE)):
+        #if(isinstance(self.sim, solvers.Maxwell2DTE)):
         dFdx = comm.bcast(dFdx, root=0)
-        #elif(isinstance(self.sim, fdfd.FDFD_3D)):
+        #elif(isinstance(self.sim, solvers.Maxwell3D)):
         #    pass
 
         # run the adjoint source
@@ -714,7 +702,7 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
                 return None, None, None
             return None
 
-class AdjointMethodMO(with_metaclass(ABCMeta, AdjointMethod)):
+class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
     """An AdjointMethod object for an ensemble of different figures of merit
     (Multi-objective adjoint method).
 
@@ -936,7 +924,7 @@ class AdjointMethodFM2D(AdjointMethod):
 
     Attributes
     ----------
-    sim : :class:`emopt.fdfd.FDFD`
+    sim : :class:`emopt.solvers.MaxwellSolver`
         The simulation object
     step : float (optional)
         The step size used by gradient calculation (default = False)
@@ -951,7 +939,7 @@ class AdjointMethodFM2D(AdjointMethod):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1070,10 +1058,10 @@ class AdjointMethodFM2D(AdjointMethod):
                 # along the diagonal are swapped and eps and mu are positioned
                 # in different parts
                 # NOTE: magic number 3 is number of field components
-                if(isinstance(sim, fdfd.FDFD_TM)):
+                if(isinstance(sim, solvers.Maxwell2DTM)):
                     dmudp = dAdp_full[0::3].reshape([M,N]) * 1j
                     depsdp = dAdp_full[1::3].reshape([M,N]) / 1j
-                elif(isinstance(sim, fdfd.FDFD_TE)):
+                elif(isinstance(sim, solvers.Maxwell2DTE)):
                     depsdp = dAdp_full[0::3].reshape([M,N]) / 1j
                     dmudp = dAdp_full[1::3].reshape([M,N]) * 1j
 
@@ -1126,7 +1114,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1145,7 +1133,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1171,7 +1159,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1189,7 +1177,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1214,7 +1202,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwllSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1228,7 +1216,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
         f = self.calc_f(sim, params)
 
         if(NOT_PARALLEL):
-            if(isinstance(sim, fdfd.FDFD_TM)):
+            if(isinstance(sim, solvers.Maxwell2DTM)):
                 dfdHz = dfdx[0]
                 dfdEx = dfdx[1]
                 dfdEy = dfdx[2]
@@ -1237,7 +1225,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
                                                                           dfdEx, \
                                                                           dfdEy)
                 return (dFdHz, dFdEx, dFdEy)
-            elif(isinstance(sim, fdfd.FDFD_TE)):
+            elif(isinstance(sim, solvers.Maxwell2DTE)):
                 dfdEz = dfdx[0]
                 dfdHx = dfdx[1]
                 dfdHy = dfdx[2]
@@ -1255,7 +1243,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
 
         Parameters
         ----------
-        sim : emopt.fdfd.FDFD
+        sim : emopt.solvers.MaxwellSolver
             The FDFD simulation object.
         params : numpy.ndarray
             The current set of design variables
@@ -1266,9 +1254,9 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
             (Master node only) The derivative of F with respect to :math:`\epsilon`,
             :math:`\epsilon^*`, :math:`\mu`, and :math:`\mu^*`
         """
-        # isinstance(sim, fdfd.FDFD_TM) must come before TE since TM is a
+        # isinstance(sim, solvers.Maxwell2DTM) must come before TE since TM is a
         # subclass of TE
-        if(isinstance(sim, fdfd.FDFD_TM)):
+        if(isinstance(sim, solvers.Maxwell2DTM)):
             M = sim.M
             N = sim.N
             dx = sim.dx
@@ -1284,9 +1272,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
                 E2 = Ex * np.conj(Ex) + Ey * np.conj(Ey)
                 H2 = Hz * np.conj(Hz)
 
-        elif(isinstance(sim, fdfd.FDFD_TE)):
-            M = sim.M
-            N = sim.N
+        elif(isinstance(sim, solvers.Maxwell2DTE)):
             dx = sim.dx
             dy = sim.dy
 

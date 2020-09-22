@@ -1,4 +1,27 @@
-Releades on May 6, 2019
+Released on 
+-----------
+This is a major update that will break scripts written with earlier version of EMopt. Please
+consult the following directions for updating old code:
+
+1. Change emopt.mode.ModeTE -> emopt.solvers.Mode1DTE
+2. Change emopt.mode.ModeTM -> emopt.solvers.Mode1DTM
+3. Change emopt.mode.ModeFullVector -> emopt.solvers.Mode2D
+4. Change emopt.fdfd.FDFD_TE -> emopt.solvers.Maxwell2DTE
+5. Change emopt.fdfd.FDFD_TM -> emopt.solvers.Maxwell2DTM
+6. Change emopt.fdtd.FDTD -> emopt.solvers.Maxwell3D
+
+A detailed list of the updates in this version follow:
+
+1. All solvers (mode, FDFD, and FDTD) have been consolidated in a subpackage called "solvers"
+and the classes have been renamed to be more descriptive and general. Specifically, there are
+now three mode solvers available: Mode1DTE, Mode1DTM, and Mode2D. Furthermore, there are 3
+equivalent Maxwell solvers available: Maxwell2DTE, Maxwell2DTM, Maxwell3D. All of these solvers
+can be found in emopt.solvers.
+
+2.
+
+
+Released on May 6, 2019
 -----------------------
 
 This is a major update. Please read through each of these changes carefully and

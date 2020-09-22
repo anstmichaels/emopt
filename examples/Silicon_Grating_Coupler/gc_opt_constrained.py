@@ -58,7 +58,7 @@ class SiliconGratingAM(AdjointMethodPNF2D):
 
     Parameters
     ----------
-    sim : emopt.fdfd.FDFD
+    sim : emopt.solvers.MaxwellSolver
         The simulation object
     grating_etch : list of Rectangle
         The list of rectangles which define the grating etch.
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     wavelength = 1.55
     X = 26.0
     Y = 8.0
-    dx = 0.03
+    dx = 0.04
     dy = dx
     w_pml = 1.0
     w_src= 3.5
@@ -327,7 +327,7 @@ if __name__ == '__main__':
 
     # create the simulation object.
     # TE => Ez, Hx, Hy
-    sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wavelength)
+    sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wavelength)
 
     # Get the actual width and height
     X = sim.X
@@ -343,7 +343,7 @@ if __name__ == '__main__':
     eps_clad = 1.444**2
 
     # the effective indices are precomputed for simplicity.  We can compute
-    # these values using emopt.modes
+    # these values using emopt.solvers.Mode1DTM
     neff = 2.8548
     neff_etched = 2.0879
 
@@ -434,7 +434,7 @@ if __name__ == '__main__':
                                  Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver. 
-    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
+    mode = emopt.solvers.Mode1DTE(wavelength, eps, mu, src_line, n0=2.5, neigs=4)
     mode.build()
     mode.solve()
 

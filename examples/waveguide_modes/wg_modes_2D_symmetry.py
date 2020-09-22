@@ -61,7 +61,7 @@ mode_line = emopt.misc.DomainCoordinates(0.0, 0.0, 0, H, 0.0, 0.0, 1.0, dy, 1.0)
 # eigenvectors that we find.  We thus solve for more vectors than we really
 # need to be sure that we can pick out the desired modes.
 neigs = 8
-modes = emopt.modes.ModeTE(wavelength,eps, mu, mode_line, n0=3.0, neigs=neigs)
+modes = emopt.solvers.Mode1DTE(wavelength,eps, mu, mode_line, n0=3.0, neigs=neigs)
 
 # set the boundary condition type. 'E' refers to electric field symmetry on the
 # bottom y=0 boundary (i.e. the electric field is mirrored across the

@@ -46,7 +46,7 @@ class SiliconGratingAM(AdjointMethodPNF2D):
 
     Parameters
     ----------
-    sim : emopt.fdfd.FDFD
+    sim : emopt.solvers.Maxwell2DTE
         The simulation object
     grating_etch : list of Rectangle
         The list of rectangles which define the grating etch.
@@ -276,12 +276,12 @@ if __name__ == '__main__':
     wavelength = 1.55
     X = 28.0
     Y = 8.0
-    dx = 0.03
+    dx = 0.04
     dy = dx
 
     # create the simulation object.
     # TE => Ez, Hx, Hy
-    sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wavelength)
+    sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wavelength)
 
     # Get the actual width and height
     X = sim.X
@@ -298,7 +298,7 @@ if __name__ == '__main__':
     eps_clad = 1.444**2
 
     # the effective indices are precomputed for simplicity.  We can compute
-    # these values using emopt.modes
+    # these values using emopt.solvers.Mode1DTM
     neff = 2.86
     neff_etched = 2.10
     n0 = np.sqrt(eps_clad)
@@ -323,31 +323,27 @@ if __name__ == '__main__':
     grating_etch = []
 
     for i in range(Ng):
-        rect_etch = emopt.grid.Rectangle(w_wg_input+i*period, y_etch,
-                                         (1-df)*period, h_etch)
+        rect_etch = emopt.geometry.Rectangle(w_wg_input+i*period, y_etch,
+                                            (1-df)*period, h_etch, eps_clad)
         rect_etch.layer = 1
-        rect_etch.material_value = eps_clad
         grating_etch.append(rect_etch)
 
     # grating waveguide
     Lwg = Ng*period + w_wg_input
-    wg = emopt.grid.Rectangle(Lwg/2.0, y_ts, Lwg, h_wg)
+    wg = emopt.geometry.Rectangle(Lwg/2.0, y_ts, Lwg, h_wg, eps_si)
     wg.layer = 2
-    wg.material_value = eps_si
 
     # define substrate
     h_BOX = 2.0
     h_subs = Y/2.0 - h_wg/2.0 - h_BOX
-    substrate = emopt.grid.Rectangle(X/2.0, h_subs/2.0, X, h_subs)
+    substrate = emopt.geometry.Rectangle(X/2.0, h_subs/2.0, X, h_subs, eps_si)
     substrate.layer = 2
-    substrate.material_value = eps_si # silicon
 
     # set the background material using a rectangle equal in size to the system
-    background = emopt.grid.Rectangle(X/2, Y/2, X, Y)
+    background = emopt.geometry.Rectangle(X/2, Y/2, X, Y, eps_clad)
     background.layer = 3
-    background.material_value = eps_clad
 
-    # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
+    # assembled the primitives in a StructuredMaterial to be used by the 2D solver
     # This Material defines the distribution of the permittivity within the simulated
     # environment
     eps = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
@@ -375,7 +371,7 @@ if __name__ == '__main__':
                                  Y/2+w_src/2, 0, 0, dx, dy, 1.0)
 
     # Setup the mode solver.    
-    mode = emopt.modes.ModeTE(wavelength, eps, mu, src_line, n0=n_si, neigs=4)
+    mode = emopt.solvers.Mode1DTE(wavelength, eps, mu, src_line, n0=n_si, neigs=4)
 
     if(NOT_PARALLEL):
         print('Generating mode data...')

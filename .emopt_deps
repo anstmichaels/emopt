@@ -1,0 +1,5 @@
+EIGEN_DIR=/home/amichaels/.emopt/include/
+BOOST_DIR=/home/amichaels/.emopt/include/
+PETSC_DIR=/home/amichaels/.emopt/
+PETSC_ARCH=
+SLEPC_DIR=/home/amichaels/.emopt/

@@ -6,18 +6,12 @@ the adjoint method/sensitivity framework, we define a general interface that
 all Maxwell solvers must implement. This allows us to standard functionality
 and ensure compatibility between modules.
 """
-
-from builtins import object
 from abc import ABCMeta, abstractmethod
-from future.utils import with_metaclass
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
-class MaxwellSolver(with_metaclass(ABCMeta, object)):
+class MaxwellSolver(metaclass=ABCMeta):
     """An interface for defining a solver for Maxwell's Equations.
 
     Methods

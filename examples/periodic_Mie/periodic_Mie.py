@@ -22,7 +22,7 @@ Y = 15.0
 dx = 0.02
 dy = 0.02
 wlen = 1.55
-sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
+sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wlen)
 
 # planewave incident along x
 sim.w_pml = [0.75, 0.75, 0., 0.]

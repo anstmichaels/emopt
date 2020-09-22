@@ -14,7 +14,6 @@ from emopt.adjoint_method import AdjointMethod
 from emopt.misc import NOT_PARALLEL, run_on_master
 
 import numpy as np
-from math import pi
 
 class WGBendAM(AdjointMethod):
 
@@ -115,7 +114,7 @@ def callback(params, sim, am, fom_history, Ts, Exm, Eym, Hzm):
     additional['source_power'] = sim.source_power
     additional['w_pml'] = w_pml
 
-    fname = 'data/wg_bend_%d' % (len(fom_history))
+    fname = 'wg_bend_%d' % (len(fom_history))
     emopt.io.save_results(fname, data, additional)
 
 
@@ -128,7 +127,7 @@ if __name__ == '__main__':
     dx = dy = 0.03
     wavelength = 1.55
 
-    sim = emopt.fdfd.FDFD_TM(X, Y, dx, dy, wavelength)
+    sim = emopt.solvers.Maxwell2DTM(X, Y, dx, dy, wavelength)
     X = sim.X
     Y = sim.Y
     M = sim.M
@@ -174,7 +173,7 @@ if __name__ == '__main__':
                                              wg_pos-h_src/2, wg_pos+h_src/2,
                                              0, 0, dx, dy, 1.0)
 
-    mode = emopt.modes.ModeTM(wavelength, eps, mu, src_plane, n0=n1, neigs=4)
+    mode = emopt.solvers.Mode1DTM(wavelength, eps, mu, src_plane, n0=n1, neigs=4)
     mode.build()
     mode.solve()
 
@@ -184,7 +183,7 @@ if __name__ == '__main__':
     T_area = emopt.misc.DomainCoordinates(wg_pos-h_src/2, wg_pos+h_src/2,
                                             w_pml[2]+5*dy, w_pml[2] + 5*dy,
                                             0, 0, dx, dy, 1.0)
-    modem = emopt.modes.ModeTM(wavelength, eps, mu, T_area, n0=n1, neigs=4)
+    modem = emopt.solvers.Mode1DTM(wavelength, eps, mu, T_area, n0=n1, neigs=4)
     modem.build()
     modem.solve()
 

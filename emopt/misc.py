@@ -1,22 +1,15 @@
 """Miscellanious functions useful for simulation and optimization.
 """
-from __future__ import print_function
-
-from builtins import object
 import numpy as np
 from scipy import interpolate
 from math import pi
 import os
 
 from petsc4py import PETSc
-#import decorator # so that sphinx will document decorated functions :S
 import warnings, inspect
 
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2019.5.6"
-__maintainer__ = "Andrew Michaels"
-__status__ = "development"
 
 # functions and variables useful for MPI stuff
 COMM = PETSc.COMM_WORLD.tompi4py()

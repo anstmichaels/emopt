@@ -21,7 +21,7 @@ wavelength = 1.55
 #####################################################################################
 # Setup simulation
 #####################################################################################
-sim = emopt.fdtd.FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44)
+sim = emopt.solvers.Maxwell3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44)
 w_pml = sim.w_pml[0]
 
 X = sim.X

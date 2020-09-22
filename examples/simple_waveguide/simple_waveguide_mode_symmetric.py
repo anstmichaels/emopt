@@ -27,7 +27,7 @@ wlen = 1.55
 
 # set up TE simulation. TE refers to the field polarization which has E
 # strictly perpendicular to the direction of propagation, i.e. E = Ez
-sim = emopt.fdfd.FDFD_TE(X, Y, dx, dy, wlen)
+sim = emopt.solvers.Maxwell2DTE(X, Y, dx, dy, wlen)
 sim.w_pml = [wlen/2, wlen/2, wlen/2, 0]
 sim.bc = '0E'
 
@@ -77,7 +77,7 @@ sim.set_materials(eps, mu)
 src_line = emopt.misc.DomainCoordinates(2.0, 2.0, 0, 1.5, 0.0, 0.0, dx, dy, 1.0)
 
 # setup, build the system, and solve
-mode = emopt.modes.ModeTE(wlen, eps, mu, src_line, n0=3.0, neigs=8)
+mode = emopt.solvers.Mode1DTE(wlen, eps, mu, src_line, n0=3.0, neigs=8)
 mode.bc = 'E'
 mode.build()
 mode.solve()
