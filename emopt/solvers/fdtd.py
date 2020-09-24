@@ -146,6 +146,11 @@ class Maxwell3D(MaxwellSolver):
     complex_eps : boolean (optional)
         Tells the solver if the permittivity is complex-valued. Setting this to
         False can speed up the solver when run on fewer cores (default = False)
+    dist_method : str
+        Method for distributing the underlying field arrays. Options are: 'auto', 'x', 'y',
+        'z'. 'auto' will automatically determine the optimal distribution of the arrays
+        between the processors. 'x', 'y', and 'z' will force the array to be distributed as
+        slices stacked along the x, y, or z axis respectively.
 
     Attributes
     ----------
@@ -220,7 +225,7 @@ class Maxwell3D(MaxwellSolver):
     """
 
     def __init__(self, X, Y, Z, dx, dy, dz, wavelength, rtol=1e-6, nconv=None,
-                 min_rindex=1.0, complex_eps=False):
+                 min_rindex=1.0, complex_eps=False, dist_method='auto'):
         super().__init__(3)
 
         if(nconv is None):
@@ -256,8 +261,21 @@ class Maxwell3D(MaxwellSolver):
         # stencil_type=1 => box
         # stencil_width=1 => 1 element ghosted region
         # boundary_type=1 => ghosted simulation boundary (padded everywhere)
-        da = PETSc.DA().create(sizes=[Nx, Ny, Nz], dof=1, stencil_type=0,
-                               stencil_width=1, boundary_type=1)
+        if(dist_method == 'auto'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
+        elif(dist_method == 'x'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], proc_sizes=[1,1,N_PROC],
+                                   dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
+        elif(dist_method == 'y'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], proc_sizes=[1,N_PROC,1],
+                                   dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
+        elif(dist_method == 'z'):
+            da = PETSc.DA().create(sizes=[Nx, Ny, Nz], proc_sizes=[N_PROC,1,1],
+                                   dof=1, stencil_type=0,
+                                   stencil_width=1, boundary_type=1)
 
         self._da = da
         ## Setup the distributed array. Currently, we need 2 for each field
@@ -923,16 +941,6 @@ class Maxwell3D(MaxwellSolver):
                            sx=0.0, sy=0.5, sz=-0.5,
                            arr=temp)
             eps_y[li, lj, lk] = temp
-
-            # update eps_z
-            eps_z = self._eps_z.getArray()
-            eps_z = np.reshape(eps_z, [I,J,K])
-            eps.get_values(g_inds[2], g_inds[2]+sizes[2],
-                           g_inds[1], g_inds[1]+sizes[1],
-                           g_inds[0], g_inds[0]+sizes[0],
-                           sx=0.0, sy=0.0, sz=0.0,
-                           arr=temp)
-            eps_z[li, lj, lk] = temp
 
             # update eps_z
             eps_z = self._eps_z.getArray()

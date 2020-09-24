@@ -354,6 +354,8 @@ class Polygon : public MaterialPrimitive {
 		 */
 		Polygon(double* x, double* y, int n);
 
+        Polygon(Polygon_2D verts);
+
 		//- Destructor
 		~Polygon();
 		
@@ -395,6 +397,16 @@ class Polygon : public MaterialPrimitive {
 		 * provided in either clockwise or counterclockwise order.
 		 */	
 		void set_points(double* x, double* y, int n);
+
+        /*
+         * Get the total number of points that form the boundary of the polygon.
+         */
+        int get_point_count();
+
+        /*
+         * Get the polygon vertices.
+         */
+        void get_points(double* x, double* y);
 		
 		/* Determine whether a point in real space is contained within the Polygon 
 		 * @x the x coordinate (real space)
@@ -420,6 +432,16 @@ class Polygon : public MaterialPrimitive {
 		 * @mat the complex material value
 		 */
 		void set_material(std::complex<double> mat);
+
+        Polygon_2D get_vertices();
+
+        ////////////////////////////////////////////////////////////////////////////
+        // Expose some of boosts boolean operations
+        ////////////////////////////////////////////////////////////////////////////
+        std::vector<Polygon*> add(Polygon& p2);
+        std::vector<Polygon*> subtract(Polygon& p2);
+        std::vector<Polygon*> intersect(Polygon& p2);
+
 
 };
 

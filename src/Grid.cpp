@@ -291,7 +291,9 @@ void Rectangle::set_position(double x0, double y0)
 }
 
 
-//------------------------------ Polygon ------------------------------------/
+////////////////////////////////////////////////////////////////////////////
+// Polygon
+////////////////////////////////////////////////////////////////////////////
 
 Polygon::Polygon()
 {
@@ -300,6 +302,11 @@ Polygon::Polygon()
 Polygon::Polygon(double* x, double* y, int n)
 {
 	set_points(x, y, n);
+}
+
+Polygon::Polygon(Polygon_2D verts)
+{
+    _verts = verts;
 }
 
 Polygon::~Polygon()
@@ -390,6 +397,94 @@ double Polygon::get_cell_overlap(GridCell& cell)
 void Polygon::set_material(std::complex<double> mat)
 {
 	_mat = mat;
+}
+
+Polygon_2D Polygon::get_vertices()
+{
+    return _verts;
+}
+
+std::vector<Polygon*> Polygon::add(Polygon& p2)
+{
+    std::vector<Polygon_2D> result;
+    std::vector<Polygon*> output;
+    
+    boost::geometry::union_(_verts, p2.get_vertices(), result);
+
+    for(auto& p: result)
+    {
+        // extract the outer boundary -- this should be the only boundary in a union
+        Polygon_2D new_verts;
+        Polygon* wrapped_poly;
+
+        new_verts.clear();
+        boost::geometry::assign(new_verts, p.outer());
+        wrapped_poly = new Polygon(new_verts);
+        wrapped_poly->set_material(_mat);
+
+        output.push_back(wrapped_poly);
+    }
+    
+    
+    return output;
+}
+
+std::vector<Polygon*> Polygon::subtract(Polygon& p2)
+{
+    std::vector<Polygon_2D> result;
+    std::vector<Polygon*> output;
+    
+    boost::geometry::difference(_verts, p2.get_vertices(), result);
+
+    for(auto& p: result)
+    {
+        // extract the outer boundary first
+        Polygon_2D new_verts;
+        Polygon* wrapped_poly;
+
+        new_verts.clear();
+        boost::geometry::assign(new_verts, p.outer());
+        wrapped_poly = new Polygon(new_verts);
+        wrapped_poly->set_material(_mat);
+
+        output.push_back(wrapped_poly);
+
+        for(auto& inner: p.inners())
+        {
+            new_verts.clear();
+            boost::geometry::assign(new_verts, inner);
+            wrapped_poly = new Polygon(new_verts);
+            wrapped_poly->set_material(1.0);
+            output.push_back(wrapped_poly);
+        }
+    }
+    
+    
+    return output;
+}
+
+std::vector<Polygon*> Polygon::intersect(Polygon& p2)
+{
+    std::vector<Polygon_2D> result;
+    std::vector<Polygon*> output;
+    
+    boost::geometry::intersection(_verts, p2.get_vertices(), result);
+
+    for(auto& p: result)
+    {
+        // extract the outer boundary -- this should be the only boundary in a union
+        Polygon_2D new_verts;
+        Polygon* wrapped_poly;
+
+        new_verts.clear();
+        boost::geometry::assign(new_verts, p.outer());
+        wrapped_poly = new Polygon(new_verts);
+        wrapped_poly->set_material(_mat);
+
+        output.push_back(wrapped_poly);
+    }
+    
+    return output;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

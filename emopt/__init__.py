@@ -3,7 +3,7 @@ devices.
 """
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
-__version__ = "2020.09.13"
+__version__ = "2020.09.21"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 

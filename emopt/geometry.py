@@ -504,18 +504,18 @@ class Rectangle(Polygon):
         self._update_points()
 
     @property
-    def w(self): return self._w
+    def width(self): return self._w
 
-    @w.setter
-    def w(self, val):
+    @width.setter
+    def width(self, val):
         self._w = val
         self._update_points()
 
     @property
-    def h(self): return self._h
+    def height(self): return self._h
 
-    @h.setter
-    def h(self, val):
+    @height.setter
+    def height(self, val):
         self._h = val
         self._update_points()
 

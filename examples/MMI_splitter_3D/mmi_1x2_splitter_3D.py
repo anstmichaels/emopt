@@ -170,10 +170,10 @@ L_mmi = 2.4
 w_mmi = 1.75
 h_si = 0.22
 
-wg_in = emopt.grid.Rectangle(X/4, 0, L_in, w_wg); wg_in.layer = 1
-mmi = emopt.grid.Rectangle(X/2, 0, L_mmi, w_mmi); mmi.layer = 1
-wg_out = emopt.grid.Rectangle(3*X/4, w_wg, L_out, w_wg); wg_out.layer = 1
-rbg = emopt.grid.Rectangle(X/2, Y/2, 2*X, 2*Y); rbg.layer = 2
+wg_in = emopt.geometry.Rectangle(X/4, 0, L_in, w_wg); wg_in.layer = 1
+mmi = emopt.geometry.Rectangle(X/2, 0, L_mmi, w_mmi); mmi.layer = 1
+wg_out = emopt.geometry.Rectangle(3*X/4, w_wg, L_out, w_wg); wg_out.layer = 1
+rbg = emopt.geometry.Rectangle(X/2, Y/2, 2*X, 2*Y); rbg.layer = 2
 
 wg_in.material_value = 3.45**2
 mmi.material_value = 3.45**2
