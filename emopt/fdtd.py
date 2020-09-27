@@ -961,16 +961,6 @@ class FDTD(MaxwellSolver):
                            arr=temp)
             eps_z[li, lj, lk] = temp
 
-            # update eps_z
-            eps_z = self._eps_z.getArray()
-            eps_z = np.reshape(eps_z, [I,J,K])
-            eps.get_values(g_inds[2], g_inds[2]+sizes[2],
-                           g_inds[1], g_inds[1]+sizes[1],
-                           g_inds[0], g_inds[0]+sizes[0],
-                           sx=0.0, sy=0.0, sz=0.0,
-                           arr=temp)
-            eps_z[li, lj, lk] = temp
-
             # update mu_x
             mu_x = self._mu_x.getArray()
             mu_x = np.reshape(mu_x, [I,J,K])
@@ -1000,6 +990,8 @@ class FDTD(MaxwellSolver):
                           sx=0.5, sy=0.5, sz=-0.5,
                           arr=temp)
             mu_z[li, lj, lk] = temp
+
+            COMM.Barrier()
 
     def __solve(self):
         ## Solve Maxwell's equations. This process is identical for the forward
