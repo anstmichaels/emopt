@@ -36,10 +36,8 @@ from argparse import ArgumentParser
 emopt_dep_file = ".emopt_deps"
 
 # Package Parameters
-EIGEN_VERSION = "3.3.7"
-BOOST_VERSION = "master"
-PETSC_VERSION = "3.12.1"
-SLEPC_VERSION = "3.12.1"
+PETSC_VERSION = "3.13.4"
+SLEPC_VERSION = "3.13.4"
 
 
 class Logger(object):
@@ -84,57 +82,11 @@ def write_deps_file(home_dir, include_dir, install_dir):
     of the installed dependencies. This is loaded by the setup.py script used
     to install EMopt.
     """
-    base_path = os.path.dirname(os.path.realpath(__file__))
-    dep_fname = base_path + '/' + emopt_dep_file
+    dep_fname = home_dir + '/' + emopt_dep_file
     with open(dep_fname, 'w') as fdep:
-        fdep.write('EIGEN_DIR=' + include_dir + '\n')
-        fdep.write('BOOST_DIR=' + include_dir + '\n')
         fdep.write('PETSC_DIR=' + install_dir + '\n')
         fdep.write('PETSC_ARCH=\n')
         fdep.write('SLEPC_DIR=' + install_dir + '\n')
-
-def install_eigen(include_dir):
-    """Download and install Eigen. It's header-only, so nice and easy."""
-    print_message('Downloading Eigen headers...')
-    call(['git', 'clone', 'https://github.com/eigenteam/eigen-git-mirror.git'])
-
-    print_message('Unpacking library...')
-    os.chdir('eigen-git-mirror')
-    call(['git', 'checkout', EIGEN_VERSION])
-
-    eigen_dest = include_dir + 'Eigen'
-    if(os.path.exists(eigen_dest)): shutil.rmtree(eigen_dest)
-    shutil.copytree('Eigen', eigen_dest)
-
-    print_message('Cleaning up...')
-    os.chdir('../')
-    shutil.rmtree('eigen-git-mirror')
-
-def install_boost(include_dir):
-    """Download and install boost.geometry.
-
-    Despite being header-only, boost is a bit tricky to install. We essentially
-    acquire the whole of boost (which takes up ~1 GB) and then extract out the
-    geometry library.
-    """
-    print_message('Retrieving boost.geometry headers. This may take a few minutes...')
-
-    call(['git', 'clone', '--recursive', 'https://github.com/boostorg/boost.git'])
-    os.chdir('boost')
-    call(['git', 'checkout', BOOST_VERSION])
-    call(['./bootstrap.sh'])
-    call(['./b2', 'headers'])
-
-    boost_dest = include_dir+'boost'
-    boost_libs_dest = include_dir+'libs/'
-    if(os.path.exists(boost_dest)): shutil.rmtree(boost_dest)
-    if(os.path.exists(boost_libs_dest)): shutil.rmtree(boost_libs_dest)
-    shutil.copytree('./boost', boost_dest)
-    shutil.copytree('./libs', boost_libs_dest)
-
-    print_message('Cleaning up boost directories')
-    os.chdir('../')
-    shutil.rmtree('boost')
 
 def install_petsc(install_dir):
     """Compile and install PETSc."""
@@ -164,7 +116,8 @@ def install_petsc(install_dir):
           "--COPTFLAGS='-O3'", "--FOPTFLAGS='-O3'", "--CXXOPTFLAGS='-O3'",  
           "--with-debugging=0", "--prefix="+install_dir, "--download-scalapack", 
           "--download-mumps", "--download-openblas"])
-    call(['make', 'all', 'test'])
+    call(['make', 'all'])
+    call(['make', 'check'])
 
     print_message('Installing PETSc...')
     call(['make', 'install'])
