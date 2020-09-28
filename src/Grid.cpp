@@ -315,7 +315,7 @@ void Polygon::add_point(double x, double y)
     boost::geometry::envelope(_verts, _bbox);
 
     // correct the geometry
-    boost::geometry::correct(_verts);
+    //boost::geometry::correct(_verts);
 }
 
 /**
@@ -362,14 +362,20 @@ void Polygon::set_points(double* x, double* y, int n)
 bool Polygon::contains_point(double x, double y)
 {
     Point_2D p(x, y);
-	bool inside = boost::geometry::within(p, _verts);
+    bool inside = false;
+
+    if(bbox_contains_point(x,y)){
+        if(boost::geometry::within(p, _verts)){
+            inside = true;
+        }
+    }
 
 	return inside;
 }
 
 bool Polygon::bbox_contains_point(double x, double y)
 {
-    Point_2D p(x,y);
+    Point_2D_D p(x,y);
     bool inside = boost::geometry::within(p, _bbox);
 
 	return inside;

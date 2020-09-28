@@ -22,8 +22,9 @@
 #define GFLOAT __float128
 
 typedef boost::geometry::model::d2::point_xy<GFLOAT> Point_2D;
+typedef boost::geometry::model::d2::point_xy<double> Point_2D_D;
 typedef boost::geometry::model::polygon<Point_2D> Polygon_2D;
-typedef boost::geometry::model::box<Point_2D> BBox;
+typedef boost::geometry::model::box<Point_2D_D> BBox;
 using namespace Eigen;
 
 typedef Array<bool, Dynamic, Dynamic> ArrayXXb;
