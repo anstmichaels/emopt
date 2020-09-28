@@ -991,8 +991,6 @@ class FDTD(MaxwellSolver):
                           arr=temp)
             mu_z[li, lj, lk] = temp
 
-            COMM.Barrier()
-
     def __solve(self):
         ## Solve Maxwell's equations. This process is identical for the forward
         # and adjoint simulation. The only difference is the specific sources
