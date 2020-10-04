@@ -307,6 +307,7 @@ Polygon::Polygon(double* x, double* y, int n)
 Polygon::Polygon(Polygon_2D verts)
 {
     _verts = verts;
+    boost::geometry::envelope(_verts, _bbox);
 }
 
 Polygon::~Polygon()
@@ -369,7 +370,13 @@ void Polygon::set_points(double* x, double* y, int n)
 bool Polygon::contains_point(double x, double y)
 {
     Point_2D p(x, y);
-	bool inside = boost::geometry::within(p, _verts);
+    bool inside = false;
+
+    if(bbox_contains_point(x,y)){
+        if(boost::geometry::within(p, _verts)){
+            inside = true;
+        }
+    }
 
 	return inside;
 }
@@ -399,6 +406,11 @@ void Polygon::set_material(std::complex<double> mat)
 	_mat = mat;
 }
 
+std::complex<double> Polygon::get_material()
+{
+    return _mat;
+}
+
 Polygon_2D Polygon::get_vertices()
 {
     return _verts;
@@ -421,6 +433,7 @@ std::vector<Polygon*> Polygon::add(Polygon& p2)
         boost::geometry::assign(new_verts, p.outer());
         wrapped_poly = new Polygon(new_verts);
         wrapped_poly->set_material(_mat);
+        wrapped_poly->set_layer(get_layer());
 
         output.push_back(wrapped_poly);
     }
@@ -485,6 +498,22 @@ std::vector<Polygon*> Polygon::intersect(Polygon& p2)
     }
     
     return output;
+}
+
+int Polygon::get_num_points()
+{
+    return boost::geometry::num_points(_verts.outer());
+}
+
+void Polygon::get_points(double* x, double* y)
+{
+    int i = 0;
+    for(auto& p: _verts.outer())
+    {
+        x[i] = p.x();
+        y[i] = p.y();
+        i++;
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

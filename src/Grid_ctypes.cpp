@@ -246,6 +246,76 @@ void Polygon_set_material(Polygon* poly, double real, double imag)
 	poly->set_material(std::complex<double>(real, imag));
 }
 
+double Polygon_get_material_real(Polygon* poly)
+{
+    return std::real(poly->get_material());
+}
+
+double Polygon_get_material_imag(Polygon* poly)
+{
+    return std::imag(poly->get_material());
+}
+
+int Polygon_get_num_points(Polygon* poly)
+{
+    return poly->get_num_points();
+}
+
+
+void Polygon_get_points(Polygon* poly, double* x, double* y)
+{
+    poly->get_points(x, y);
+}
+
+
+Polygon** Polygon_add(Polygon* p1, Polygon* p2, int* Npoly)
+{
+    std::vector<Polygon*> result = p1->add(*p2);
+    *Npoly = result.size();
+    Polygon** output = new Polygon*[*Npoly];
+
+    for(int i = 0; i < *Npoly; i++)
+    {
+        output[i] = result[i];
+    }
+
+    return output;
+}
+
+Polygon** Polygon_subtract(Polygon* p1, Polygon* p2, int* Npoly)
+{
+    std::vector<Polygon*> result = p1->subtract(*p2);
+    *Npoly = result.size();
+    Polygon** output = new Polygon*[*Npoly];
+
+    for(int i = 0; i < *Npoly; i++)
+    {
+        output[i] = result[i];
+    }
+
+    return output;
+}
+
+Polygon** Polygon_intersect(Polygon* p1, Polygon* p2, int* Npoly)
+{
+    std::vector<Polygon*> result = p1->intersect(*p2);
+    *Npoly = result.size();
+    Polygon** output = new Polygon*[*Npoly];
+
+    for(int i = 0; i < *Npoly; i++)
+    {
+        output[i] = result[i];
+    }
+
+    return output;
+}
+
+
+void Polygon_cleanup_array(Polygon** array)
+{
+    delete[] array;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////
 // ConstantMaterial2D
 /////////////////////////////////////////////////////////////////////////////////////

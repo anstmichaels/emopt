@@ -1,5 +1,5 @@
 """Define an interface for accessing the grid library written in c++."""
-from ctypes import  cdll, c_int, c_double, c_void_p, c_bool
+from ctypes import  cdll, c_int, c_double, c_void_p, c_bool, POINTER
 import os
 import numpy as np
 from numpy.ctypeslib import ndpointer
@@ -16,6 +16,8 @@ libGrid = cdll.LoadLibrary(so_path)
 c_complex_2D_p = ndpointer(np.complex128, ndim=2, flags='C')
 c_complex_1D_p = ndpointer(np.complex128, ndim=1, flags='C')
 c_double_p = ndpointer(np.double, ndim=1, flags='C')
+c_int_p = ndpointer(np.int, ndim=1, flags='C')
+c_void_p_p = POINTER(c_void_p)
 
 #####################################################################################
 # Material2D configuration 
@@ -110,6 +112,10 @@ libGrid.Polygon_delete.argtypes = [c_void_p]
 libGrid.Polygon_delete.restype = None
 libGrid.Polygon_set_material.argtypes = [c_void_p, c_double, c_double]
 libGrid.Polygon_set_material.restype = None
+libGrid.Polygon_get_material_real.argtypes = [c_void_p]
+libGrid.Polygon_get_material_real.restype = c_double
+libGrid.Polygon_get_material_imag.argtypes = [c_void_p]
+libGrid.Polygon_get_material_imag.restype = c_double
 libGrid.Polygon_add_point.argtypes = [c_void_p, c_double, c_double]
 libGrid.Polygon_add_point.restype = None
 libGrid.Polygon_add_points.argtypes = [c_void_p, c_double_p, c_double_p, c_int]
@@ -118,6 +124,18 @@ libGrid.Polygon_set_points.argtypes = [c_void_p, c_double_p, c_double_p, c_int]
 libGrid.Polygon_set_points.restype = None
 libGrid.Polygon_set_point.argtypes = [c_void_p, c_double, c_double, c_int]
 libGrid.Polygon_set_point.restype = None
+libGrid.Polygon_get_num_points.argtypes = [c_void_p]
+libGrid.Polygon_get_num_points.restype = c_int
+libGrid.Polygon_get_points.argtypes = [c_void_p, c_double_p, c_double_p]
+libGrid.Polygon_get_points.restype = None
+libGrid.Polygon_add.argtypes = [c_void_p, c_void_p, c_int_p]
+libGrid.Polygon_add.restype = c_void_p_p
+libGrid.Polygon_subtract.argtypes = [c_void_p, c_void_p, c_int_p]
+libGrid.Polygon_subtract.restype = c_void_p_p
+libGrid.Polygon_intersect.argtypes = [c_void_p, c_void_p, c_int_p]
+libGrid.Polygon_intersect.restype = c_void_p_p
+libGrid.Polygon_cleanup_array.argtypes = [c_void_p_p]
+libGrid.Polygon_cleanup_array.restype = None
 
 ####################################################################################
 # ConstantMaterial2D configuration

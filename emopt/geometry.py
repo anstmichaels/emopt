@@ -26,14 +26,13 @@ class MaterialPrimitive(object):
 
     def __init__(self, label=None):
         self._object = None
-        self._layer = 1
 
         if(label == None):
             label = 'Primitive'
 
     @property
     def layer(self):
-        return self._layer
+        return libGrid.MaterialPrimitive_get_layer(self._object)
 
     @layer.setter
     def layer(self, newlayer):
@@ -105,20 +104,31 @@ class Polygon(MaterialPrimitive):
         self._transformations = []
 
     @property
+    def points(self):
+        xs = np.zeros(self.Np, dtype=np.float64)
+        ys = np.zeros(self.Np, dtype=np.float64)
+        libGrid.Polygon_get_points(self._object, xs, ys)
+
+        return xs, ys
+
+    @property
     def xs(self):
-        return np.copy(self._xs)
+        xs, ys = self.points
+        return xs
 
     @property
     def ys(self):
-        return np.copy(self._ys)
+        xs, ys = self.points
+        return ys
 
     @property
     def Np(self):
-        return self._Np
+        return libGrid.Polygon_get_num_points(self._object)
 
     @property
     def material_value(self):
-        return self._value
+        return libGrid.Polygon_get_material_real(self._object) + \
+            1j*libGrid.Polygon_get_material_imag(self._object)
 
     @xs.setter
     def xs(self, vals):
@@ -146,30 +156,24 @@ class Polygon(MaterialPrimitive):
     def __del__(self):
         libGrid.Polygon_delete(self._object)
 
+    def __create_from_pointer(self, new_obj):
+        # Recreate the polygon by setting a new Polygon
+        orig_obj = self._object
+        self._object = new_obj
+        libGrid.Polygon_delete(orig_obj)
+
     def add_point(self, x, y):
         libGrid.Polygon_add_point(self._object, x, y)
-
-        self._Np += 1
-        self._xs = np.concatenate(self._xs, [x])
-        self._ys = np.concatenate(self._ys, [y])
 
     def add_points(self, x, y):
         x = np.array(x, dtype=np.float64)
         y = np.array(y, dtype=np.float64)
         libGrid.Polygon_add_points(self._object, x, y, len(x))
 
-        self._Np += len(x)
-        self._xs = np.concatenate(self._xs, x)
-        self._ys = np.concatenate(self._ys, y)
-
     def set_points(self, x, y):
         x = np.array(x, dtype=np.float64)
         y = np.array(y, dtype=np.float64)
         libGrid.Polygon_set_points(self._object, x, y, len(x))
-
-        self._Np = len(x)
-        self._xs = np.copy(x)
-        self._ys = np.copy(y)
 
     def set_point(self, index, x, y):
         libGrid.Polygon_set_point(self._object, x, y, index)
@@ -471,6 +475,54 @@ class Polygon(MaterialPrimitive):
         self.set_points(x, y)
 
         self._transformations.append( ('mirror', mx, my, x0, y0) )
+
+    def add(self, p2):
+        Npoly = np.zeros(1, dtype=np.int)
+        polygons = libGrid.Polygon_add(self._object, p2._object, Npoly)
+        Npoly = Npoly[0]
+
+        # Extract the polygon pointers and create new objects based on those polygons
+        new_polygons = []
+        for i in range(Npoly):
+            p = Polygon([], [])
+            p.__create_from_pointer(polygons[i])
+            new_polygons.append(p)
+
+        libGrid.Polygon_cleanup_array(polygons)
+
+        return new_polygons
+
+    def subtract(self, p2):
+        Npoly = np.zeros(1, dtype=np.int)
+        polygons = libGrid.Polygon_subtract(self._object, p2._object, Npoly)
+        Npoly = Npoly[0]
+
+        # Extract the polygon pointers and create new objects based on those polygons
+        new_polygons = []
+        for i in range(Npoly):
+            p = Polygon([], [])
+            p.__create_from_pointer(polygons[i])
+            new_polygons.append(p)
+
+        libGrid.Polygon_cleanup_array(polygons)
+
+        return new_polygons
+
+    def intersect(self, p2):
+        Npoly = np.zeros(1, dtype=np.int)
+        polygons = libGrid.Polygon_intersect(self._object, p2._object, Npoly)
+        Npoly = Npoly[0]
+
+        # Extract the polygon pointers and create new objects based on those polygons
+        new_polygons = []
+        for i in range(Npoly):
+            p = Polygon([], [])
+            p.__create_from_pointer(polygons[i])
+            new_polygons.append(p)
+
+        libGrid.Polygon_cleanup_array(polygons)
+
+        return new_polygons
 
 class Rectangle(Polygon):
     """Define a rectangle.

@@ -22,8 +22,9 @@
 #define GFLOAT __float128
 
 typedef boost::geometry::model::d2::point_xy<GFLOAT> Point_2D;
+typedef boost::geometry::model::d2::point_xy<double> Point_2D_D;
 typedef boost::geometry::model::polygon<Point_2D> Polygon_2D;
-typedef boost::geometry::model::box<Point_2D> BBox;
+typedef boost::geometry::model::box<Point_2D_D> BBox;
 using namespace Eigen;
 
 typedef Array<bool, Dynamic, Dynamic> ArrayXXb;
@@ -401,7 +402,7 @@ class Polygon : public MaterialPrimitive {
         /*
          * Get the total number of points that form the boundary of the polygon.
          */
-        int get_point_count();
+        int get_num_points();
 
         /*
          * Get the polygon vertices.
@@ -432,6 +433,7 @@ class Polygon : public MaterialPrimitive {
 		 * @mat the complex material value
 		 */
 		void set_material(std::complex<double> mat);
+        std::complex<double> get_material();
 
         Polygon_2D get_vertices();
 

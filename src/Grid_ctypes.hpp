@@ -79,6 +79,15 @@ extern "C" {
 	void Polygon_set_point(Polygon* poly, double x, double y, int index);
 	void Polygon_set_points(Polygon* poly, double* x, double* y, int n);
 	void Polygon_set_material(Polygon* poly, double real, double imag);
+	double Polygon_get_material_real(Polygon* poly);
+	double Polygon_get_material_imag(Polygon* poly);
+    int Polygon_get_num_points(Polygon* poly);
+    void Polygon_get_points(Polygon* poly, double* x, double* y);
+    Polygon** Polygon_add(Polygon* p1, Polygon* p2, int* Npoly);
+    Polygon** Polygon_subtract(Polygon* p1, Polygon* p2, int* Npoly);
+    Polygon** Polygon_intersect(Polygon* p1, Polygon* p2, int* Npoly);
+    void Polygon_cleanup_array(Polygon** array);
+
 
 	////////////////////////////////////////////////////////////////////////////////
 	// ConstantMaterial2D

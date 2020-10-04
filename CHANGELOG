@@ -18,7 +18,12 @@ now three mode solvers available: Mode1DTE, Mode1DTM, and Mode2D. Furthermore, t
 equivalent Maxwell solvers available: Maxwell2DTE, Maxwell2DTM, Maxwell3D. All of these solvers
 can be found in emopt.solvers.
 
-2.
+2. All MaterialPrimitive objects (Polygon, Circle, Square, Ellipse) have been moved to
+emopt.geometry.
+
+3. Significant performance improvement in grid calculations involving many Polygons.
+
+4. Overhaul of Polygon implementation.
 
 
 Released on May 6, 2019
