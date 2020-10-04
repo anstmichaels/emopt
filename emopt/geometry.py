@@ -203,8 +203,8 @@ class Polygon(MaterialPrimitive):
         numpy.array, numpy.array
             The x and y coordinates of the newly populated line segments.
         """
-        xs = np.copy(self._xs)
-        ys = np.copy(self._ys)
+        xs = np.copy(self.xs)
+        ys = np.copy(self.ys)
         Np = len(xs)
 
         xf = np.array([xs[0]])
@@ -255,7 +255,7 @@ class Polygon(MaterialPrimitive):
 
         self.set_points(np.array(x_reduc), np.array(y_reduc))
 
-    def fillet(self, R, make_round=None, points_per_90=10, equal_thresh=1e-8,
+    def fillet(self, R, selection=None, points_per_90=10, equal_thresh=1e-8,
                ignore_roc_lim=False, points_per_bend=None):
         """Round corners of a polygon.
 
@@ -272,10 +272,9 @@ class Polygon(MaterialPrimitive):
         ----------
         R : float
             The desired fillet radius
-        make_round : list or None (optional)
-            A list of boolean values which specifies which points should be
-            rounded. If None, then all roundable points are rounded. If supplying a
-            list, the list must have the same length as x and y. (default = None)
+        selection : tuple or None (optional)
+            A 4-tuple specifying the xmin, xmax, ymin, ymax bounding box within which
+            points will be rounded. (default = None)
         points_per_90 : int (optional)
             The number of points to generate per 90 degrees of the arc. (default =
             10)
@@ -292,8 +291,8 @@ class Polygon(MaterialPrimitive):
         list, list
             The x and y coordinates of the new set of lines segments or polygon.
         """
-        x = self._xs
-        y = self._ys
+        x = self.xs
+        y = self.ys
 
         xn = []
         yn = []
@@ -304,6 +303,15 @@ class Polygon(MaterialPrimitive):
         # we always ignore the last point
         N -= 1
 
+        # set the inclusion box
+        if(selection is None):
+            xmin = np.min(x)
+            ymin = np.min(y)
+            xmax = np.max(x)
+            ymax = np.max(y)
+        else:
+            xmin, xmax, ymin, ymax = selection
+
         closed = True
         i = 0
         if(x[0] != x[-1] or y[0] != y[-1]):
@@ -313,10 +321,11 @@ class Polygon(MaterialPrimitive):
             i = 1
 
         while(i < N):
-            if(make_round is None or make_round[i]):
-                # get current and adjacent points
-                x1 = x[i]
-                y1 = y[i]
+            # get current and adjacent points
+            x1 = x[i]
+            y1 = y[i]
+
+            if(x1 >= xmin and x1 <= xmax and y1 >= ymin and y1 <= ymax):
                 if(i == 0):
                     x0 = x[-2]
                     y0 = y[-2]
@@ -399,7 +408,8 @@ class Polygon(MaterialPrimitive):
                         # only add point if not duplicate (this can happen if
                         # the desired radis of curvature equals or exceeds the
                         # maximum allowed)
-                        if(np.abs(xfil - xn[-1]) > equal_thresh or
+                        if(len(xn) == 0 or \
+                           np.abs(xfil - xn[-1]) > equal_thresh or
                            np.abs(yfil - yn[-1]) > equal_thresh):
                             xn.append(xfil)
                             yn.append(yfil)
