@@ -39,7 +39,7 @@ emopt_dep_file = ".emopt_deps"
 
 # Package Parameters
 EIGEN_VERSION = "3.3.7"
-BOOST_VERSION = "master"
+BOOST_VERSION = "1_73_0"
 PETSC_VERSION = "3.12.1"
 SLEPC_VERSION = "3.12.1"
 
@@ -120,9 +120,18 @@ def install_boost(include_dir):
     """
     print_message('Retrieving boost.geometry headers. This may take a few minutes...')
 
-    call(['git', 'clone', '--recursive', 'https://github.com/boostorg/boost.git'])
-    os.chdir('boost')
-    call(['git', 'checkout', BOOST_VERSION])
+    boost_url = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0_rc1.tar.gz"
+
+    boost_fname = "boost_" + BOOST_VERSION + ".tar.gz"
+    r = requests.get(boost_url, allow_redirects=True)
+    with open(boost_fname, 'wb') as fsave:
+        fsave.write(r.content)
+
+    # unzip package
+    call(['tar', 'xvzf', boost_fname])
+
+    boost_folder = "boost_" + BOOST_VERSION
+    os.chdir(boost_folder)
     call(['./bootstrap.sh'])
     call(['./b2', 'headers'])
 
@@ -135,7 +144,7 @@ def install_boost(include_dir):
 
     print_message('Cleaning up boost directories')
     os.chdir('../')
-    shutil.rmtree('boost')
+    shutil.rmtree(boost_folder)
 
 def install_petsc(install_dir):
     """Compile and install PETSc."""
@@ -224,6 +233,7 @@ def install_deps():
         install_dir = home_dir + '/.emopt/'
     else:
         install_dir = args.prefix
+        print(install_dir)
 
     if(not os.path.exists(install_dir)):
         os.makedirs(install_dir)
