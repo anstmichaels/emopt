@@ -599,8 +599,8 @@ class FDTD(MaxwellSolver):
         self._w_pml_xmax = int(w_pml[1]/dx)
         self._w_pml_ymin = int(w_pml[2]/dy)
         self._w_pml_ymax = int(w_pml[3]/dy)
-        self._w_pml_zmin = int(w_pml[4]/dy)
-        self._w_pml_zmax = int(w_pml[5]/dy)
+        self._w_pml_zmin = int(w_pml[4]/dz)
+        self._w_pml_zmax = int(w_pml[5]/dz)
 
         self._w_pml = [self._w_pml_xmin*dx, self._w_pml_xmax*dx, \
                        self._w_pml_ymin*dy, self._w_pml_ymax*dy, \
