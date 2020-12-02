@@ -714,294 +714,76 @@ class Ellipse(Polygon):
 
         super().set_points(x,y)
 
-class IndexSet(object):
+class ParameterizedPolygon(Polygon):
 
-    def __init__(self, x, y):
-        self._x = x
-        self._y = y
-        self._indices = []
+    class VertexNode:
+        # Define a graph node that contains information about constrained vertices in a
+        # polygon
+        def __init__(self, index, px, py):
+            self._index = index
+            self._px = px
+            self._py = py
+            self._neighbors = dict()
 
-    def __getitem__(self, key):
-        return self._indices[key]
+        def __hash__(self):
+            return hash(self._index)
 
-    @property
-    def x(self):
-        return self._x
+        def __eq__(self, o):
+            if(type(o) == type(self)):
+                if(self._index == o.index):
+                    return True
+            return False
 
-    @property
-    def y(self):
-        return self._y
+        @property
+        def index(self): return self._index
 
-    @property
-    def indices(self):
-        return self._indices
+        @property
+        def px(self): return self._px
 
-    @x.setter
-    def x(self, newx):
-        self._x = newx
+        @property
+        def py(self): return self._py
 
-    @y.setter
-    def y(self, newy):
-        self._y = newy
+        @property
+        def neighbors(self): return self._neighbors
 
-    def append(self, xmin, xmax, ymin, ymax, reverse=False):
-        x = self._x
-        y = self._y
+        def add_neighbor(self, neighbor, constraint):
+            if(neighbor in self._neighbors):
+                warning_message(f'Constraint has already been added between vertices '
+                        f'{self._index} and {neighbor.index}. The current constraint '
+                        f'will be overwritten.')
 
-        Np = len(x)
-        inds = []
-        for i in range(Np):
-            if(x[i] >= xmin and x[i] <= xmax and
-               y[i] >= ymin and y[i] <= ymax):
-                inds.append(i)
+            self._neighbors[neighbor] = constraint
 
-        if(reverse):
-            self._indices += inds[::-1]
-        else:
-            self._indices += inds
 
-    def remove(self, xmin, xmax, ymin, ymax):
-        x = self._x
-        y = self._y
+    def __init__(self, xs, ys, material_value=1.0, layer=1, label=None):
+        super().__init__(xs, ys, material_value, layer, label)
 
-        inds = []
-        for i in self._indices:
-            if(x[i] < xmin or x[i] > xmax or
-               y[i] < ymin or y[i] > ymax):
-                inds.append(i)
+        self._param_inds = set()
 
-        self._indices = inds
-
-    def clear(self):
-        self._indices = []
-
-class NURBS(object):
-    """Create a NURBS curve.
-
-    This class wraps a NURBS-python NURBS object and provides some additional
-    useful functionality (like radius of curvature calculation).
-
-    Notes
-    -----
-    The underlying NURBS object can be accessed at any time using the curve
-    attribute.
-
-    Attributes
-    ----------
-    x : numpy.ndarray
-        The x coordinates of the control points (array of size N).
-    y : numpy.ndarray
-        The y coordinates of the control points (array of size N).
-    N : int
-        The number of control points.
-    w : numpy.ndarray
-        Weight values (array of size N).
-    curve : geomdl.NURBS.Curve
-        The wrapped NURBS object
-    knot_vec : list
-        The knot vector
-    degree : int
-        The degree of the NURBS curve
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        The x coordinates of the control points (array of size N).
-    y : numpy.ndarray
-        The y coordinates of the control points (array of size N).
-    w : numpy.ndarray (optional)
-        Weight values (array of size N). By default, uniform unity weights are used. (default = None)
-    degree : int (optional)
-        The degree of the curve. Recommended: degree >= 3 (default = 3)
-    """
-
-    def __init__(self, x, y, degree=3, w=None):
-        try:
-            from geomdl import NURBS, utilities
-            self.utilities = utilities
-        except ImportError:
-            error_message('The module `geomdl` is not installed, but it is required for NURBS!')
-
-        self._x = np.array(x)
-        self._y = np.array(y)
-        self._n = len(x)
-
-        if(w is None):
-            w = np.ones(self._x.shape)
-        self._w = w
-
-        # Create the curve
-        curve = NURBS.Curve()
-        curve.degree = degree
-        self._degree = degree
-
-        cpoints = np.zeros((self._n,2))
-        cpoints[:,0] = x
-        cpoints[:,1] = y
-        self._cpoints = cpoints
-
-        curve.ctrlpts = cpoints
-        curve.knotvector = utilities.generate_knot_vector(degree, len(cpoints))
-        curve.weights = w
-        self._curve = curve
-
-    @property
-    def x(self): return self._x
-
-    @property
-    def y(self): return self._y
-
-    @property
-    def N(self): return self._n
-
-    @property
-    def w(self): return self._w
-
-    @property
-    def curve(self): return self._curve
-
-    @property
-    def knot_vec(self): return self._curve.kotvector
-
-    @property
-    def degree(self): return self._degree
-
-    @property
-    def bbox(self): return [coordinate for xy in self._curve.bbox \
-                            for coordinate in xy]
-
-    @w.setter
-    def w(self, ww):
-        self._w = ww
-        self._curve.weights = ww
-
-    @degree.setter
-    def degree(self, d):
-        self._degree = d
-        self._curve.degree = d
-
-    def set_cpoints(self, x, y):
-        """Set new control points
+    def parameterize(self, selection, px=True, py=True):
+        """Select points to parameterize.
 
         Parameters
         ----------
-        x : numpy.ndarray
-            The new x coordinates.
-        y : numpy.ndarray
-            The new y coordinates.
+        selection : tuple or callable
+            Either a box in the form (xmin, xmax, ymin, ymax) which selects points to
+            parameterize, or a function of the form f(x,y) which returns True if the (x,y) is
+            to be selected, or False otherwise.
+        px : bool (True)
+            If True, parameterize the x coordinate of the selected points
+        py : bool (True)
+            If True, parameterize the y coordinate of the selected points
         """
-        self._x = x
-        self._y = y
-        self._n = len(x)
-
-        cpoints = np.zeros((self._n,2))
-        cpoints[:,0] = x
-        cpoints[:,1] = y
-        self._cpoints = cpoints
-
-        self._curve.ctrlpts = cpoints
-        self._curve.knotvector = self.utilities.generate_knot_vector(self._degree, len(cpoints))
-
-    def evaluate(self, u=None, Neval=10):
-        """Evaluate the NURBS curve.
-
-        The NURBS curve can be evaluated either at a single specified value or at a
-        specified number of values which span the whole curve. If a single value
-        is provided, then the curve is evaluated at that single point. Otherwise,
-        the curve is evaluated at the specified Neval points.
-
-        Parameters
-        ----------
-        u : float (optional)
-            A value between 0 and 1 when the x,y coordinate of the curve is evaluated. (default = None)
-        Neval : int
-            The number of points along the full length of the curve to evaluate the x,y
-            coordinates of the curve. This is only evaluated if u=None. (default = 10)
-
-        Returns
-        -------
-        float, float or numpy.ndarray, numpy.ndarray
-            The x,y coordinate(s) of the evaluated curve
-        """
-        if(u is not None):
-            xy = self._curve.curvept(u)
-            return xy[0], xy[1]
+        if(callable(selection)):
+            select_point = selection
         else:
-            self._curve.sample_size = Neval
-            self._curve.evaluate()
-            points = np.array(self._curve.evalpts)
-            return points[:,0], points[:,1]
+            xmin, xmax, ymin, ymax = selection
+            select_point = lambda x, y : (x >= xmin) and (x <= xmax) and \
+                                         (y >= ymin) and (y <= ymax)
 
-    def radius_of_curvature(self, u=None, Neval=10):
-        """Evaluate the radius of curvature along the NURBS curve.
+        xs = self.xs
+        ys = self.ys
 
-        The ROC can be evaluated either at a single specified value or at a
-        specified number of values which span the whole curve. If a single value
-        is provided, then the ROC is evaluated at that single point. Otherwise,
-        the curve is evaluated at the specified Neval points.
-
-        Parameters
-        ----------
-        u : float (optional)
-            A value between 0 and 1 when the x,y coordinate of the curve is evaluated. (default = None)
-        Neval : int
-            The number of points along the full length of the curve to evaluate the x,y
-            coordinates of the curve. This is only evaluated if u=None. (default = 10)
-
-        Returns
-        -------
-        float or numpy.ndarray
-            The radius of curvature evaluated along the curve.
-        """
-        if(u is not None):
-            us = [u]
-            Neval = 1
-        else:
-            us = np.linspace(0,1,Neval)
-
-        # Calculate 1st and second derivative
-        xdot = np.zeros(Neval)
-        ydot = np.zeros(Neval)
-        xddot = np.zeros(Neval)
-        yddot = np.zeros(Neval)
-        for i in range(Neval):
-            xydots = self._curve.derivatives(us[i],order=2)
-            xdot[i] = xydots[1][0]
-            ydot[i] = xydots[1][1]
-            xddot[i] = xydots[2][0]
-            yddot[i] = xydots[2][1]
-
-        roc = (xdot**2 + ydot**2)**(3.0/2.0) / np.abs(xdot*yddot - xddot*ydot)
-        return roc
-
-    def evaluate_tangent(self, u=None, Neval=None):
-        """Evaluate the tangent direction along the curve.
-
-        Notes
-        -----
-        1. This is the normalized first derivative of x(u) and y(u)
-
-        returns
-        -------
-        numpy.ndarray, numpy.ndarray
-            The tangential vectors at each point
-        """
-        if(u is not None):
-            us = [u]
-            Neval = 1
-        else:
-            us = np.linspace(0,1,Neval)
-
-        # Calculate 1st and second derivative
-        xdot = np.zeros(Neval)
-        ydot = np.zeros(Neval)
-        for i in range(Neval):
-            xydots = self._curve.derivatives(us[i],order=2)
-            dx = xydots[1][0]
-            dy = xydots[1][1]
-
-            norm = np.sqrt(dx**2 + dy**2)
-            xdot[i] = dx/norm
-            ydot[i] = dy/norm
-
-        return xdot, ydot
+        for i in range(self.Np):
+            if(select_point(xs[i], ys[i])):
+                self._param_inds.add(self.VertexNode(i, px, py))
