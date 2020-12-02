@@ -76,7 +76,7 @@ libFDTD.FDTD_set_pml_properties.argtypes = [c_void_p, c_double, c_double,
 libFDTD.FDTD_set_pml_properties.restype = None
 
 libFDTD.FDTD_build_pml.argtypes = [c_void_p]
-libFDTD.FDTD_build_pml.argtypes = None
+libFDTD.FDTD_build_pml.restype = None
 
 libFDTD.FDTD_set_t0_arrays.argtypes = [c_void_p,
                                        c_complex_p, c_complex_p, c_complex_p,
@@ -144,3 +144,6 @@ libFDTD.FDTD_copy_to_ghost_comm.restype = None
 libFDTD.FDTD_copy_from_ghost_comm.argtypes = [c_double_p, c_complex_p,
                                               c_int, c_int, c_int]
 libFDTD.FDTD_copy_from_ghost_comm.restype = None
+
+libFDTD.FDTD_reset_pml.argtypes = [c_void_p]
+libFDTD.FDTD_reset_pml.restype = None
