@@ -16,7 +16,7 @@ endif
 
 CXXFLAGS = -Wall -fopenmp -O3 -march=native -DNDEBUG -std=c++11
 
-INCLUDES = -I${EIGEN_DIR} -I${BOOST_DIR} -I/usr/include/eigen3
+INCLUDES = -I/usr/include/eigen3
 LDFLAGS = -lpthread
 
 all: Grid.o Grid_ctypes.o FDTD.o Grid.cpp Grid.hpp Grid_ctypes.cpp Grid_ctypes.hpp fdtd.cpp fdtd.hpp
