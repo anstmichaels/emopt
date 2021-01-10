@@ -123,9 +123,9 @@ void fdtd::FDTD::update_H(int n, double t)
     double odx = _R/_dx,
            ody = _R/_dy,
            odz = _R/_dz,
-           b, C, kappa,
-           src_t,
-           dt_by_mux, dt_by_muy, dt_by_muz;
+           //b, C, kappa,
+           src_t;
+           //dt_by_mux, dt_by_muy, dt_by_muz;
 
     int pml_xmin = _w_pml_x0, pml_xmax = _Nx-_w_pml_x1,
         pml_ymin = _w_pml_y0, pml_ymax = _Ny-_w_pml_y1,
@@ -135,8 +135,7 @@ void fdtd::FDTD::update_H(int n, double t)
         ind_pml, ind_src, i0s, j0s, k0s, Is, Js, Ks,
         ind_pml_param;
 
-    double dExdy, dExdz, dEydx, dEydz, dEzdx, dEzdy;
-    complex128 *Mx, *My, *Mz;
+    //double dExdy, dExdz, dEydx, dEydz, dEzdx, dEzdy;
 
     // Setup the fields on the simulation boundary based on the boundary conditions
     if(_bc[0] != 'P' && _k0 + _K == _Nx){
@@ -175,40 +174,41 @@ void fdtd::FDTD::update_H(int n, double t)
     for(int i = 0; i < _I; i++) {
         for(int j = 0; j < _J; j++) {
             for(int k = 0; k < _K; k++) {
-                ind_ijk = (i+1)*(_J+2)*(_K+2) + (j+1)*(_K+2) + k + 1;
-                ind_ijp1k = (i+1)*(_J+2)*(_K+2) + (j+2)*(_K+2) + k + 1;
-                ind_ip1jk = (i+2)*(_J+2)*(_K+2) + (j+1)*(_K+2) + k + 1;
-                ind_ijkp1 = (i+1)*(_J+2)*(_K+2) + (j+1)*(_K+2) + k + 2;
-
-                ind_global = i*_J*_K + j*_K + k;
+                int ind_ijk = (i+1)*(_J+2)*(_K+2) + (j+1)*(_K+2) + k + 1,
+                    ind_ijp1k = (i+1)*(_J+2)*(_K+2) + (j+2)*(_K+2) + k + 1,
+                    ind_ip1jk = (i+2)*(_J+2)*(_K+2) + (j+1)*(_K+2) + k + 1,
+                    ind_ijkp1 = (i+1)*(_J+2)*(_K+2) + (j+1)*(_K+2) + k + 2,
+                    ind_global = i*_J*_K + j*_K + k;
 
                 // compute prefactors
-                dt_by_mux = _dt/_mu_x[ind_global].real;
-                dt_by_muy = _dt/_mu_y[ind_global].real;
-                dt_by_muz = _dt/_mu_z[ind_global].real;
+                double dt_by_mux = _dt/_mu_x[ind_global].real,
+                       dt_by_muy = _dt/_mu_y[ind_global].real,
+                       dt_by_muz = _dt/_mu_z[ind_global].real;
         
                 // Update Hx
-                dEzdy = ody*(_Ez[ind_ijp1k] - _Ez[ind_ijk]);
-                dEydz = odz*(_Ey[ind_ip1jk] - _Ey[ind_ijk]);
+                double dEzdy = ody*(_Ez[ind_ijp1k] - _Ez[ind_ijk]),
+                       dEydz = odz*(_Ey[ind_ip1jk] - _Ey[ind_ijk]);
 
                 _Hx[ind_ijk] = _Hx[ind_ijk] +  dt_by_mux * 
                                (dEydz - dEzdy);
 
                 // update Hy
-                dExdz = odz*(_Ex[ind_ip1jk] - _Ex[ind_ijk]);
-                dEzdx = odx * (_Ez[ind_ijkp1] - _Ez[ind_ijk]);
+                double dExdz = odz*(_Ex[ind_ip1jk] - _Ex[ind_ijk]),
+                       dEzdx = odx * (_Ez[ind_ijkp1] - _Ez[ind_ijk]);
 
                 _Hy[ind_ijk] = _Hy[ind_ijk] + dt_by_muy *
                                (dEzdx - dExdz);
 
                 // update Hz
-                dEydx = odx*(_Ey[ind_ijkp1] - _Ey[ind_ijk]);
-                dExdy = ody * (_Ex[ind_ijp1k] - _Ex[ind_ijk]);
+                double dEydx = odx*(_Ey[ind_ijkp1] - _Ey[ind_ijk]),
+                       dExdy = ody * (_Ex[ind_ijp1k] - _Ex[ind_ijk]);
                 
                 _Hz[ind_ijk] = _Hz[ind_ijk] + dt_by_muz *
                                (dExdy - dEydx);
 
                 // Do PML updates
+                int ind_pml, ind_pml_param;
+                double b, C, kappa;
                 if(k + _k0 < pml_xmin) {
                     // get index in PML array
                     ind_pml = i*_J*(pml_xmin - _k0) +j*(pml_xmin - _k0) + k;
@@ -310,6 +310,7 @@ void fdtd::FDTD::update_H(int n, double t)
     }
 
     // Update sources
+    complex128 *Mx, *My, *Mz;
     for(auto const& src : _sources) {
         i0s = src.i0; Is = src.I;
         j0s = src.j0; Js = src.J;

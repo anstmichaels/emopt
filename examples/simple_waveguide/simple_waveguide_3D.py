@@ -22,6 +22,7 @@ wavelength = 1.55
 # Setup simulation
 #####################################################################################
 sim = emopt.solvers.Maxwell3D(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44)
+#sim.ramp_time = sim.Nlambda
 w_pml = sim.w_pml[0]
 
 X = sim.X
@@ -35,8 +36,8 @@ Nz = sim.Nz
 #####################################################################################
 # Define the geometry/materials
 #####################################################################################
-r1 = emopt.grid.Rectangle(X/2, Y/2, 2*X, 0.5); r1.layer = 1
-r2 = emopt.grid.Rectangle(X/2, Y/2, 2*X, 2*Y); r2.layer = 2
+r1 = emopt.geometry.Rectangle(X/2, Y/2, 2*X, 0.5); r1.layer = 1
+r2 = emopt.geometry.Rectangle(X/2, Y/2, 2*X, 2*Y); r2.layer = 2
 
 r1.material_value = 3.45**2
 r2.material_value = 1.444**2
@@ -77,11 +78,11 @@ field_monitor = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, Z/2
                                   dx, dy, dz)
 Ey = sim.get_field_interp('Ey', domain=field_monitor, squeeze=True)
 
-if(NOT_PARALLEL):
-    import matplotlib.pyplot as plt
-
-    vmax = np.max(np.real(Ey))
-    f = plt.figure()
-    ax = f.add_subplot(111)
-    ax.imshow(np.real(Ey), extent=[0,X-w_pml*2,0,Y-w_pml*2], vmin=-vmax, vmax=vmax, cmap='seismic')
-    plt.show()
+#if(NOT_PARALLEL):
+#    import matplotlib.pyplot as plt
+#
+#    vmax = np.max(np.real(Ey))
+#    f = plt.figure()
+#    ax = f.add_subplot(111)
+#    ax.imshow(np.real(Ey), extent=[0,X-w_pml*2,0,Y-w_pml*2], vmin=-vmax, vmax=vmax, cmap='seismic')
+#    plt.show()
