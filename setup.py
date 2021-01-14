@@ -51,5 +51,5 @@ setup(name='emopt',
       packages=find_packages(),
       package_data={'emopt':['*.so', '*.csv', 'data/*', 'solvers/*.so']},
       cmdclass={'install':MakeInstall},
-      install_requires=['numpy', 'scipy', 'matplotlib', 'mpi4py', 'petsc4py', 'slepc4py', 'h5py'],
+      install_requires=['numpy', 'scipy', 'matplotlib', 'mpi4py', 'petsc', 'petsc4py', 'slepc', 'slepc4py', 'h5py'],
       zip_safe=False)
