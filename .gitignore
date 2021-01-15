@@ -52,3 +52,6 @@ emopt.egg-info/
 dist/
 docs/build/doctrees
 docs/build/html
+
+# other files
+.emopt_deps
