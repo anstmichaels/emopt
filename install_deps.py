@@ -8,24 +8,10 @@ EMopt depends on 2 core open source software packages:
 
 To run this script, simply call:
 
-    $ python3 install.py
+    $ python3 install_deps.py
 
-By default, this will create the directory ~/.emopt and install all of the
-libraries there. If you want to install these files elsewhere, you can use the
-prefix flag:
-
-    $ python3 install.py --prefix=/custom/install/path
-
-For example, for a system-wide install, we might use:
-
-    $ python3 install.py --prefix=/opt/local
-
-where /opt/local is an existing directory.
-
-If this script fails for any reason, read through the output and check the
-install.log file which should be created. This should give you some indication
-of what went wrong. In most cases, the issue will be related to not having the
-appropriate prerequisite software packages installed.
+Note: This script no longer needs to be called by the user. Instead, setup.py/pip will
+take care of it for you.
 """
 
 import os, sys, shutil, glob, requests, pathlib
@@ -34,11 +20,6 @@ from argparse import ArgumentParser
 
 # EMopt parameters
 emopt_dep_file = ".emopt_deps"
-
-# Package Parameters
-PETSC_VERSION = "3.13.4"
-SLEPC_VERSION = "3.13.4"
-
 
 class Logger(object):
     """Setup log file."""
@@ -97,18 +78,8 @@ def install_petsc(install_dir):
 
     # get PETSc
     print_message('Downloading PETSc...')
-    petsc_url = "http://ftp.mcs.anl.gov/pub/petsc/release-snapshots/petsc-" + PETSC_VERSION + \
-                ".tar.gz"
-    petsc_fname = "petsc-" + PETSC_VERSION + ".tar.gz"
-    r = requests.get(petsc_url, allow_redirects=True)
-    with open(petsc_fname, 'wb') as fsave:
-        fsave.write(r.content)
-
-    # unzip package
-    call(['tar', 'xvzf', petsc_fname])
-
-    petsc_folder = "petsc-" + PETSC_VERSION
-    os.chdir(petsc_folder)
+    call(['git', 'clone', '-b', 'release', 'https://gitlab.com/petsc/petsc.git petsc'])
+    call(['cd', 'petsc'])
 
     # compile
     print_message('Compiling PETSc...')
@@ -126,7 +97,7 @@ def install_petsc(install_dir):
     # cleanup
     print_message('Cleaning up working directory...')
     os.chdir('../')
-    shutil.rmtree(petsc_folder)
+    shutil.rmtree('petsc')
 
 def install_slepc(install_dir):
     """Compile and install SLEPc."""
@@ -135,15 +106,8 @@ def install_slepc(install_dir):
 
     # get the SLEPc source
     print_message('Downloading SLEPc source...')
-    slepc_url = "http://slepc.upv.es/download/distrib/slepc-" + SLEPC_VERSION + \
-                ".tar.gz"
-    slepc_fname = "slepc-" + SLEPC_VERSION + ".tar.gz"
-    r = requests.get(slepc_url, allow_redirects=True)
-    with open(slepc_fname, 'wb') as fsave:
-        fsave.write(r.content)
-
-    # unzip package
-    call(['tar', 'xvzf', slepc_fname])
+    call(['git', 'clone', '-b', 'release', 'https://gitlab.com/slepc/slepc.git slepc'])
+    call(['cd', 'slepc'])
 
     # compile and install
     print_message('Compiling SLEPc...')
@@ -156,8 +120,7 @@ def install_slepc(install_dir):
 
     # cleanup
     os.chdir('../')
-    shutil.rmtree(slepc_folder)
-    os.remove(slepc_fname)
+    shutil.rmtree('slepc')
 
 def install_deps(prefix=None):
     # setup logging
