@@ -2,6 +2,12 @@ from setuptools import setup, find_packages
 from setuptools.command.install import install as SetuptoolsInstall
 import subprocess, os, sys
 
+if('petsc4py' not in os.modules and 'PETSC_DIR' not in os.environ):
+    os.system('export PETSC_DIR="NOT_INSTALLED"')
+    PETSC_INSTALLED = False
+else:
+    PETSC_INSTALLED = True
+
 class MakeInstall(SetuptoolsInstall):
     # Add a commandline argument for emopt prefix
     user_options = SetuptoolsInstall.user_options + [('emopt-prefix=', None, None)]
@@ -26,41 +32,20 @@ class MakeInstall(SetuptoolsInstall):
                     toks = line.rstrip('\r\n').split('=')
                     os.environ[toks[0]] = toks[1]
         else:
-            if('PETSC_DIR' not in os.environ \
-                or 'PETSC_ARCH' not in os.environ \
-                or os.environ['PETSC_DIR'] == ''):
-                try:
-                    import petsc4py, slepc4py
-                except ImportError:
-                    print('petsc4py is not currently installed, but is required by EMopt.')
-                    print('If the petsc-complex is available through your package manager ' \
-                          'then it is recommended that you install the following packages:')
-                    print('\t1. petsc-complex')
-                    print('\t2. slepc-complex')
-                    print('\t3. petsc4py-complex')
-                    print('\t4. slepc4py-complex')
-                    print('And then re-install EMopt.')
-                    print('')
-                    print('Alternatively, PETSc and SLEPc may be downloaded and compiled ' \
-                          'for use with EMopt automatically now.')
-                    inp = input('Proceed with installation of PETSc and SLEPc? [y/n] ')
+            if(not PETSC_INSTALLED):
+                print('petsc4py is not currently installed, but is required by EMopt.')
+                print('It will be compiled and installed now.')
+                print('If the petsc-complex is available through your package manager ' \
+                      'then it is recommended that you install the following packages:')
+                print('\t1. petsc-complex')
+                print('\t2. slepc-complex')
+                print('\t3. petsc4py-complex')
+                print('\t4. slepc4py-complex')
+                print('And then re-install EMopt.')
+                print('')
 
-                    ask_input = True
-                    get_deps = False
-                    while(ask_input):
-                        if(inp.upper() == 'Y'):
-                            get_deps = True
-                            ask_input = False
-                        elif(inp.upper() == 'N'):
-                            sys.exit(0)
-                        else:
-                            print("Please enter 'y' to proceed with the installation " \
-                                        "or 'n' to abort. ")
-                            inp = input('Proceed with installation of PETSc and SLEPc? [y/n] ')
-
-                        if(get_deps):
-                            import install_deps
-                            install_deps.install_deps(self.emopt_prefix)
+                import install_deps
+                install_deps.install_deps(self.emopt_prefix)
 
         subprocess.call('make')
         SetuptoolsInstall.do_egg_install(self)
