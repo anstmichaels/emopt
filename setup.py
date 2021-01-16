@@ -2,13 +2,33 @@ from setuptools import setup, find_packages
 from setuptools.command.install import install as SetuptoolsInstall
 import subprocess, os, sys
 
-if('petsc4py' not in sys.modules and 'PETSC_DIR' not in os.environ):
-    os.system('export PETSC_DIR="NOT_INSTALLED"')
-    os.system('export PETSC_ARCH=""')
-    os.system('export SLEPC_DIR="NOT_INSTALLED"')
-    PETSC_INSTALLED = False
-else:
-    PETSC_INSTALLED = True
+# EMopt depends on the PETSc and SLEPc libraries. These can be installed through pip
+# however not quite automatically. Here, we manually pip install the petsc and slepc
+# packages in required way.
+try:
+    import petsc4py
+except:
+    if('PETSC_DIR' not in os.environ or 'PETSC_ARCH' not in os.environ):
+        os.environ['PETSC_CONFIGURE_OPTIONS'] = "--with-scalar-type=complex " \
+                                                            "--with-mpi=1 " \
+                                                            "--COPTFLAGS='-O3' " \
+                                                            "--FOPTFLAGS='-O3' " \
+                                                            "--CXXOPTFLAGS='-O3' " \
+                                                            "--with-debugging=0 " \
+                                                            "--download-scalapack " \
+                                                            "--download-mumps " \
+                                                            "--download-openblas"
+        if('numpy' not in sys.modules):
+            subprocess.call(['pip3', 'install', 'numpy'])
+
+        subprocess.call(['pip3', 'install', 'petsc', 'petsc4py', '--no-binary', ':all:'])
+
+try:
+    import slepc4py
+except:
+    if('SLEPC_DIR' not in os.environ):
+        subprocess.call(['pip3', 'install', 'slepc', 'slepc4py', '--no-binary', ':all:'])
+
 
 class MakeInstall(SetuptoolsInstall):
     # Add a commandline argument for emopt prefix
@@ -22,33 +42,7 @@ class MakeInstall(SetuptoolsInstall):
         SetuptoolsInstall.finalize_options(self)
 
     def run(self):
-        # EMopt has a few import dependencies that need to be installed first. Some linux
-        # distributions provide these packages in their package manager (e.g. Ubunutu,
-        # and archlinux). If these packages are not provided, EMopt includes an install_deps
-        # script which can take care of the installation.
-        base_dir = os.path.dirname(os.path.realpath(__file__))
-        deps_file = base_dir + '/.emopt_deps'
-        if(os.path.exists(deps_file)):
-            with open(deps_file, 'r') as fdeps:
-                for line in fdeps:
-                    toks = line.rstrip('\r\n').split('=')
-                    os.environ[toks[0]] = toks[1]
-        else:
-            if(not PETSC_INSTALLED):
-                print('petsc4py is not currently installed, but is required by EMopt.')
-                print('It will be compiled and installed now.')
-                print('If the petsc-complex is available through your package manager ' \
-                      'then it is recommended that you install the following packages:')
-                print('\t1. petsc-complex')
-                print('\t2. slepc-complex')
-                print('\t3. petsc4py-complex')
-                print('\t4. slepc4py-complex')
-                print('And then re-install EMopt.')
-                print('')
-
-                import install_deps
-                install_deps.install_deps(self.emopt_prefix)
-
+        # Compile C++ components of EMopt
         subprocess.call('make')
         SetuptoolsInstall.do_egg_install(self)
 
@@ -72,5 +66,5 @@ setup(name='emopt',
       packages=find_packages(),
       package_data={'emopt':['*.so', '*.csv', 'data/*', 'solvers/*.so']},
       cmdclass={'install':MakeInstall},
-      install_requires=['numpy', 'scipy', 'mpi4py', 'petsc4py', 'slepc4py'],
+      install_requires=['numpy', 'scipy', 'matplotlib', 'mpi4py', 'petsc4py', 'slepc4py'],
       zip_safe=False)
