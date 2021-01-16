@@ -4,6 +4,8 @@ import subprocess, os, sys
 
 if('petsc4py' not in os.modules and 'PETSC_DIR' not in os.environ):
     os.system('export PETSC_DIR="NOT_INSTALLED"')
+    os.system('export PETSC_ARCH=""')
+    os.system('export SLEPC_DIR="NOT_INSTALLED"')
     PETSC_INSTALLED = False
 else:
     PETSC_INSTALLED = True
