@@ -14,15 +14,53 @@ class MakeInstall(SetuptoolsInstall):
         SetuptoolsInstall.finalize_options(self)
 
     def run(self):
-        os.environ['PETSC_CONFIGURE_OPTIONS'] = "--with-scalar-type=complex " \
-                                                    "--with-mpi=1 " \
-                                                    "--COPTFLAGS='-O3' " \
-                                                    "--FOPTFLAGS='-O3' " \
-                                                    "--CXXOPTFLAGS='-O3' " \
-                                                    "--with-debugging=0 " \
-                                                    "--download-scalapack " \
-                                                    "--download-mumps " \
-                                                    "--download-openblas"
+        # EMopt has a few import dependencies that need to be installed first. Some linux
+        # distributions provide these packages in their package manager (e.g. Ubunutu,
+        # and archlinux). If these packages are not provided, EMopt includes an install_deps
+        # script which can take care of the installation.
+        base_dir = os.path.dirname(os.path.realpath(__file__))
+        deps_file = base_dir + '/.emopt_deps'
+        if(os.path.exists(deps_file)):
+            with open(deps_file, 'r') as fdeps:
+                for line in fdeps:
+                    toks = line.rstrip('\r\n').split('=')
+                    os.environ[toks[0]] = toks[1]
+        else:
+            if('PETSC_DIR' not in os.environ \
+                or 'PETSC_ARCH' not in os.environ \
+                or os.environ['PETSC_DIR'] == ''):
+                try:
+                    import petsc4py, slepc4py
+                except ImportError:
+                    print('petsc4py is not currently installed, but is required by EMopt.')
+                    print('If the petsc-complex is available through your package manager ' \
+                          'then it is recommended that you install the following packages:')
+                    print('\t1. petsc-complex')
+                    print('\t2. slepc-complex')
+                    print('\t3. petsc4py-complex')
+                    print('\t4. slepc4py-complex')
+                    print('And then re-install EMopt.')
+                    print('')
+                    print('Alternatively, PETSc and SLEPc may be downloaded and compiled ' \
+                          'for use with EMopt automatically now.')
+                    inp = input('Proceed with installation of PETSc and SLEPc? [y/n] ')
+
+                    ask_input = True
+                    get_deps = False
+                    while(ask_input):
+                        if(inp.upper() == 'Y'):
+                            get_deps = True
+                            ask_input = False
+                        elif(inp.upper() == 'N'):
+                            sys.exit(0)
+                        else:
+                            print("Please enter 'y' to proceed with the installation " \
+                                        "or 'n' to abort. ")
+                            inp = input('Proceed with installation of PETSc and SLEPc? [y/n] ')
+
+                        if(get_deps):
+                            import install_deps
+                            install_deps.install_deps(self.emopt_prefix)
 
         subprocess.call('make')
         SetuptoolsInstall.do_egg_install(self)
