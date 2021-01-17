@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from setuptools.command.install import install as SetuptoolsInstall
+from distutils.command.build import build
 import subprocess, os, sys
 
 # EMopt depends on the PETSc and SLEPc libraries. These can be installed through pip
@@ -21,30 +21,19 @@ except:
         if('numpy' not in sys.modules):
             subprocess.call(['pip3', 'install', 'numpy'])
 
-        subprocess.call(['pip3', 'install', 'petsc', 'petsc4py', '--no-binary', ':all:'])
+        subprocess.call(['pip3', 'install', 'petsc', '--no-binary', ':all:'])
 
 try:
     import slepc4py
 except:
     if('SLEPC_DIR' not in os.environ):
-        subprocess.call(['pip3', 'install', 'slepc', 'slepc4py', '--no-binary', ':all:'])
+        subprocess.call(['pip3', 'install', 'slepc', '--no-binary', ':all:'])
 
-
-class MakeInstall(SetuptoolsInstall):
-    # Add a commandline argument for emopt prefix
-    user_options = SetuptoolsInstall.user_options + [('emopt-prefix=', None, None)]
-
-    def initialize_options(self):
-        SetuptoolsInstall.initialize_options(self)
-        self.emopt_prefix = None
-
-    def finalize_options(self):
-        SetuptoolsInstall.finalize_options(self)
-
+class RunMake(build):
     def run(self):
         # Compile C++ components of EMopt
-        subprocess.call('make')
-        SetuptoolsInstall.do_egg_install(self)
+        subprocess.call(['make'])
+        build.run(self)
 
 def get_version_number():
     base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -65,6 +54,7 @@ setup(name='emopt',
       license='GPL 3.0',
       packages=find_packages(),
       package_data={'emopt':['*.so', '*.csv', 'data/*', 'solvers/*.so']},
-      cmdclass={'install':MakeInstall},
+      include_package_data=True,
+      cmdclass={'build':RunMake},
       install_requires=['numpy', 'scipy', 'matplotlib', 'mpi4py', 'petsc4py', 'slepc4py'],
       zip_safe=False)
