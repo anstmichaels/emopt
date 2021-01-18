@@ -717,6 +717,8 @@ class Ellipse(Polygon):
 class ParameterizedPolygon(Polygon):
 
     class VertexNode:
+        # Note: This is currently unused. Eventually, it will be used to impose constrints
+        # on parameterized polygons
         # Define a graph node that contains information about constrained vertices in a
         # polygon
         def __init__(self, index, px, py):
@@ -758,9 +760,22 @@ class ParameterizedPolygon(Polygon):
     def __init__(self, xs, ys, material_value=1.0, layer=1, label=None):
         super().__init__(xs, ys, material_value, layer, label)
 
-        self._param_inds = set()
+        self._x0 = np.copy(xs)
+        self._y0 = np.copy(ys)
 
-    def parameterize(self, selection, px=True, py=True):
+        #self._param_inds = set()
+        self._xparam = dict()
+        self._yparam = dict()
+
+    @property
+    def xparam(self):
+        return self._xparam.copy()
+
+    @property
+    def yparam(self):
+        return self._yparam.copy()
+
+    def parameterize(self, selection, px=True, py=True, selection_name='default'):
         """Select points to parameterize.
 
         Parameters
@@ -769,10 +784,15 @@ class ParameterizedPolygon(Polygon):
             Either a box in the form (xmin, xmax, ymin, ymax) which selects points to
             parameterize, or a function of the form f(x,y) which returns True if the (x,y) is
             to be selected, or False otherwise.
-        px : bool (True)
-            If True, parameterize the x coordinate of the selected points
-        py : bool (True)
-            If True, parameterize the y coordinate of the selected points
+        px : bool (optional)
+            If True, parameterize the x coordinate of the selected points. (default = True)
+        py : bool (optional)
+            If True, parameterize the y coordinate of the selected points. (default = True)
+        selection_name : str (optional)
+            The name of the set of selected points. Multiple set of parameterized points can
+            be selected by defining unique names or alternatively more complex selections 
+            can be built up by providing the same name repeatedly. The default name is
+            'default'.
         """
         if(callable(selection)):
             select_point = selection
@@ -784,6 +804,17 @@ class ParameterizedPolygon(Polygon):
         xs = self.xs
         ys = self.ys
 
+        ix = []
+        iy = []
+
         for i in range(self.Np):
             if(select_point(xs[i], ys[i])):
-                self._param_inds.add(self.VertexNode(i, px, py))
+                if(px): ix.append(i)
+                if(py): iy.append(i)
+
+        if(selection_name not in self._xparam):
+            self._xparam[selection_name] = ix
+            self._yparam[selection_name] = iy
+        else:
+            self._xparam[selection_name] = list(set(self._xparam[selection_name]) | set(ix))
+            self._yparam[selection_name] = list(set(self._yparam[selection_name]) | set(iy))
