@@ -136,7 +136,7 @@ First, we install necessary packages using ``apt-get``::
 
 Finally, we install a few required python packages::
 
-    $ install requests matplotlib numpy scipy mpi4py --user
+    $ pip install requests matplotlib numpy scipy mpi4py --user
 
 ---------------------------------------
 Installing Remaining EMopt Dependencies
