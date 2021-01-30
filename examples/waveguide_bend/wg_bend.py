@@ -10,15 +10,15 @@ To run the code, execute::
 in the command line which will run the optimization using 8 cores on the current
 machine."""
 import emopt
-from emopt.adjoint_method import AdjointMethod
+from emopt.opt_def import OptDef
 from emopt.misc import NOT_PARALLEL, run_on_master
 
 import numpy as np
 
-class WGBendAM(AdjointMethod):
+class WGBendOptDef(OptDef):
 
     def __init__(self, sim, xs, ys, waveguide, Psrc):
-        super(WGBendAM, self).__init__(sim, step=1e-12)
+        super().__init__(sim, step=1e-12)
 
         self.xs = xs
         self.ys = ys
@@ -30,16 +30,18 @@ class WGBendAM(AdjointMethod):
     def get_current_points(self, params):
         x = np.copy(self.xs)
         y = np.copy(self.ys)
+        p = emopt.geometry.Polygon(xs, ys)
 
         Rin, Rout = params
-        mr = np.zeros(len(x)); mr[1] = 1
-        x, y = emopt.geometry.fillet(x, y, Rout, make_round=mr,
-                                       points_per_bend=50, ignore_roc_lim=True)
-        mr = np.zeros(len(x)); mr[53] = 1
-        x, y = emopt.geometry.fillet(x, y, Rin, make_round=mr,
-                                       points_per_bend=50, ignore_roc_lim=True)
 
-        return x,y
+        # Fillet/round the outer point
+        p.fillet(Rout, selection=[1], points_per_bend=50, ignore_roc_lim=True)
+
+        # Fillet/round the inner point. Since we just added 50 points, we need to be careful
+        # to select the right one!
+        p.fillet(Rin, selection=[53], points_per_bend=50, ignore_roc_lim=True)
+
+        return p.xs, p.ys
 
     def update_system(self, params):
         x,y = self.get_current_points(params)
@@ -117,7 +119,6 @@ def callback(params, sim, am, fom_history, Ts, Exm, Eym, Hzm):
     fname = 'wg_bend_%d' % (len(fom_history))
     emopt.io.save_results(fname, data, additional)
 
-
 if __name__ == '__main__':
     ###########################################################################
     # Setup the simulation domain
@@ -150,11 +151,11 @@ if __name__ == '__main__':
     ys = [wg_pos + w_wg/2, wg_pos+w_wg/2,-1.0, -1.0,
           wg_pos-w_wg/2, wg_pos-w_wg/2, wg_pos+w_wg/2]
 
-    waveguide = emopt.grid.Polygon(xs, ys)
+    waveguide = emopt.geometry.Polygon(xs, ys)
     waveguide.layer = 1
     waveguide.material_value = n1**2
 
-    background = emopt.grid.Rectangle(wg_pos, wg_pos, 2*X, 2*Y)
+    background = emopt.geometry.Rectangle(wg_pos, wg_pos, 2*X, 2*Y)
     background.layer = 2
     background.material_value = n0**2
 
@@ -214,12 +215,12 @@ if __name__ == '__main__':
     Psrc = sim.source_power
 
     ###########################################################################
-    # Create the AdjointMethod object
+    # Create the OptDef object
     ###########################################################################
     # We will parameterize our structure in terms of the inner and outer radii
     # of the bend
     design_params = np.array([0.25, 0.25+w_wg])
-    am = WGBendAM(sim, xs, ys, waveguide, Psrc)
+    am = WGBendOptDef(sim, xs, ys, waveguide, Psrc)
 
     am.check_gradient(design_params)
 

@@ -3,9 +3,9 @@ This :class:`.Optimizer` class provides a simple wrapper around scipy.minimize.o
 which allows you optimize an electromagnetic structure given an arbitrary
 (user-defined) set of design parameters. The :class:`.Optimizer` class
 minimizes a figure of merit defined in an
-:class:`emopt.adjoint_method.AdjointMethod` object and takes advantage of the
+:class:`emopt.opt_def.OptDef` object and takes advantage of the
 gradient computed by the supplied
-:class:`emopt.adjoint_method.AdjointMethod` object.
+:class:`emopt.opt_def.OptDef` object.
 
 
 Examples
@@ -14,14 +14,14 @@ The :class:`.Optimizer` is used approximately as follows:
 
 .. doctest::
     import emopt.fdfd
-    import emopt.adjoint_method
+    import emopt.opt_def
     import emopt.optimizer
 
     # Setup the simulation object
     sim = ...
 
-    # Define a custom adjoint method class and instantiate it
-    am = MyAdjointMethod(...)
+    # Define a custom OptDef class and instantiate it
+    am = MyOptDef(...)
 
     # Define a callback function
     def my_callback(params, ...):
@@ -72,8 +72,8 @@ class Optimizer(object):
     ----------
     sim : emopt.fdfd.FDFD
         Simulation object
-    am : emopt.adjoint_method.AdjointMethod
-        Object containing problem-specific implementation of AdjointMethod
+    am : emopt.opt_def.OptDef
+        Object containing problem-specific implementation of OptDef
     p0 : numpy.ndarray or list
         Initial guess for design parameters of system
     callback_func : function
@@ -97,8 +97,8 @@ class Optimizer(object):
 
     Attributes
     ----------
-    am : emopt.adjoint_method.AdjointMethod
-        The adjoint method object for calculating FOM and gradient
+    am : emopt.opt_def.OptDef
+        The OptDef object for calculating FOM and gradient
     p0 : numpy.ndarray or list
         The initial guess for design variables
     callback : function
@@ -229,8 +229,8 @@ class Optimizer(object):
 
         Parameters
         ----------
-        am : :class:`emopt.adjoint_method.AdjointMethod`
-            The adjoint method object responsible for FOM and gradient
+        am : :class:`emopt.opt_def.OptDef`
+            The OptDef object responsible for FOM and gradient
             calculations.
 
         Returns

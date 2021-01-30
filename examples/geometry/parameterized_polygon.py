@@ -46,3 +46,19 @@ ax.plot(poly.xs[poly.yparam['bot']], poly.ys[poly.yparam['bot']],
         'b.', markersize=12, alpha=0.25)
 plt.axis('equal')
 plt.show()
+
+# Get bounding boxes for the parameterized vertices
+bbox_x, bbox_y = poly.get_param_bboxes()
+
+f = plt.figure()
+ax = f.add_subplot(111)
+ax.plot(poly.xs, poly.ys, 'c.-', markersize=4)
+
+for bbox in bbox_x['top']:
+    ax.plot(bbox[[0,1,1,0,0]], bbox[[2,2,3,3,2]], 'r-', alpha=0.5)
+
+for bbox in bbox_x['bot']:
+    ax.plot(bbox[[0,1,1,0,0]], bbox[[2,2,3,3,2]], 'b-', alpha=0.5)
+
+plt.axis('equal')
+plt.show()

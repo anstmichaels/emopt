@@ -1,9 +1,10 @@
 """
-This modules provides the definition for the :class:`.AdjointMethod` class.  Given an
-electromagnetic structure (which is simulated using the FDFD class) and a merit
-function which describes the 'performance' of that electromagnetic structure,
-the :class:`.AdjointMethod` class defines the methods needed in order to calculate the gradient
-of that merit function with respect to a set of user-defined design variables.
+This modules provides the definition for the :class:`.OptDef` class.  Given an
+electromagnetic structure (which is simulated using the FDFD class), a parameterization of the
+shape of that structure, and a merit function which describes the 'performance' of that
+electromagnetic structure, the :class:`.OptDef` class defines the methods needed in order to
+calculate the gradient of that merit function with respect to the set of user-defined design
+variables.
 
 Notes
 -----
@@ -24,7 +25,7 @@ equations, and :math:`\partial A / \partial p_i` describes how the materials in
 the system change with respect to changes to the design variables of the
 system.
 
-The AdjointMethod class does most of the work needed to compute :math:`x`,
+The OptDef class does most of the work needed to compute :math:`x`,
 :math:`y`, :math:`\partial A / \partial p_i`, and the gradient
 :math:`\\nabla_\\mathbf{p}F`.
 
@@ -53,16 +54,16 @@ will depend on the RANK of the node running the code.
 Examples
 --------
 
-The AdjointMethod class is used by extending the AdjointMethod base class. At
+The OptDef class is used by extending the OptDef base class. At
 a minimum, four methods must be defined in the inheriting class. As an
-example, a custom AdjointMethod class might look like
+example, a custom OptDef class might look like
 
 .. doctest::
 
-    class MyAdjointMethod(AdjointMethod):
+    class MyOptDef(OptDef):
 
         def __init__(self, sim, myparam, step=1e-8):
-            super(MyAdjointMethod, self).__init__(sim, step=step)
+            super(MyOptDef, self).__init__(sim, step=step)
             self._myparam = myparam
 
         def update_system(self, params):
@@ -88,19 +89,19 @@ example, a custom AdjointMethod class might look like
             ...
             return grad_y
 
-Here :meth:`.AdjointMethod.update_system` updates the the system based on the
-current set of design parameters, :meth:`.AdjointMethod.calc_fom` calculates
+Here :meth:`.OptDef.update_system` updates the the system based on the
+current set of design parameters, :meth:`.OptDef.calc_fom` calculates
 the value of F(\\mathbf{E}, \\mathbf{H}, y_1, y_2, \cdots, y_N) for the specified
-set of design parameters in :samp:`params`, :meth:`.AdjointMethod.calc_dFdx`
+set of design parameters in :samp:`params`, :meth:`.OptDef.calc_dFdx`
 calculates the derivative of :math:`F` with respect to the relevant field
-components, and :meth:`.AdjointMethod.calc_grad_y` calculates the gradient of F
+components, and :meth:`.OptDef.calc_grad_y` calculates the gradient of F
 with respect to the non-field-dependent quantities in F.
 
-In order to verify that the :meth:`.AdjointMethod.calc_fom`,
-:meth:`.AdjointMethod.calc_dFdx`, and :meth:`.AdjointMethod.calc_grad_y`
+In order to verify that the :meth:`.OptDef.calc_fom`,
+:meth:`.OptDef.calc_dFdx`, and :meth:`.OptDef.calc_grad_y`
 functions are consistent, the gradient accuracty should always be verified. The
-AdjointMethod base class defines a function to do just this.  For example, using
-the :samp:`MyAdjointMethod` that we have just defined, we might do:
+OptDef base class defines a function to do just this.  For example, using
+the :samp:`MyOptDef` that we have just defined, we might do:
 
 .. doctest::
 
@@ -108,11 +109,11 @@ the :samp:`MyAdjointMethod` that we have just defined, we might do:
     ...
 
     # create the adjoint method object
-    am = MyAdjointMethod(sim, myparam)
+    od = MyOptDef(sim, myparam)
 
     # check the gradient
     init_params = ...
-    am.check_gradient(init_params, indices=np.arange(0,10))
+    od.check_gradient(init_params, indices=np.arange(0,10))
 
 In this example, we check the accuracy of the gradients computed for a given
 initial set of design parameters called :samp:`init_params`.  We restrict the
@@ -120,11 +121,11 @@ check to the first ten components of the gradient in order to speed things up.
 
 In addition to the adjoint method base class, there are a number of
 application-specific implementations which you may find useful. In particular,
-the :class:`.AdjointMethodFM2D` class provides a simplified interface for
+the :class:`.OptDefFM2D` class provides a simplified interface for
 computing the gradient of a function that depends not only on the fields but
 also the permittivity and permeability.  In addition to the functions specified
 above, the user must implement an additional function
-:meth:`.AdjointMethodFM.calc_dFdm` which must compute the derivative of the figure
+:meth:`.OptDefFM.calc_dFdm` which must compute the derivative of the figure
 of merit :math:`F` with respect to the permittivity and permeability,
 :math:`\epsilon` and :math:`\mu`.  An example of such a function would be, for
 example, the total absorption of electromagnetic energy in a domain.
@@ -134,14 +135,14 @@ In many cases, this efficiency is defined in terms of the ratio of a calculated
 power to the total source power of the system.  Because differentiating these
 power-normalized quantities (which depend on the fields and the
 permittivity/permeability) is rather laborious, this functionality is
-implemented in the :class:`.AdjointMethodPNF2D` and
-:class:`.AdjointMethodPNF3D` classes for convenience.
+implemented in the :class:`.OptDefPNF2D` and
+:class:`.OptDefPNF3D` classes for convenience.
 
 See Also
 --------
-emopt.solvers.MaxwellSolver : Base class for simulators supported by :class:`.AdjointMethod`.
+emopt.solvers.MaxwellSolver : Base class for simulators supported by :class:`.OptDef`.
 
-emopt.optimizer.Optimizer : Primary application of :class:`.AdjointMethod` to optimization.
+emopt.optimizer.Optimizer : Primary application of :class:`.OptDef` to optimization.
 
 References
 ----------
@@ -159,17 +160,24 @@ from mpi4py import MPI
 __author__ = "Andrew Michaels"
 __license__ = "GPL License, Version 3.0"
 
-class AdjointMethod(metaclass=ABCMeta):
-    """Adjoint Method Class
+class OptDef(metaclass=ABCMeta):
+    """Optimization definition class
 
-    Defines the core functionality needed to compute the gradient of a function
-    of the form
+    This class defines an interface and core functionality needed to define an optimization
+    problem. This includes defining a parameterization, computing a figure of merit (FOM), and
+    computing the gradient of the figure of merit.
+
+    A key compent of gradient-based optimization is the calculation of the gradient of a
+    FOM with respect to the defined design parameters. This class implements a generic form
+    of the adjoint method, which allows it to efficiently calculate this gradient with
+    minimal input from the user. In general, figures of merit are of the form
 
     .. math:
         F \\rightarrow F(\\mathbf{E}, \\mathbf{H}, \\vec{p})
 
-    with respect to an arbitrary set of design variables :math:`\\vec{p}`.
-    In general, the gradient is given by
+    where :math:`\\mathbf{E}` is the electric field, :math:`\\mathbf{H}` is the electric
+    field, and :math:`\\vec{p}` is the set of design parameters In general, the gradient of
+    this function is given by
 
     .. math::
         \\nabla F = \\nabla_\mathrm{AM} F + \\frac{\partial F}{\partial \\vec{p}}
@@ -178,29 +186,29 @@ class AdjointMethod(metaclass=ABCMeta):
     using the adjoint method, and the remaining gradient term corresponds to
     any explicit dependence of the figure of merit on the design parameters.
     The derivatives of these quantities are assumed to be known and should be
-    computed using :meth:`.AdjointMethod.calc_grad_p` function.
+    computed using :meth:`.OptDef.calc_grad_p` function.
 
-    In order to use the AdjointMethod class, it should extended and the
-    abstract methods :meth:`.AdjointMethod.update_system`,
-    :meth:`.AdjointMethod.calc_fom`, :meth:`.AdjointMethod.calc_dFdx`, and
-    :meth:`.AdjointMethod.calc_grad_p` should be implemented for the desired
+    In order to use the OptDef class, it should extended and the
+    abstract methods :meth:`.OptDef.update_system`,
+    :meth:`.OptDef.calc_fom`, :meth:`.OptDef.calc_dFdx`, and
+    :meth:`.OptDef.calc_grad_p` should be implemented for the desired
     application.
 
     Notes
     -----
     Currently source derivatives are not supported.  If needed, this should not
-    be too difficult to achieve by extending :class:`.AdjointMethod`
+    be too difficult to achieve by extending :class:`.OptDef`
 
     Parameters
     ----------
-    sim : emopt.simulation.MaxwellSolver
+    sim : emopt.solvers.MaxwellSolver
         Simulation object
     step : float
         Step sized used in the calculation of :math:`\partial A / \partial p_i`
 
     Attributes
     ----------
-    sim : emopt.simulation.MaxwellSolver
+    sim : emopt.solvers.MaxwellSolver
         Simulation object
     step : float
         Step sized used in the calculation of :math:`\partial A / \partial p_i`
@@ -282,11 +290,11 @@ class AdjointMethod(metaclass=ABCMeta):
 
         Notes
         -----
-        This function is called by the :func:`.AdjointMethod.fom` function. In
+        This function is called by the :func:`.OptDef.fom` function. In
         this case, update_system(params) and sim.solve_forward() are guaranteed
         to be called before this function is executed.
 
-        If this function is called outside of the :func:`.AdjointMethod.fom`
+        If this function is called outside of the :func:`.OptDef.fom`
         function (which is not advised), it is up to the caller to ensure that
         the :func:`.emopt.FDFD.solve_forward` has been run previously.
 
@@ -669,28 +677,37 @@ class AdjointMethod(metaclass=ABCMeta):
             else:
                 warning_message('The total error in the gradient is %0.4E '
                                 'which is over 1%%' % (error_tot), \
-                                'emopt.adjoint_method')
+                                'emopt.opt_def')
 
             if(plot):
                 import matplotlib.pyplot as plt
-                f = plt.figure()
-                ax1 = f.add_subplot(311)
-                ax2 = f.add_subplot(312)
-                ax3 = f.add_subplot(313)
+                f = plt.figure(figsize=(9,6))
+                ax1 = f.add_subplot(211)
+                ax2 = f.add_subplot(212)
 
                 xs = np.arange(len(indices))
-                ax1.bar(xs, grad_fd)
-                ax1.set_title('Finite Differences')
-                ax2.bar(xs, grad_am[indices])
-                ax2.set_title('Adjoint Method')
-                ax3.bar(xs, errors)
-                ax3.set_title('Error in Adjoint Method')
+                ax1.bar(xs, grad_fd, facecolor='b', alpha=0.5, label='Finite Differences')
+                ax1.bar(xs, grad_am[indices], facecolor='r', alpha=0.5,
+                        label='OptDef (Adjoint Method)')
+                ax2.bar(xs, errors)
 
-                for ax in [ax1, ax2, ax3]:
-                    ax.set_xticklabels(['%d' % i for i in indices])
+                ax1.set_title('Gradient')
+                ax2.set_title('Error in OptDef Gradient Calculation')
+                ax2.set_xlabel('Design Parameter [index]')
+                ax2.set_ylabel('Gradient Error')
 
-                ax3.set_yscale('log', nonposy='clip')
+                for ax in [ax1, ax2]:
+                    ax.xaxis.set_ticks(indices)
+                    ax.set_xticklabels(['{ind}'.format(ind=i) for i in indices])
 
+                ax2.set_yscale('log', nonposy='clip')
+
+                for ax in [ax1, ax2]:
+                    ax.grid(alpha=0.25)
+
+                ax1.legend()
+
+                plt.tight_layout
                 plt.show()
 
             if(return_gradients):
@@ -702,8 +719,8 @@ class AdjointMethod(metaclass=ABCMeta):
                 return None, None, None
             return None
 
-class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
-    """An AdjointMethod object for an ensemble of different figures of merit
+class OptDefMO(OptDef, metaclass=ABCMeta):
+    """An OptDef object for an ensemble of different figures of merit
     (Multi-objective adjoint method).
 
     In many situations, it is desirable to calculate the sensitivities of a
@@ -722,32 +739,32 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
 
     Parameters
     ----------
-    ams : list of :class:`.AdjointMethod`
-        A list containing *extended* AdjointMethod objects
+    ods : list of :class:`.OptDef`
+        A list containing *extended* OptDef objects
 
     Attributes
     ----------
-    adjoint_methods : list of :class:`.AdjointMethod`
-        A list containing extended AdjointMethod objects
+    opt_defs : list of :class:`.OptDef`
+        A list containing extended OptDef objects
     """
 
-    def __init__(self, ams, step=1e-6):
-        self._ams = ams
-        self._foms_current = np.zeros(len(ams))
+    def __init__(self, ods, step=1e-6):
+        self._ods = ods
+        self._foms_current = np.zeros(len(ods))
         self._step = step
 
     @property
-    def adjoint_methods(self):
-        return self._ams
+    def opt_defs(self):
+        return self._ods
 
-    @adjoint_methods.setter
-    def adjoint_methods(self, new_ams):
-        self._ams = new_ams
+    @opt_defs.setter
+    def opt_defs(self, new_ods):
+        self._ods = new_ods
 
     def update_system(self, params):
-        """Update all of the individual AdjointMethods."""
-        for am in self._ams:
-            am.update_system(params)
+        """Update all of the individual OptDefs."""
+        for od in self._ods:
+            od.update_system(params)
 
     def calc_fom(self, sim, params):
         """Calculate the figure of merit.
@@ -757,12 +774,12 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
 
     def calc_dFdx(self, sim, params):
         # We dont need this -- all dFdx's are performed by
-        # AdjointMethod objects contained in self._ams
+        # OptDef objects contained in self._ods
         pass
 
     def calc_grad_p(self, sim, params):
         # We dont need this -- all individual grad_p calculations are handled
-        # by supplied AdjointMethod objects.
+        # by supplied OptDef objects.
         pass
 
     @abstractmethod
@@ -825,7 +842,7 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
 
         Notes
         -----
-        Overrides :class:`.AdjointMethod`.fom(...)
+        Overrides :class:`.OptDef`.fom(...)
 
         Parameters
         ----------
@@ -839,8 +856,8 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
         """
         foms = []
 
-        for am in self._ams:
-            foms.append(am.fom(params))
+        for od in self._ods:
+            foms.append(od.fom(params))
 
         self._foms_current = foms
         if(NOT_PARALLEL):
@@ -854,7 +871,7 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
 
         Notes
         -----
-        Overrides :class:`.AdjointMethod`.gradient(...)
+        Overrides :class:`.OptDef`.gradient(...)
 
         Parameters
         ----------
@@ -869,9 +886,9 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
         foms = []
         grads = []
 
-        for am in self._ams:
-            grads.append( am.gradient(params) )
-            foms.append( am.calc_fom(am.sim, params) )
+        for od in self._ods:
+            grads.append( od.gradient(params) )
+            foms.append( od.calc_fom(od.sim, params) )
 
         if(NOT_PARALLEL):
             grad_total = self.calc_total_gradient(foms, grads)
@@ -882,7 +899,7 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
 
     def check_gradient(self, params, indices=[], plot=True, verbose=True,
                        return_gradients=False, fd_step=1e-10):
-        """Check the gradient of an multi-objective AdjointMethod.
+        """Check the gradient of an multi-objective OptDef.
 
         Parameters
         ----------
@@ -901,24 +918,24 @@ class AdjointMethodMO(AdjointMethod, metaclass=ABCMeta):
         # we override this function so we can initially update all of the ams
         # as desired
         self.sim = self._ams[0].sim
-        for am in self._ams:
-            am.update_system(params)
-            am.sim.update()
+        for od in self._ods:
+            od.update_system(params)
+            od.sim.update()
 
-        return super(AdjointMethodMO, self).check_gradient(params, indices, plot,
+        return super(OptDefMO, self).check_gradient(params, indices, plot,
                                                            verbose,
                                                            return_gradients,
                                                            fd_step)
 
-class AdjointMethodFM2D(AdjointMethod):
-    """Define an :class:`.AdjointMethod` which simplifies the calculation of
+class OptDefFM2D(OptDef):
+    """Define an :class:`.OptDef` which simplifies the calculation of
     gradients which are a function of the materials (eps and mu) in 2D
     problems.
 
     In certain cases, the gradient of a function of the fields, permittivity,
     and permeability may be desired.  Differentiating the function with respect
     to the permittivity and permeability shares many of the same calculations
-    in common with :meth:`.AdjointMethod.calc_gradient`.  In order to maximize
+    in common with :meth:`.OptDef.calc_gradient`.  In order to maximize
     performance and simplify the implementation of material-dependent figures
     of merit, this class reimplements the :meth:`calc_gradient` function.
 
@@ -930,7 +947,7 @@ class AdjointMethodFM2D(AdjointMethod):
         The step size used by gradient calculation (default = False)
     """
     def __init__(self, sim, step=1e-8):
-        super(AdjointMethodFM2D, self).__init__(sim, step)
+        super(OptDefFM2D, self).__init__(sim, step)
 
     @abstractmethod
     def calc_dFdm(self, sim, params):
@@ -960,7 +977,7 @@ class AdjointMethodFM2D(AdjointMethod):
 
         Parameters
         ----------
-        sim : FDFD
+        sim : solvers.FDFD
             Simulation object.  sim = self.sim
         params : numpy.array or list of floats
             List of design parameters.
@@ -1089,8 +1106,8 @@ class AdjointMethodFM2D(AdjointMethod):
         if(NOT_PARALLEL):
             return gradient
 
-class AdjointMethodPNF2D(AdjointMethodFM2D):
-    """Define an AdjointMethod object for a figure of merit which contains
+class OptDefPNF2D(OptDefFM2D):
+    """Define an OptDef object for a figure of merit which contains
     power normalization in 2D problems.
 
     A power-normalized figure of merit has the form
@@ -1105,7 +1122,7 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
     """
 
     def __init__(self, sim, step=1e-8):
-        super(AdjointMethodPNF2D, self).__init__(sim, step)
+        super(OptDefPNF2D, self).__init__(sim, step)
 
     @abstractmethod
     def calc_f(self, sim, params):
@@ -1306,8 +1323,8 @@ class AdjointMethodPNF2D(AdjointMethodFM2D):
         else:
             return None
 
-class AdjointMethodPNF3D(AdjointMethod):
-    """Define an AdjointMethod object for a figure of merit which contains
+class OptDefPNF3D(OptDef):
+    """Define an OptDef object for a figure of merit which contains
     power normalization in 3D problems.
 
     In 3D, lossy materials are not supported. As a result, power normalization
@@ -1316,7 +1333,7 @@ class AdjointMethodPNF3D(AdjointMethod):
     """
 
     def __init__(self, sim, step=1e-8):
-        super(AdjointMethodPNF3D, self).__init__(sim, step)
+        super(OptDefPNF3D, self).__init__(sim, step)
 
     @abstractmethod
     def calc_f(self, sim, params):

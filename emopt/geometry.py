@@ -272,9 +272,8 @@ class Polygon(MaterialPrimitive):
         ----------
         R : float
             The desired fillet radius
-        selection : tuple or None (optional)
-            A 4-tuple specifying the xmin, xmax, ymin, ymax bounding box within which
-            points will be rounded. (default = None)
+        selection : list or None (optional)
+            A list which defines the indices of the vertices to round. (default = None)
         points_per_90 : int (optional)
             The number of points to generate per 90 degrees of the arc. (default =
             10)
@@ -304,13 +303,13 @@ class Polygon(MaterialPrimitive):
         N -= 1
 
         # set the inclusion box
-        if(selection is None):
-            xmin = np.min(x)
-            ymin = np.min(y)
-            xmax = np.max(x)
-            ymax = np.max(y)
-        else:
-            xmin, xmax, ymin, ymax = selection
+        #if(selection is None):
+        #    xmin = np.min(x)
+        #    ymin = np.min(y)
+        #    xmax = np.max(x)
+        #    ymax = np.max(y)
+        #else:
+        #    xmin, xmax, ymin, ymax = selection
 
         closed = True
         i = 0
@@ -325,7 +324,8 @@ class Polygon(MaterialPrimitive):
             x1 = x[i]
             y1 = y[i]
 
-            if(x1 >= xmin and x1 <= xmax and y1 >= ymin and y1 <= ymax):
+            #if(x1 >= xmin and x1 <= xmax and y1 >= ymin and y1 <= ymax):
+            if(selection is None or i in selection):
                 if(i == 0):
                     x0 = x[-2]
                     y0 = y[-2]
@@ -818,3 +818,58 @@ class ParameterizedPolygon(Polygon):
         else:
             self._xparam[selection_name] = list(set(self._xparam[selection_name]) | set(ix))
             self._yparam[selection_name] = list(set(self._yparam[selection_name]) | set(iy))
+
+    def get_param_bboxes(self):
+        """Get the bounding boxes of the parameterized vertices.
+
+        These 'bounding boxes' encompass the parameterized point and its adjacent points.
+        Equivalently, they encompass the polygon edges which are modified when moving each
+        parameterized vertex of the polygon.
+
+        Returns
+        -------
+        dict(str, np.ndarray), dict(str, np.ndarray)
+            Two dictionaries (one for xparam and one for yparam) whose keys correspond to the
+            named selections and values are Nx4 numpy arrays where the rows consist of the
+            xmin, xmax, ymin, ymax bounding box values for each parameterized vertex in the
+            polygon.
+        """
+        bboxes_x = dict()
+        bboxes_y = dict()
+
+        for name in self._xparam:
+            inds = self._xparam[name]
+            inds_prev = [i-1 for i in inds]
+            inds_next = [i+1 for i in inds]
+
+            xs = np.vstack((self.xs[inds], self.xs[inds_prev], self.xs[inds_next]))
+            ys = np.vstack((self.ys[inds], self.ys[inds_prev], self.ys[inds_next]))
+
+            N = len(inds)
+            bboxes = np.zeros((N, 4))
+            bboxes[:, 0] = np.min(xs, axis=0)
+            bboxes[:, 1] = np.max(xs, axis=0)
+            bboxes[:, 2] = np.min(ys, axis=0)
+            bboxes[:, 3] = np.max(ys, axis=0)
+
+            bboxes_x[name] = bboxes
+
+        for name in self._yparam:
+            inds = self._yparam[name]
+            inds_prev = [i-1 for i in inds]
+            inds_next = [i+1 for i in inds]
+
+            xs = np.vstack((self.xs[inds], self.xs[inds_prev], self.xs[inds_next]))
+            ys = np.vstack((self.ys[inds], self.ys[inds_prev], self.ys[inds_next]))
+
+            N = len(inds)
+            bboxes = np.zeros((N, 4))
+            bboxes[:, 0] = np.min(xs, axis=0)
+            bboxes[:, 1] = np.max(xs, axis=0)
+            bboxes[:, 2] = np.min(ys, axis=0)
+            bboxes[:, 3] = np.max(ys, axis=0)
+
+            bboxes_y[name] = bboxes
+
+        return bboxes_x, bboxes_y
+

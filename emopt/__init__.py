@@ -7,7 +7,7 @@ __version__ = "2020.10.3"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"
 
-from . import adjoint_method, solvers, fomutils, grid, io, misc, optimizer, geometry
+from . import opt_def, solvers, fomutils, grid, io, misc, optimizer, geometry
 
-__all__ = ["adjoint_method", "solvers", "fomutils", "grid", "io", "misc",
+__all__ = ["opt_def", "solvers", "fomutils", "grid", "io", "misc",
           "optimizer", "geometry"]
