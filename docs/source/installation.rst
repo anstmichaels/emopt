@@ -147,7 +147,8 @@ Installing on Ubuntu 18.04
 First, we install necessary packages using ``apt-get``::
 
     $ sudo apt-get update
-    $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev git python python3 python3-dev python3-pip python3-tk
+    $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev libeigen3-dev \
+                           libboost-dev git python python3 python3-dev python3-pip python3-tk
 
 Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
 a script which expediates this process::
@@ -157,7 +158,7 @@ a script which expediates this process::
 
 Finally, we can install EMopt::
 
-    $ pip3 install emopt --user
+    $ PIP_IGNORE_INSTALLED=0 pip3 install emopt --user
 
 A few notes::
 
@@ -167,6 +168,10 @@ A few notes::
            the dependencies, we can call install_deps.py with the --upgrade flag.
     2. If you run into errors when running install_deps.py or pip3 install emopt, it is
            recommended you supply the '--version' flag.
+    3. For some reason, Debian/Ubuntu's version of pip will automatically reinstall all
+           required packages. This breaks the EMopt installation since it requires PETSc and
+           SLEPc be installed with custom configure options. For this reason, the environment
+           variable PIP_IGNORE_INSTALLED must be set to 0 before running pip install.
 
 ---------------------------------------
 Installing Remaining EMopt Dependencies

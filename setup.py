@@ -2,11 +2,6 @@ from setuptools import setup, find_packages
 from distutils.command.build import build
 import subprocess, os, sys
 
-# Ubuntu's pip defaults to ignoring already installed packages. This will cause problems since
-# PETSc needs to be installed with specific configure options and petsc4py would try to
-# reinstall it...
-os.environ['PIP_IGNORE_INSTALLED'] = '0'
-
 class RunMake(build):
     def run(self):
         # Compile C++ components of EMopt
