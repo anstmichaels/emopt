@@ -12,7 +12,7 @@ pip_args = sys.argv[1:]
 pip_cmd = [sys.executable, '-m', 'pip', 'install']
 
 # Ubuntu's pip defaults to ignoring already installed packages. we disable this
-os.environ['PIP_IGNORE_INSTALLED'] = 0
+os.environ['PIP_IGNORE_INSTALLED'] = '0'
 
 # Install (or update) PETSc. If an existing PETSc installation is detected, this will be
 # skipped
