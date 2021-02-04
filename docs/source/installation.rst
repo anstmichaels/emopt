@@ -149,9 +149,24 @@ First, we install necessary packages using ``apt-get``::
     $ sudo apt-get update
     $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev git python python3 python3-dev python3-pip python3-tk
 
-Finally, we install a few required python packages::
+Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
+a script which expediates this process::
 
-    $ install requests matplotlib numpy scipy mpi4py --user
+    $ wget https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
+    $ python3 install_deps.py --user
+
+Finally, we can install EMopt::
+
+    $ pip3 install emopt --user
+
+A few notes::
+
+    1. The install_deps.py can accept any flags that you would normally pass to pip. In this
+           example, we supplied --user to indicate that we want to install the dependencies to
+           our user account (and hence not require root priviliges). If we ever want to update
+           the dependencies, we can call install_deps.py with the --upgrade flag.
+    2. If you run into errors when running install_deps.py or pip3 install emopt, it is
+           recommended you supply the '--version' flag.
 
 ---------------------------------------
 Installing Remaining EMopt Dependencies
