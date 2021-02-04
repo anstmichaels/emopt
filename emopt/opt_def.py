@@ -307,6 +307,11 @@ class OptDef(metaclass=ABCMeta):
         """
         pass
 
+    def _calc_fom(self, sim, params):
+        # This function can be overriden to do additional behind-the-scenes post processing
+        # on the user-defined figure of merit.
+        return self.calc_fom(sim, params)
+
     @abstractmethod
     def calc_dFdx(self, sim, params):
         """Calculate the derivative of the figure of merit with respect to the
@@ -331,6 +336,11 @@ class OptDef(metaclass=ABCMeta):
         emopt.solvers.MaxwellSolver : Base class for simulators which generate :math:`x`
         """
         pass
+
+    def _calc_dFdx(self, sim, params):
+        # This function can be overriden to do additional behind-the-scenes post processing
+        # on the user-defined figure of merit
+        return self.calc_dFdx(sim, params)
 
     @abstractmethod
     def calc_grad_p(self, sim, params):
@@ -436,7 +446,7 @@ class OptDef(metaclass=ABCMeta):
         self.sim.solve_forward()
 
         # calculate the figure of merit
-        return self.calc_fom(self.sim, params)
+        return self._calc_fom(self.sim, params)
 
     def calc_gradient(self, sim, params):
         """Calculate the gradient of the figure of merit.
@@ -573,7 +583,7 @@ class OptDef(metaclass=ABCMeta):
         comm = MPI.COMM_WORLD
 
         # This should return only non-null on RANK=0
-        dFdx = self.calc_dFdx(self.sim, params)
+        dFdx = self._calc_dFdx(self.sim, params)
 
         #if(isinstance(self.sim, solvers.Maxwell2DTE)):
         dFdx = comm.bcast(dFdx, root=0)
@@ -1124,44 +1134,6 @@ class OptDefPNF2D(OptDefFM2D):
     def __init__(self, sim, step=1e-8):
         super(OptDefPNF2D, self).__init__(sim, step)
 
-    @abstractmethod
-    def calc_f(self, sim, params):
-        """Calculate the non-power-normalized figure of merit
-        :math:`f(\\mathbf{E}, \\mathbf{H})`.
-
-        Parameters
-        ----------
-        sim : emopt.solvers.MaxwellSolver
-            The FDFD simulation object.
-        params : numpy.ndarray
-            The current set of design variables
-
-        Returns
-        -------
-        float
-            The value of the non-power-normalized figure of merit.
-        """
-        pass
-
-    @abstractmethod
-    def calc_dfdx(self, sim, params):
-        """Calculate the derivative of the non-power-normalized figure of merit
-        with respect to the fields in the discretized grid.
-
-        Parameters
-        ----------
-        sim : emopt.solvers.MaxwellSolver
-            The FDFD simulation object.
-        params : numpy.ndarray
-            The current set of design variables
-
-        Returns
-        -------
-        tuple of numpy.ndarray
-            The derivative of f with respect to the fields in the form (E, H)
-        """
-        pass
-
     def calc_penalty(self, sim, params):
         """Calculate the additive contribution to the figure of merit by
         explicit functions of the design variables.
@@ -1189,7 +1161,7 @@ class OptDefPNF2D(OptDefFM2D):
         return 0.0
 
 
-    def calc_fom(self, sim, params):
+    def _calc_fom(self, sim, params):
         """Calculate the power-normalized figure of merit.
 
         Parameters
@@ -1204,7 +1176,7 @@ class OptDefPNF2D(OptDefFM2D):
         float
             The value of the power-normalized figure of merit.
         """
-        f = self.calc_f(sim, params)
+        f = self.calc_fom(sim, params)
         penalty = self.calc_penalty(sim, params)
         Psrc = sim.get_source_power()
 
@@ -1213,7 +1185,7 @@ class OptDefPNF2D(OptDefFM2D):
         else:
             return None
 
-    def calc_dFdx(self, sim, params):
+    def _calc_dFdx(self, sim, params):
         """Calculate the derivative of the power-normalized figure of merit
         with respect to the field.
 
@@ -1229,8 +1201,8 @@ class OptDefPNF2D(OptDefFM2D):
         tuple of numpy.ndarray
             The derivative of F with respect to the fields in the form (E, H)
         """
-        dfdx = self.calc_dfdx(sim, params)
-        f = self.calc_f(sim, params)
+        dfdx = self.calc_dFdx(sim, params)
+        f = self.calc_fom(sim, params)
 
         if(NOT_PARALLEL):
             if(isinstance(sim, solvers.Maxwell2DTM)):
@@ -1311,7 +1283,7 @@ class OptDefPNF2D(OptDefFM2D):
             dPdy3 = -1j*0.125 * dx * dy * H2
             dPdy4 = 1j*0.125 * dx * dy * H2
 
-            f = self.calc_f(sim, params)
+            f = self.calc_fom(sim, params)
             Ptot = sim.get_source_power()
 
             dFdy1 = -f / Ptot**2 * dPdy1
@@ -1336,7 +1308,7 @@ class OptDefPNF3D(OptDef):
         super(OptDefPNF3D, self).__init__(sim, step)
 
     @abstractmethod
-    def calc_f(self, sim, params):
+    def calc_fom(self, sim, params):
         """Calculate the non-power-normalized figure of merit
         :math:`f(\\mathbf{E}, \\mathbf{H})`.
 
@@ -1355,7 +1327,7 @@ class OptDefPNF3D(OptDef):
         pass
 
     @abstractmethod
-    def calc_dfdx(self, sim, params):
+    def calc_dFdx(self, sim, params):
         """Calculate the derivative of the non-power-normalized figure of merit
         with respect to the fields in the discretized grid.
 
@@ -1373,17 +1345,6 @@ class OptDefPNF3D(OptDef):
         """
         pass
 
-    @abstractmethod
-    def get_fom_domains(self):
-        """Retrieve the user-defined domains where the figure of merit is
-        calculated.
-
-        Returns
-        -------
-        List of emopt.misc.DomainCoordinates
-            The list of FOM domains.
-        """
-        pass
 
     def calc_penalty(self, sim, params):
         """Calculate the additive contribution to the figure of merit by
@@ -1412,7 +1373,7 @@ class OptDefPNF3D(OptDef):
         return 0.0
 
 
-    def calc_fom(self, sim, params):
+    def _calc_fom(self, sim, params):
         """Calculate the power-normalized figure of merit.
 
         Parameters
@@ -1427,7 +1388,7 @@ class OptDefPNF3D(OptDef):
         float
             The value of the power-normalized figure of merit.
         """
-        f = self.calc_f(sim, params)
+        f = self.calc_fom(sim, params)
         penalty = self.calc_penalty(sim, params)
         Psrc = sim.source_power
 
@@ -1436,7 +1397,7 @@ class OptDefPNF3D(OptDef):
         else:
             return None
 
-    def calc_dFdx(self, sim, params):
+    def _calc_dFdx(self, sim, params):
         """Calculate the derivative of the power-normalized figure of merit
         with respect to the field.
 
@@ -1452,32 +1413,22 @@ class OptDefPNF3D(OptDef):
         tuple of numpy.ndarray
             The derivative of F with respect to the fields in the form (E, H)
         """
-        fom = self.calc_f(sim, params)
-        dfdxs = self.calc_dfdx(sim, params)
-        domains = self.get_fom_domains()
+        fom = self.calc_fom(sim, params)
+        dfdxs = self.calc_dFdx(sim, params)
+        dfdxs = COMM.bcast(dfdxs, root=0)
 
-        domains = COMM.bcast(domains, root=0)
-        Nderiv = len(domains)
+        adjoint_sources = {}
+        for fom_domain, dfdx in dfdxs.items():
+            dFdEx = dfdx[0]
+            dFdEy = dfdx[1]
+            dFdEz = dfdx[2]
+            dFdHx = dfdx[3]
+            dFdHy = dfdx[4]
+            dFdHz = dfdx[5]
 
-        adjoint_sources = [[], []]
-        for i in range(Nderiv):
-            if(NOT_PARALLEL):
-                dfdx = dfdxs[i]
-                dFdEx = dfdx[0]
-                dFdEy = dfdx[1]
-                dFdEz = dfdx[2]
-                dFdHx = dfdx[3]
-                dFdHy = dfdx[4]
-                dFdHz = dfdx[5]
-            else:
-                dFdEx = None; dFdEy = None; dFdEz = None
-                dFdHx = None; dFdHy = None; dFdHz = None
-
-            fom_domain = domains[i]
             a_src = fomutils.power_norm_dFdx_3D(sim, fom,
-                                                self.fom_domain,
+                                                fom_domain,
                                                 dFdEx, dFdEy, dFdEz,
                                                 dFdHx, dFdHy, dFdHz)
-            adjoint_sources = [adjoint_sources[0]+a_src[0],
-                               adjoint_sources[1]+a_src[1]]
+            adjoint_sources.update(a_src)
         return adjoint_sources

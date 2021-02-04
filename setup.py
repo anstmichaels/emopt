@@ -2,33 +2,6 @@ from setuptools import setup, find_packages
 from distutils.command.build import build
 import subprocess, os, sys
 
-# EMopt depends on the PETSc and SLEPc libraries. These can be installed through pip
-# however not quite automatically. Here, we manually pip install the petsc and slepc
-# packages in required way.
-try:
-    import petsc4py
-except:
-    if('PETSC_DIR' not in os.environ or 'PETSC_ARCH' not in os.environ):
-        os.environ['PETSC_CONFIGURE_OPTIONS'] = "--with-scalar-type=complex " \
-                                                            "--with-mpi=1 " \
-                                                            "--COPTFLAGS='-O3' " \
-                                                            "--FOPTFLAGS='-O3' " \
-                                                            "--CXXOPTFLAGS='-O3' " \
-                                                            "--with-debugging=0 " \
-                                                            "--download-scalapack " \
-                                                            "--download-mumps " \
-                                                            "--download-openblas"
-        if('numpy' not in sys.modules):
-            subprocess.call(['pip3', 'install', 'numpy'])
-
-        subprocess.call(['pip3', 'install', 'petsc', '--no-binary', ':all:'])
-
-try:
-    import slepc4py
-except:
-    if('SLEPC_DIR' not in os.environ):
-        subprocess.call(['pip3', 'install', 'slepc', '--no-binary', ':all:'])
-
 class RunMake(build):
     def run(self):
         # Compile C++ components of EMopt

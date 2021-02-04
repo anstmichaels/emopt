@@ -9,6 +9,10 @@ consult the following directions for updating old code:
 4. Change emopt.fdfd.FDFD_TE -> emopt.solvers.Maxwell2DTE
 5. Change emopt.fdfd.FDFD_TM -> emopt.solvers.Maxwell2DTM
 6. Change emopt.fdtd.FDTD -> emopt.solvers.Maxwell3D
+7. Change emopt.adjoint_method.* -> emopt.opt_def.*
+8. Change AdjointMethod* -> OptDef*
+9. Change AdjointMethodPNF2D(3D).calc_f -> OptDefPNF2D(3D).calc_fom
+10. Change AdjointMethodPNF2D(2D).calc_dfdx -> OptDefPNF2D(3D).calc_dFdx
 
 A detailed list of the updates in this version follow:
 
@@ -23,7 +27,18 @@ emopt.geometry.
 
 3. Significant performance improvement in grid calculations involving many Polygons.
 
-4. Overhaul of Polygon implementation.
+4. Overhaul of Polygon implementation...
+
+5. Implementation of ParameterizedPolygon...
+
+6. Renamed adjoint_method to opt_def and AdjointMethod classes to OptDef...
+
+7. Modified return type of OptDef.calc_dFdx function and enforced consistency across all
+OptDef uses (for 2D and 3D problems).
+
+8. OptDefPNF2D and OptDefPNF3D (formally AdjointMethodPNF) no longer require defining calc_f
+and calc_dfdx. Instead, define calc_fom and calc_dFdx as you would in the OptDef base class.
+This consistency will be enforced throughout all derivatives of OptDef.
 
 
 Released on May 6, 2019

@@ -54,25 +54,39 @@ equipped with the ability to compile c++ source using a makefile.
 Installing C/C++ Prerequisites
 ==============================
 
-The easiest way to install the EMopt dependencies is using the install.py script
-which is included EMopt. Before running this script, however, we need to do a little
-prep work. This preparation will varying depending on the linux distribution or (OS
-X) you are using, however, the process is the same. Below we include instructions for
-CentOS 7, Fedora 28, and Ubuntu 18.04.
+Before installing EMopt, a number of packages need to be installed. One Linux systems, this is
+accomplished through your system's package manager. This portion of the installation has been
+tested on RedHat8, CentOS 7, CentOS 8, Fedora 33, Ubuntu 18.04, and 20.04, and archlinux. If
+using a linux distribution not listed, the process should be very similar.
 
-The general flow is as follows:
+If running on Windows, you can install EMopt in the Windows Subsystem for Linux (WSL).
 
-1. Install development tools (gcc, gcc-c++, etc)
-2. Intall openmpi and openmpi (or mpich) development libraries
-3. Install python, pip, and tkinter
-4. Install python libraries through pip: requests, matplotlib, numpy, scipy
-5. (Depending on distribution) Load openmpi (or mpich) module
-6. Compile and install the remaining dependencies using install.py (included with emopt)
+----------------------
+Installing on Redhat 8
+----------------------
 
-In some situations you may wish to manually install some or all of the EMopt
-dependencies. If this is the case, see the :ref:`manual installation
-instructions<installation_instructions_manual>` for help on how to compile and
-install the different dependencies.
+First, we need to install development tools so that we can compile the required
+packages as well as openmpi, python, and tkinter::
+
+    $ sudo yum groupinstall "Development Tools"
+    $ sudo yum install openmpi openmpi-devel python3-pip python3-devel python3-tkinter python2
+
+
+Once OpenMPI is installed, we need to load the appropriate module::
+
+    $ . /etc/profile # make the module command accessible 
+    $ module load mpi/openmpi-x86_64
+
+If you use mpich instead, then you will need to choose the appropriate module name.
+If you reboot, you will need to load it again unless you add this line to your
+``.bashrc`` file (or equivalent).
+
+Finally, we need to install some required python packages::
+
+    $ pip install requests matplotlib numpy scipy mpi4py --user
+
+NOTE: pip appears to work differently on Redhat. --user is passed on to pip installs within
+setup.py
 
 ----------------------
 Installing on CentOS 7
@@ -132,7 +146,8 @@ Installing on Ubuntu 18.04
 
 First, we install necessary packages using ``apt-get``::
 
-    $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev python python-dev python-pip git python-tk
+    $ sudo apt-get update
+    $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev git python python3 python3-dev python3-pip python3-tk
 
 Finally, we install a few required python packages::
 

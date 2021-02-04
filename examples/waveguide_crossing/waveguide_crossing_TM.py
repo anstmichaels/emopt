@@ -37,11 +37,11 @@ change 8 to the desired number of cores.
 """
 import emopt
 from emopt.misc import NOT_PARALLEL, RANK, run_on_master
-from emopt.adjoint_method import AdjointMethodPNF2D
+from emopt.opt_def import OptDefPNF2D
 
 import numpy as np
 
-class WGCrossAM_TM(AdjointMethodPNF2D):
+class WGCrossAM_TM(OptDefPNF2D):
     """Define an adjoint method class which calculates the figure of merit and
     its gradient for the waveguide crossing structure.
 
@@ -62,23 +62,23 @@ class WGCrossAM_TM(AdjointMethodPNF2D):
     structure.
 
     In emopt, the implementation of these functions is handled by extending a
-    base AdjointMethod class and implementing the required abstract methods.
-    There are a number of AdjointMethod classes to choose from (for 2D problems):
+    base OptDef class and implementing the required abstract methods.
+    There are a number of OptDef classes to choose from (for 2D problems):
 
-        1) AdjointMethod : This is the simplest and should be used when your
+        1) OptDef : This is the simplest and should be used when your
         merit function is independent of the materials of the system and does
         not require power normalization.
-        2) AdjointMethodPNF2D : This is for figures of merit which have source
+        2) OptDefPNF2D : This is for figures of merit which have source
         power normalization.
-        3) AdjointMethodFM2D : This is for figures of merit which depend on the
+        3) OptDefFM2D : This is for figures of merit which depend on the
         materials of the system
-        4) AdjointMethodMO : This provides a simple way of combining multiple
-        AdjointMethods to allow for optimizations of figures of merit which
+        4) OptDefMO : This provides a simple way of combining multiple
+        OptDefs to allow for optimizations of figures of merit which
         combine multiple objective functions (e.g. optimizing over multiple
         wavelengths, etc)
 
     It is highly recommended that you read the documentation for the
-    AdjointMethod class and the relevant subclasses.
+    OptDef class and the relevant subclasses.
     """
 
     def __init__(self, sim, crossing_x, crossing_y, h_wg, mode_match, line_fom, step=1e-8):
@@ -133,7 +133,7 @@ class WGCrossAM_TM(AdjointMethodPNF2D):
         self.crossing_y.set_points(ys, xs)
 
     @run_on_master
-    def calc_f(self, sim, params):
+    def calc_fom(self, sim, params):
         """Calculate the figure of merit.
 
         The figure of merit for our crossing optimization is the
@@ -148,7 +148,7 @@ class WGCrossAM_TM(AdjointMethodPNF2D):
         multiply the mode match by -1 in order to ensure that it is actually
         maximized.
 
-        See AdjointMethodPNF's documentation for details about implementing
+        See OptDefPNF's documentation for details about implementing
         this function.
 
         Note: because emopt is built on top of MPI, this function is called on
@@ -175,7 +175,7 @@ class WGCrossAM_TM(AdjointMethodPNF2D):
         return fom
 
     @run_on_master
-    def calc_dfdx(self, sim, params):
+    def calc_dFdx(self, sim, params):
         """Calculate the derivative of the figure of merit with respecto the
         fields.
 
@@ -224,7 +224,7 @@ class WGCrossAM_TM(AdjointMethodPNF2D):
         """Out figure of merit contains no additional non-field dependence on
         the design variables so we just return zeros here.
 
-        See the AdjointMethod documentation for the mathematical details of
+        See the OptDef documentation for the mathematical details of
         grad y and to learn more about its use case.
         """
         return np.zeros(params.shape)
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     n_eff = 2.85 # Precomputed. We could use the mode solver to do this too
 
     # set a background permittivity containing the cladding material (SiO2)
-    eps_background = emopt.grid.Rectangle(X/2, Y/2, 2*X, Y)
+    eps_background = emopt.geometry.Rectangle(X/2, Y/2, 2*X, Y)
     eps_background.layer = 2
     eps_background.material_value = eps_clad
 
@@ -313,7 +313,6 @@ if __name__ == '__main__':
     # "closed" meaning the first point must be added again at the very end. Not
     # following this convention can result in very unexpected consequences,
     # especially when running an optimization.
-    crossing_x = emopt.grid.Polygon()
 
     # define the x coordinates
     xs = np.array([-w_in, w_in, w_in + L_taper])
@@ -329,7 +328,7 @@ if __name__ == '__main__':
     ys += Y/2.0
 
     # assemble the polygon
-    crossing_x.set_points(xs, ys)
+    crossing_x = emopt.geometry.Polygon(xs, ys)
     crossing_x.layer = 1
     crossing_x.material_value = n_eff**2
 
@@ -345,9 +344,7 @@ if __name__ == '__main__':
     xs += Y/2.0
     ys += X/2.0
 
-    crossing_y = emopt.grid.Polygon()
-
-    crossing_y.set_points(ys, xs)
+    crossing_y = emopt.geometry.Polygon(xs, ys)
     crossing_y.layer = 1
     crossing_y.material_value = n_eff**2
 

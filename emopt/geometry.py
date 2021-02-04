@@ -178,9 +178,6 @@ class Polygon(MaterialPrimitive):
     def set_point(self, index, x, y):
         libGrid.Polygon_set_point(self._object, x, y, index)
 
-        self._xs[index] = x
-        self._ys[index] = y
-
     def set_material(self, mat):
         warning_message('set_material(...) is deprecated. Use property ' \
                         'mypoly.material_value=... instead.', 'emopt.grid')

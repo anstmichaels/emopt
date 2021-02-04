@@ -35,11 +35,11 @@ spacing than the FDFD example.
 
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
-from emopt.adjoint_method import AdjointMethodPNF3D
+from emopt.opt_def import OptDefPNF3D
 
 import numpy as np
 
-class MMISplitterAdjointMethod(AdjointMethodPNF3D):
+class MMISplitterOptDef(OptDefPNF3D):
     """Define a figure of merit and its derivative for adjoint sensitivity
     analysis.
 
@@ -52,7 +52,7 @@ class MMISplitterAdjointMethod(AdjointMethodPNF3D):
     """
 
     def __init__(self, sim, mmi, fom_domain, mode_match):
-        super(MMISplitterAdjointMethod, self).__init__(sim, step=1e-5)
+        super(MMISplitterOptDef, self).__init__(sim, step=1e-5)
         self.mmi = mmi
         self.mode_match = mode_match
         self.fom_domain = fom_domain
@@ -71,7 +71,7 @@ class MMISplitterAdjointMethod(AdjointMethodPNF3D):
         self.mmi.width = params[1]
 
     @run_on_master
-    def calc_f(self, sim, params):
+    def calc_fom(self, sim, params):
         """Calculate the figure of merit.
 
         The FOM is the mode overlap between the simulated fields and the
@@ -85,12 +85,12 @@ class MMISplitterAdjointMethod(AdjointMethodPNF3D):
         return fom
 
     @run_on_master
-    def calc_dfdx(self, sim, params):
+    def calc_dFdx(self, sim, params):
         """Calculate the figure of merit with respect to E and H.
 
         Note: our function is normalized with respect to the total source
         power and our derivative needs to account for this`*`. Currently,
-        AdjointMethodPNF does not handle 3D simulations. For now, instead use
+        OptDefPNF does not handle 3D simulations. For now, instead use
         emopt.fomutils.power_norm_dFdx_3D directly.
 
         `*` One might think that no power should couple back into the source.
@@ -99,6 +99,9 @@ class MMISplitterAdjointMethod(AdjointMethodPNF3D):
         the source power.
         """
         Psrc = sim.source_power
+        Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[0]
+
+        self.mode_match.compute(Ex, Ey, Ez, Hx, Hy, Hz)
 
         dfdEx = -1*self.mode_match.get_dFdEx()
         dfdEy = -1*self.mode_match.get_dFdEy()
@@ -107,13 +110,10 @@ class MMISplitterAdjointMethod(AdjointMethodPNF3D):
         dfdHy = -1*self.mode_match.get_dFdHy()
         dfdHz = -1*self.mode_match.get_dFdHz()
 
-        return [(dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)]
+        derivatives = {}
+        derivatives[self.fom_domain] = (dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
 
-    def get_fom_domains(self):
-        """We must return the DomainCoordinates object that corresponds to our
-        figure of merit. In theory, we could have many of these.
-        """
-        return [self.fom_domain]
+        return derivatives
 
     def calc_grad_p(self, sim, params):
         """Our FOM does not depend explicitly on the design parameters so we
@@ -238,11 +238,11 @@ mode_match = emopt.fomutils.ModeMatch([1,0,0], dy, dz, Exm, Eym, Ezm,
                                       Hxm, Hym, Hzm)
 
 #####################################################################################
-# Setup the AdjointMethod object needed for gradient calculations
+# Setup the OptDef object needed for gradient calculations
 #####################################################################################
 sim.field_domains = [fom_slice]
 
-am = MMISplitterAdjointMethod(sim, mmi, fom_slice, mode_match)
+am = MMISplitterOptDef(sim, mmi, fom_slice, mode_match)
 params = np.array([w_mmi, L_mmi])
 
 am.check_gradient(params)

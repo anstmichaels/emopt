@@ -1689,12 +1689,14 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
 
     adj_sources = []
     adj_domains = []
+    dFdx = {}
 
+    # Account for interpolation and add provided derivatives to dFdx
     if(NOT_PARALLEL):
         dfdEH = interpolated_dFdx_3D(sim, domain,
                                      dfdEx/Psrc, dfdEy/Psrc, dfdEz/Psrc,
                                      dfdHx/Psrc, dfdHy/Psrc, dfdHz/Psrc)
-        adj_sources.append(dfdEH[1:]); adj_domains.append(dfdEH[0])
+        dFdx[dfdEH[0]] = dfdEH[1:]
 
     # setup the domains that are needed to get the power flux
     w_pml = sim.w_pml
@@ -1757,7 +1759,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         dPdEH = interpolated_dFdx_3D(sim, x1, dPdEx, dPdEy, dPdEz,
                                      dPdHx, dPdHy, dPdHz)
 
-        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+        dFdx[dPdEH[0]] = dPdEH[1:]
 
     # clean up
     del Ey; del Ez; del Hy; del Hz
@@ -1787,7 +1789,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         dPdEH = interpolated_dFdx_3D(sim, x2, dPdEx, dPdEy, dPdEz,
                                      dPdHx, dPdHy, dPdHz)
 
-        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+        dFdx[dPdEH[0]] = dPdEH[1:]
 
     # clean up
     del Ey; del Ez; del Hy; del Hz
@@ -1817,7 +1819,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         dPdEH = interpolated_dFdx_3D(sim, y1, dPdEx, dPdEy, dPdEz,
                                      dPdHx, dPdHy, dPdHz)
 
-        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+        dFdx[dPdEH[0]] = dPdEH[1:]
 
     # clean up
     del Ex; del Ez; del Hx; del Hz
@@ -1847,7 +1849,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         dPdEH = interpolated_dFdx_3D(sim, y2, dPdEx, dPdEy, dPdEz,
                                      dPdHx, dPdHy, dPdHz)
 
-        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+        dFdx[dPdEH[0]] = dPdEH[1:]
 
     # clean up
     del Ex; del Ez; del Hx; del Hz
@@ -1877,7 +1879,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         dPdEH = interpolated_dFdx_3D(sim, z1, dPdEx, dPdEy, dPdEz,
                                      dPdHx, dPdHy, dPdHz)
 
-        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+        dFdx[dPdEH[0]] = dPdEH[1:]
 
     # clean up
     del Ex; del Ey; del Hx; del Hy
@@ -1907,12 +1909,12 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
         dPdEH = interpolated_dFdx_3D(sim, z2, dPdEx, dPdEy, dPdEz,
                                      dPdHx, dPdHy, dPdHz)
 
-        adj_sources.append(dPdEH[1:]); adj_domains.append(dPdEH[0])
+        dFdx[dPdEH[0]] = dPdEH[1:]
 
     # clean up
     del Ex; del Ey; del Hx; del Hy
 
-    return [adj_sources, adj_domains]
+    return dFdx
 
 # TODO: Remove this?
 def power_norm_dFdx(sim, f, dfdA1, dfdA2, dfdA3):

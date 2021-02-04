@@ -800,7 +800,7 @@ class Maxwell3D(MaxwellSolver):
         self.clear_adjoint_sources()
 
         # add the new sources
-        for dFdx, domain in zip(src[0], src[1]):
+        for domain, dFdx in src.items():
             self.add_adjoint_sources(dFdx, domain)
 
     def add_adjoint_sources(self, src, domain):
