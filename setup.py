@@ -1,12 +1,12 @@
 from setuptools import setup, find_packages
-from distutils.command.build import build
+from setuptools.command.install import install
 import subprocess, os, sys
 
-class RunMake(build):
+class RunMake(install):
     def run(self):
         # Compile C++ components of EMopt
         subprocess.call(['make'])
-        build.run(self)
+        install.run(self)
 
 def get_version_number():
     base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -28,6 +28,6 @@ setup(name='emopt',
       packages=find_packages(),
       package_data={'emopt':['*.so', '*.csv', 'data/*', 'solvers/*.so']},
       include_package_data=True,
-      cmdclass={'build':RunMake},
+      cmdclass={'install':RunMake},
       install_requires=['numpy', 'scipy', 'matplotlib', 'mpi4py', 'petsc4py', 'slepc4py'],
       zip_safe=False)

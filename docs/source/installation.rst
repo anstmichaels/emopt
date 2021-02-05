@@ -50,9 +50,9 @@ provided useful functionality which is leveraged within some of EMopt's modules
 In addition to these specific packages, your system must be 
 equipped with the ability to compile c++ source using a makefile.
 
-==============================
-Installing C/C++ Prerequisites
-==============================
+=====================================
+Installing EMopt and its Dependencies
+=====================================
 
 Before installing EMopt, a number of packages need to be installed. One Linux systems, this is
 accomplished through your system's package manager. This portion of the installation has been
@@ -60,33 +60,6 @@ tested on RedHat8, CentOS 7, CentOS 8, Fedora 33, Ubuntu 18.04, and 20.04, and a
 using a linux distribution not listed, the process should be very similar.
 
 If running on Windows, you can install EMopt in the Windows Subsystem for Linux (WSL).
-
-----------------------
-Installing on Redhat 8
-----------------------
-
-First, we need to install development tools so that we can compile the required
-packages as well as openmpi, python, and tkinter::
-
-    $ sudo yum groupinstall "Development Tools"
-    $ sudo yum install openmpi openmpi-devel python3-pip python3-devel python3-tkinter python2
-
-
-Once OpenMPI is installed, we need to load the appropriate module::
-
-    $ . /etc/profile # make the module command accessible 
-    $ module load mpi/openmpi-x86_64
-
-If you use mpich instead, then you will need to choose the appropriate module name.
-If you reboot, you will need to load it again unless you add this line to your
-``.bashrc`` file (or equivalent).
-
-Finally, we need to install some required python packages::
-
-    $ pip install requests matplotlib numpy scipy mpi4py --user
-
-NOTE: pip appears to work differently on Redhat. --user is passed on to pip installs within
-setup.py
 
 ----------------------
 Installing on CentOS 7
@@ -101,20 +74,39 @@ Next, we need to install development tools so that we can compile the required
 packages as well as openmpi, python, and tkinter::
 
     $ sudo yum groupinstall "Development Tools"
-    $ sudo yum install openmpi openmpi-devel python-pip python-devel tkinter
+    $ sudo yum install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
+      python3-tkinter eigen3-devel boost-devel
+    $ sudo ln -s /usr/include/boost169/boost/ /usr/include/boost
 
 Once OpenMPI is installed, we need to load the appropriate module::
 
+    $ . /etc/profile
     $ module load mpi/openmpi-x86_64
 
 If you use mpich instead, then you will need to choose the appropriate module name.
 If you reboot, you will need to load it again unless you add this line to your
 ``.bashrc`` file (or equivalent).
 
-Finally, we need to install some required python packages::
+Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
+a script which expediates this process::
 
-    $ pip install requests matplotlib numpy scipy mpi4py --user
+    $ curl -O https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
+    $ python3 install_deps.py --user
 
+Finally, we can install EMopt::
+
+    $ pip3 install emopt --user
+
+Once this completes, EMopt should be installed and ready to go!
+
+A few notes::
+
+    1. The install_deps.py can accept any flags that you would normally pass to pip. In this
+           example, we supplied --user to indicate that we want to install the dependencies to
+           our user account (and hence not require root priviliges). If we ever want to update
+           the dependencies, we can call install_deps.py with the --upgrade flag.
+    2. If you run into errors when running install_deps.py or pip3 install emopt, it is
+           recommended you supply the '--version' flag.
 
 -----------------------
 Installing on Fedora 28
@@ -153,12 +145,14 @@ First, we install necessary packages using ``apt-get``::
 Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
 a script which expediates this process::
 
-    $ wget https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
+    $ curl -O https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
     $ python3 install_deps.py --user
 
 Finally, we can install EMopt::
 
     $ PIP_IGNORE_INSTALLED=0 pip3 install emopt --user
+
+Once this completes, EMopt should be installed and ready to go!
 
 A few notes::
 
@@ -198,42 +192,6 @@ under ``~/.emopt``. If the script fails, check the terminal output and ``install
 for errors. Most likely, failure will result from not having the appropriate packages
 installed.
 
-================
-Installing EMopt
-================
-
-Once the dependencies are installed, we are ready to install EMopt. If you installed
-the dependencies using the install.py as described in the previous section, you can
-go ahead and run the setup.py script::
-
-    $ python setup.py install --user
-
-Assuming this completes without error, you should be all set and ready to go!
-
-In some scenarios, you may have installed the EMopt dependencies manually. In this
-case, you need to create a file call ``~/.emopt_deps`` which contains the following
-contents::
-
-    EIGEN_DIR=/path/to/eigen/includes
-    BOOST_DIR=/path/to/boost/includes
-    PETSC_DIR=/path/to/petsc/installation
-    SLEPC_DIR=/path/to/slepc/installation
-
-For example, if you have made these dependencies available system wide by installing
-them in the ``/opt`` folder, your ``~/.emopt_deps`` file might look like the
-following::
-
-    EIGEN_DIR=/opt/include
-    BOOST_DIR=/opt/include
-    PETSC_DIR=/opt/petsc/petsc-3.8.0
-    SLEPC_DIR=/opt/slepc/slepc-3.8.1
-
-After this file has been created, you should be ready to run the EMopt setup.py
-script as described above.
-
-To learn how to use EMopt, head over to the :ref:`tutorials
-section<tutorials_main>` section.
-
 ======================
 A Note on MPI + OpenMP
 ======================
@@ -256,3 +214,6 @@ or::
 
 If running on a network/cluster, increasing the number of threads used by OpenMP
 should be fine.
+
+To learn how to use EMopt, head over to the :ref:`tutorials
+section<tutorials_main>` section.
