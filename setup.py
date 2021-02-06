@@ -5,6 +5,13 @@ import subprocess, os, sys
 class RunMake(install):
     def run(self):
         # Compile C++ components of EMopt
+        # First check if Eigen is installed. If it isn't, we will just download it since it
+        # is a header-only library
+        if(not os.path.exists('/usr/include/eigen3')):
+            EIGEN_VERSION = '3.3.9'
+            call(['git', 'clone', '--branch', EIGEN_VERSION, 'https://gitlab.com/libeigen/eigen.git'])
+            shutil.copytree('eigen/Eigen', 'src/Eigen')
+            
         subprocess.call(['make'])
         install.run(self)
 
