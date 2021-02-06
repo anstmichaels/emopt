@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 from setuptools.command.install import install
-import subprocess, os, sys
+import subprocess, os, sys, shutil
 
 class RunMake(install):
     def run(self):

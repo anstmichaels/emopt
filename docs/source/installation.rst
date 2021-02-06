@@ -62,6 +62,50 @@ using a linux distribution not listed, the process should be very similar.
 If running on Windows, you can install EMopt in the Windows Subsystem for Linux (WSL).
 
 ----------------------
+Installing on CentOS 8
+----------------------
+
+First, we need to install dependencies through the package manager in order to compile and
+run emopt::
+
+    $ sudo dnf groupinstall "Development Tools"
+    $ sudo dnf install epel-release
+    $ sudo dnf install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
+      python3-tkinter eigen3-devel boost169-devel
+
+Once OpenMPI is installed, we need to load the appropriate module::
+
+    $ source /etc/profile.d/module.sh
+    $ module load mpi/openmpi-x86_64
+
+If you use mpich instead, then you will need to choose the appropriate module name.
+If you reboot, you will need to load it again unless you add this line to your
+``.bashrc`` file (or equivalent).
+
+Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
+a script which expediates this process::
+
+    $ curl -O https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
+    $ python3 install_deps.py --user
+
+Finally, we can install EMopt::
+
+    $ pip3 install emopt --user
+
+Once this completes, EMopt should be installed and ready to go!
+
+A few notes::
+
+    1. The install_deps.py can accept any flags that you would normally pass to pip. In this
+           example, we supplied --user to indicate that we want to install the dependencies to
+           our user account (and hence not require root priviliges). If we ever want to update
+           the dependencies, we can call install_deps.py with the --upgrade flag.
+    2. If you run into errors when running install_deps.py or pip3 install emopt, it is
+           recommended you supply the '--version' flag.
+
+
+
+----------------------
 Installing on CentOS 7
 ----------------------
 
@@ -75,7 +119,7 @@ packages as well as openmpi, python, and tkinter::
 
     $ sudo yum groupinstall "Development Tools"
     $ sudo yum install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
-      python3-tkinter eigen3-devel boost-devel
+      python3-tkinter eigen3-devel boost169-devel
     $ sudo ln -s /usr/include/boost169/boost/ /usr/include/boost
 
 Once OpenMPI is installed, we need to load the appropriate module::
