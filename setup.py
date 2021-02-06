@@ -9,7 +9,7 @@ class RunMake(install):
         # is a header-only library
         if(not os.path.exists('/usr/include/eigen3')):
             EIGEN_VERSION = '3.3.9'
-            call(['git', 'clone', '--branch', EIGEN_VERSION, 'https://gitlab.com/libeigen/eigen.git'])
+            subprocess.call(['git', 'clone', '--branch', EIGEN_VERSION, 'https://gitlab.com/libeigen/eigen.git'])
             shutil.copytree('eigen/Eigen', 'src/Eigen')
             
         subprocess.call(['make'])
