@@ -24,8 +24,7 @@ if('PETSC_DIR' not in os.environ or 'PETSC_ARCH' not in os.environ):
                                                         "--CXXOPTFLAGS='-O3' " \
                                                         "--with-debugging=0 " \
                                                         "--download-scalapack " \
-                                                        "--download-mumps " \
-                                                        "--download-openblas"
+                                                        "--download-mumps "
     subprocess.call(pip_cmd + ['numpy'] + pip_args)
     subprocess.call(pip_cmd + ['petsc', 'petsc4py', '--no-binary', 'petsc'] + pip_args)
     subprocess.call(pip_cmd + ['petsc4py'] + pip_args)

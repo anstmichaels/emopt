@@ -70,6 +70,7 @@ First, we install necessary packages using ``apt-get``::
     $ sudo apt-get update
     $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev libeigen3-dev \
                            libboost-dev git python python3 python3-dev python3-pip python3-tk
+                           libopenblas-dev
 
 Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
 a script which expediates this process::
@@ -110,7 +111,7 @@ packages as well as openmpi, python, and tkinter::
 
     $ sudo yum groupinstall "Development Tools"
     $ sudo yum install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
-      python3-tkinter eigen3-devel boost169-devel
+      python3-tkinter eigen3-devel boost169-devel openblas-devel
 
 Once OpenMPI is installed, we need to load the appropriate module::
 
@@ -147,9 +148,9 @@ A few notes::
 
 
 
-----------------------
-Installing on CentOS 8
-----------------------
+-------------------------------
+Installing on CentOS 8 / RHEL 8
+-------------------------------
 
 .. warning::
     At this time, emopt may fail to build on CentOS 8. If you have trouble getting emopt
@@ -159,9 +160,9 @@ First, we need to install dependencies through the package manager in order to c
 run emopt::
 
     $ sudo dnf groupinstall "Development Tools"
-    $ sudo dnf install epel-release
+    $ sudo dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
     $ sudo dnf install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
-      python3-tkinter eigen3-devel boost169-devel
+      python3-tkinter eigen3-devel boost169-devel openblas-devel
 
 Once OpenMPI is installed, we need to load the appropriate module::
 
@@ -194,29 +195,36 @@ A few notes::
            recommended you supply the '--version' flag.
 
 -----------------------
-Installing on Fedora 28
+Installing on Fedora 33
 -----------------------
 
 First we need to install development tools (gcc, g++) so that we can compile the
 required packages as well as openmpi, python, and tkinter::
 
-    $ sudo yum groupinstall "Development Tools"
-    $ sudo yum install gcc gcc-c++ openmpi openmpi-devel python-pip python-devel python2-tkinter
+    $ sudo dnf groupinstall "Development Tools"
+    $ sudo dnf install gcc gcc-c++ openmpi openmpi-devel python2 python3 python3-pip \
+        python3-devel python3-tkinter eigen3-devel boost-devel
 
 In order to use OpenMPI, we need to load the corresponding module::
 
+    $ . /etc/profile
     $ module load mpi/openmpi-x86_64   
 
 If you use mpich instead, then you will need to choose the appropriate module name.
 If you reboot, you will need to load it again unless you add this line to your
 ``.bashrc`` file (or equivalent).
 
-Finally, we need to install a few python prerequisites (technically a few of these
-should be installed by emopt's installation script, but we install them manually just
-to be safe)::
+Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
+a script which expediates this process::
 
-    $ pip install requests matplotlib numpy scipy mpi4py --user
+    $ curl -O https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
+    $ python3 install_deps.py --user
 
+Finally, we can install EMopt::
+
+    $ pip3 install emopt --user
+
+Once this completes, EMopt should be installed and ready to go!
 
 ======================
 A Note on MPI + OpenMP
