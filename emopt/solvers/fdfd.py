@@ -101,7 +101,7 @@ class Maxwell2D(MaxwellSolver, metaclass=ABCMeta):
         Build the system matrix :math:`A`.
     update(self)
         Update the system matrix :math:`A`
-    set_sources(self, src)
+    set_sources(self, src, mindex=0)
         Set the discretized current sources used in the forward simulation.
     set_adjoint_sources(self, src)
         Set the discretized current sources used in the adjoint simulation.
@@ -595,12 +595,14 @@ class Maxwell2DTE(Maxwell2D):
         self._eps = eps
         self._mu = mu
 
-    def set_sources(self, src, src_domain=None, mindex=0):
+    def set_sources(self, srcs, mindex=0):
         """Set the sources of the system used in the forward solve.
 
-        The sources can be defined either using three numpy arrays or using a
-        mode source. When using a mode source, the corresponding current
-        density arrays will be automatically generated and extracted.
+        The sources are defined using a dictionary. The keys of the dictionary contain the
+        DomainCoordinates which specify the positions of the sources in the simulation. The
+        corresponding values of the dictionary can be either an Iterable (e.g. tuple, list) of
+        three arrays whose shape matches the DomainCoordinate's shape or alternatively a Mode1DTE
+        object. In the latter case, the source arrays are extracted from the Mode solver.
 
         Notes
         -----
@@ -611,59 +613,38 @@ class Maxwell2DTE(Maxwell2D):
         shifted in the negative x direction by half of a grid cell.  It is
         important to take this into account when defining the current sources.
 
-        Todo
-        ----
-        1. Implement a more user-friendly version of these sources (so that you do
-        not need to deal with the Yee cell implementation).
-
-        2. Implement this in a better parallelized way
-
         Parameters
         ----------
-        src : tuple of numpy.ndarray or modes.Mode1DTE
-            (Option 1) The current sources in the form (Jz, Mx, My).  Each array in the
-            tuple should be a 2D numpy.ndarry with dimensions MxN.
-            (Option 2), a mode source which has been built and solved.
-        src_domain : emopt.misc.DomainCoordinates (optional)
-            Specifies the location of the provided current source distribution
-            or mode source. If None, it is assumed that source arrays have been
-            provided and those source arrays span the whole simulation region
-            (i.e. have size MxN)
+        srcs : dict
+            (Option 1) The current sources in the form {DomainCoordinates : (Jz, Mx, My), ...}.
+            Each array in the tuple should be a 2D numpy.ndarry with dimensions which match the
+            shape of the DomainCoordinates which defines where in the simulation the sources
+            are placed.
+            (Option 2), A set of Mode sources in the form
+            {DomainCoordinates : Mode1DTE}
+
         mindx : int (optional)
             Specifies the index of the mode source (only used if a mode source
             is passed in as src)
         """
-        if(isinstance(src, modes.Mode1DTE)):
-            Jz = np.zeros((self._M, self._N), dtype=np.complex128)
-            Mx = np.zeros((self._M, self._N), dtype=np.complex128)
-            My = np.zeros((self._M, self._N), dtype=np.complex128)
+        Jz = np.zeros((self._M, self._N), dtype=np.complex128)
+        Mx = np.zeros((self._M, self._N), dtype=np.complex128)
+        My = np.zeros((self._M, self._N), dtype=np.complex128)
 
-            msrc = src.get_source(mindex, self._dx, self._dy)
+        for domain, src in srcs.items():
+            if(isinstance(src, modes.Mode1DTE)):
+                msrc = src.get_source(mindex, self._dx, self._dy)
+                Jz[domain.j, domain.k] = msrc[0]
+                Mx[domain.j, domain.k] = msrc[1]
+                My[domain.j, domain.k] = msrc[2]
+            else:
+                Jz[domain.j, domain.k] = arrs[0]
+                Mx[domain.j, domain.k] = arrs[1]
+                My[domain.j, domain.k] = arrs[2]
 
-            Jz[src_domain.j, src_domain.k] = msrc[0]
-            Mx[src_domain.j, src_domain.k] = msrc[1]
-            My[src_domain.j, src_domain.k] = msrc[2]
-
-            self.Jz = Jz
-            self.Mx = Mx
-            self.My = My
-
-        elif(src_domain is not None):
-            Jz = np.zeros((self._M, self._N), dtype=np.complex128)
-            Mx = np.zeros((self._M, self._N), dtype=np.complex128)
-            My = np.zeros((self._M, self._N), dtype=np.complex128)
-
-            Jz[src_domain.j, src_domain.k] = src[0]
-            Mx[src_domain.j, src_domain.k] = src[1]
-            My[src_domain.j, src_domain.k] = src[2]
-
-            self.Jz = Jz
-            self.Mx = Mx
-            self.My = My
-        else:
-            self.Jz = src[0]
-            self.Mx = src[1]
-            self.My = src[2]
+        self.Jz = Jz
+        self.Mx = Mx
+        self.My = My
 
         src_arr = np.zeros(self.Nc*self._M*self._N, dtype=np.complex128)
         src_arr[0::self.Nc] = self.Jz.ravel()
@@ -684,9 +665,18 @@ class Maxwell2DTE(Maxwell2D):
             The current sources in the form (Jz_adj, Mx_adj, My_adj).  Each array
             in the tiple should be a 2D numpy.ndarry with dimensions MxN.
         """
-        self.Jz_adj = src[0]
-        self.Mx_adj = src[1]
-        self.My_adj = src[2]
+        Jz_adj = np.zeros((self._M, self._N), dtype=np.complex128)
+        Mx_adj = np.zeros((self._M, self._N), dtype=np.complex128)
+        My_adj = np.zeros((self._M, self._N), dtype=np.complex128)
+
+        for domain, arrs in src.items():
+            Jz_adj[domain.j, domain.k] = arrs[0]
+            Mx_adj[domain.j, domain.k] = arrs[1]
+            My_adj[domain.j, domain.k] = arrs[2]
+
+        self.Jz_adj = Jz_adj
+        self.Mx_adj = Mx_adj
+        self.My_adj = My_adj
 
         src_arr = np.zeros(self.Nc*self._M*self._N, dtype=np.complex128)
         src_arr[0::self.Nc] = self.Jz_adj.ravel()
@@ -1572,12 +1562,14 @@ class Maxwell2DTM(Maxwell2DTE):
         self._eps_actual = eps
         self._mu_actual = mu
 
-    def set_sources(self, src, src_domain=None, mindex=0):
+    def set_sources(self, srcs, mindex=0):
         """Set the sources of the system used in the forward solve.
 
-        The sources can be defined either using three numpy arrays or using a
-        mode source. When using a mode source, the corresponding current
-        density arrays will be automatically generated and extracted.
+        The sources are defined using a dictionary. The keys of the dictionary contain the
+        DomainCoordinates which specify the positions of the sources in the simulation. The
+        corresponding values of the dictionary can be either an Iterable (e.g. tuple, list) of
+        three arrays whose shape matches the DomainCoordinate's shape or alternatively a Mode1DTM
+        object. In the latter case, the source arrays are extracted from the Mode solver.
 
         Notes
         -----
@@ -1588,42 +1580,30 @@ class Maxwell2DTM(Maxwell2DTE):
         shifted in the negative x direction by half of a grid cell.  It is
         important to take this into account when defining the current sources.
 
-        Todo
-        ----
-        1. Implement a more user-friendly version of these sources (so that you do
-        not need to deal with the Yee cell implementation).
-
-        2. Implement this in a better parallelized way
-
         Parameters
         ----------
-        src : tuple of numpy.ndarray or modes.Mode1DTM
-            (Option 1) The current sources in the form (Mz, Jx, Jy).  Each array in the
-            tuple should be a 2D numpy.ndarry with dimensions MxN.
-            (Option 2), a mode source which has been built and solved.
-        src_domain : emopt.misc.DomainCoordinates (optional)
-            Specifies the location of the provided current source distribution
-            or mode source. If None, it is assumed that source arrays have been
-            provided and those source arrays span the whole simulation region
-            (i.e. have size MxN)
+        srcs : dict
+            (Option 1) The current sources in the form {DomainCoordinates : (Mz, Jx, Jy), ...}.
+            Each array in the tuple should be a 2D numpy.ndarry with dimensions which match the
+            shape of the DomainCoordinates which defines where in the simulation the sources
+            are placed.
+            (Option 2), A set of Mode sources in the form
+            {DomainCoordinates : Mode1DTM}
+
         mindx : int (optional)
             Specifies the index of the mode source (only used if a mode source
             is passed in as src)
         """
-        if(isinstance(src, modes.Mode1DTM)):
-            msrc = src.get_source(mindex, self._dx, self._dy)
+        new_srcs = {}
 
-            Mz = msrc[0]
-            Jx = msrc[1]
-            Jy = msrc[2]
-        else:
-            Mz = src[0]
-            Jx = src[1]
-            Jy = src[2]
-        # In order to properly make use of the TE subclass, we need to flip the
-        # sign of Jx and Jy
-        super().set_sources((Mz, -1*Jx, -1*Jy),
-                                         src_domain, mindex)
+        for domain, src in srcs:
+            if(isinstance(src, modes.Mode1DTM)):
+                msrc = src.get_source(mindex, self._dx, self._dy)
+                new_srcs[domain] = (msrc[0], -1*msrc[1], -1*msrc[2])
+            else:
+                new_srcs[domain] = (src[0], -1*src[1], -1*src[2])
+
+        super().set_sources(new_srcs, mindex)
 
     def set_adjoint_sources(self, src):
         """Set the sources of the system used in the adjoint solve.
@@ -1637,9 +1617,14 @@ class Maxwell2DTM(Maxwell2DTE):
             The current sources in the form (Mz_adj, Jx_adj, Jy_adj).  Each array 
             in the tiple should be a 2D numpy.ndarry with dimensions MxN.
         """
-        # In order to properly make use of the TE subclass, we need to flip the
-        # sign of Jx_adj and Jy_adj
-        super().set_adjoint_sources((src[0], -1*src[1], -1*src[2]))
+        new_srcs = {}
+
+        for domain, src in srcs:
+            # In order to properly make use of the TE subclass, we need to flip the
+            # sign of Jx_adj and Jy_adj
+            new_srcs[domain] = (src[0], -1*src[1], -1*src[2])
+
+        super().set_adjoint_sources(new_srcs)
 
     def build(self):
         """(Re)Build the system matrix.

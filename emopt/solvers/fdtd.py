@@ -737,7 +737,7 @@ class Maxwell3D(MaxwellSolver):
                                 src.I, src.J, src.K,
                                 True)
 
-    def set_sources(self, src, domain, mindex=0):
+    def set_sources(self, srcs, mindex=0):
         """Set a simulation source.
 
         Simulation sources can be set either using a set of 6 arrays (Jx, Jy,
@@ -751,32 +751,35 @@ class Maxwell3D(MaxwellSolver):
 
         Parameters
         ----------
-        src : tuple or modes.Mode2D
-            The source arrays or mode object containing source data
-        domain : misc.DomainCoordinates
-            The domain which specifies where the source is located
+        srcs : dict
+            A dictionary whose keys are the DomainCoordinates specifying where sources are
+            located and whose corresponding values are either an Iterable (e.g. tuple, list) of
+            6 arrays containing the current densities Jx, Jy, Jz, Mx, My, Mz whose shapes
+            correspond to the shape of the DomainCoordinates. Alternatively, the values
+            can be Mode2D objects which will be used to generate mode sources.
         mindex : int (optional)
             The mode source index. This is only relevant if using a
             Mode2D object to set the sources. (default = 0)
         """
-        if(type(src) == Mode2D):
-            Jxs, Jys, Jzs, Mxs, Mys, Mzs = src.get_source(mindex, self._dx,
-                                                                  self._dy,
-                                                                  self._dz)
+        for domain, src in srcs.items():
+            if(type(src) == Mode2D):
+                Jxs, Jys, Jzs, Mxs, Mys, Mzs = src.get_source(mindex, self._dx,
+                                                                      self._dy,
+                                                                      self._dz)
 
-            Jxs = COMM.bcast(Jxs, root=0)
-            Jys = COMM.bcast(Jys, root=0)
-            Jzs = COMM.bcast(Jzs, root=0)
-            Mxs = COMM.bcast(Mxs, root=0)
-            Mys = COMM.bcast(Mys, root=0)
-            Mzs = COMM.bcast(Mzs, root=0)
+                Jxs = COMM.bcast(Jxs, root=0)
+                Jys = COMM.bcast(Jys, root=0)
+                Jzs = COMM.bcast(Jzs, root=0)
+                Mxs = COMM.bcast(Mxs, root=0)
+                Mys = COMM.bcast(Mys, root=0)
+                Mzs = COMM.bcast(Mzs, root=0)
 
-            src_arrays = (Jxs, Jys, Jzs, Mxs, Mys, Mzs)
-        else:
-            src_arrays = src
+                src_arrays = (Jxs, Jys, Jzs, Mxs, Mys, Mzs)
+            else:
+                src_arrays = src
 
-        self.__set_sources(src_arrays, domain, adjoint=False)
-        COMM.Barrier()
+            self.__set_sources(src_arrays, domain, adjoint=False)
+            COMM.Barrier()
 
     def set_adjoint_sources(self, src):
         """Set the adjoint sources.

@@ -59,8 +59,8 @@ Nz = sim.Nz
 #####################################################################################
 # Define the geometry/materials
 #####################################################################################
-r1 = emopt.grid.Rectangle(X/2, Y/2, 2*X, 0.5); r1.layer = 1
-r2 = emopt.grid.Rectangle(X/2, Y/2, 2*X, 2*Y); r2.layer = 2
+r1 = emopt.geometry.Rectangle(X/2, Y/2, 2*X, 0.5); r1.layer = 1
+r2 = emopt.geometry.Rectangle(X/2, Y/2, 2*X, 2*Y); r2.layer = 2
 
 r1.material_value = 3.45**2
 r2.material_value = 1.444**2

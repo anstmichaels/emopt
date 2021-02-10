@@ -5,7 +5,7 @@ ifeq ($(UNAME), Linux)
 	CC = g++
 	SHARED_FLAG = -shared
 	CXXFLAGS = -Wall -fopenmp -O3 -march=native -DNDEBUG -std=c++11
-	INCLUDES = -I/usr/include -I/usr/include/eigen3 -I/usr/include/boost169 -I../eigen
+	INCLUDES = -I/usr/include -I/usr/include/eigen3 -I../eigen
 else
 	ifeq ($(UNAME), Darwin)
 # OS X

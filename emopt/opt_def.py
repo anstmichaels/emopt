@@ -148,7 +148,7 @@ References
 ----------
 .. [1] A. Michaels and E. Yablonovitch, "Leveraging continuous material averaging for inverse electromagnetic design," Opt. Express 26, 31717-31737 (2018)
 """
-from .misc import info_message, warning_message, RANK, NOT_PARALLEL, N_PROC, COMM
+from .misc import info_message, warning_message, RANK, NOT_PARALLEL, N_PROC, COMM, DomainCoordinates
 from . import fomutils
 from . import solvers
 
@@ -1204,25 +1204,37 @@ class OptDefPNF2D(OptDefFM2D):
         dfdx = self.calc_dFdx(sim, params)
         f = self.calc_fom(sim, params)
 
+        full_domain = DomainCoordinates(0, sim.X, 0, sim.Y, 0, 0, sim.dx, sim.dy, 1.0)
+
         if(NOT_PARALLEL):
             if(isinstance(sim, solvers.Maxwell2DTM)):
-                dfdHz = dfdx[0]
-                dfdEx = dfdx[1]
-                dfdEy = dfdx[2]
+                dfdHz = np.zeros((sim.M, sim.N), dtype=np.complex128)
+                dfdEx = np.zeros((sim.M, sim.N), dtype=np.complex128)
+                dfdEy = np.zeros((sim.M, sim.N), dtype=np.complex128)
+
+                for domain, arrs in dfdx.items():
+                    dfdHz[domain.j, domain.k] = arrs[0]
+                    dfdEx[domain.j, domain.k] = arrs[1]
+                    dfdEy[domain.j, domain.k] = arrs[2]
 
                 dFdHz, dFdEx, dFdEy = fomutils.power_norm_dFdx_TM(sim, f, dfdHz, \
                                                                           dfdEx, \
                                                                           dfdEy)
-                return (dFdHz, dFdEx, dFdEy)
+                return {full_domain : (dFdHz, dFdEx, dFdEy)}
             elif(isinstance(sim, solvers.Maxwell2DTE)):
-                dfdEz = dfdx[0]
-                dfdHx = dfdx[1]
-                dfdHy = dfdx[2]
+                dfdEz = np.zeros((sim.M, sim.N), dtype=np.complex128)
+                dfdHx = np.zeros((sim.M, sim.N), dtype=np.complex128)
+                dfdHy = np.zeros((sim.M, sim.N), dtype=np.complex128)
+
+                for domain, arrs in dfdx.items():
+                    dfdEz[domain.j, domain.k] = arrs[0]
+                    dfdHx[domain.j, domain.k] = arrs[1]
+                    dfdHy[domain.j, domain.k] = arrs[2]
 
                 dFdEz, dFdHx, dFdHy = fomutils.power_norm_dFdx_TE(sim, f, dfdEz, \
                                                                           dfdHx, \
                                                                           dfdHy)
-                return (dFdEz, dFdHx, dFdHy)
+                return {full_domain : (dFdEz, dFdHx, dFdHy)}
         else:
             return None
 

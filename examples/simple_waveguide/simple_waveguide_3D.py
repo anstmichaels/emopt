@@ -78,11 +78,11 @@ field_monitor = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, Z/2
                                   dx, dy, dz)
 Ey = sim.get_field_interp('Ey', domain=field_monitor, squeeze=True)
 
-#if(NOT_PARALLEL):
-#    import matplotlib.pyplot as plt
-#
-#    vmax = np.max(np.real(Ey))
-#    f = plt.figure()
-#    ax = f.add_subplot(111)
-#    ax.imshow(np.real(Ey), extent=[0,X-w_pml*2,0,Y-w_pml*2], vmin=-vmax, vmax=vmax, cmap='seismic')
-#    plt.show()
+if(NOT_PARALLEL):
+    import matplotlib.pyplot as plt
+
+    vmax = np.max(np.real(Ey))
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    ax.imshow(np.abs(Ey), extent=[0,X-w_pml*2,0,Y-w_pml*2], vmin=-vmax, vmax=vmax, cmap='seismic')
+    plt.show()

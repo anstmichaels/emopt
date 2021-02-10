@@ -36,12 +36,12 @@ machine.
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL
-from emopt.adjoint_method import AdjointMethodPNF2D
+from emopt.opt_def import OptDefPNF2D
 
 import numpy as np
 from math import pi
 
-class SiliconGrating2LAM(AdjointMethodPNF2D):
+class SiliconGrating2LOptDef(OptDefPNF2D):
     """Compute the merit function and gradient of a two layer grating coupler.
 
     Parameters
@@ -69,7 +69,7 @@ class SiliconGrating2LAM(AdjointMethodPNF2D):
     """
     def __init__(self, sim, grating_top, grating_bot, y_top, y_bot, w_in, h_wg, Ng,
                  eps_clad, mm_line):
-        super(SiliconGrating2LAM, self).__init__(sim, step=1e-10)
+        super(SiliconGrating2LOptDef, self).__init__(sim, step=1e-10)
 
         # save the variables for later
         self.grating_top = grating_top
@@ -137,7 +137,7 @@ class SiliconGrating2LAM(AdjointMethodPNF2D):
             x0_top += period_top
             x0_bot += period_bot
 
-    def calc_f(self, sim, params):
+    def calc_fom(self, sim, params):
         """
         Compute the figure of merit.
 
@@ -162,25 +162,21 @@ class SiliconGrating2LAM(AdjointMethodPNF2D):
         self.current_fom = -self.mode_match.get_mode_match_forward(1.0)
         return self.current_fom
 
-    def calc_dfdx(self, sim, params):
+    def calc_dFdx(self, sim, params):
         """Calculate the derivative of the non-source-power-normalized figure
         of merit with respect to the electric and magnetic fields at each
         location in the grid.
         """
-        dFdEz = np.zeros([sim.M, sim.N], dtype=np.complex128)
-        dFdHx = np.zeros([sim.M, sim.N], dtype=np.complex128)
-        dFdHy = np.zeros([sim.M, sim.N], dtype=np.complex128)
-
         # Get the fields which were recorded 
         Ez, Hx, Hy = sim.saved_fields[0]
 
         self.mode_match.compute(Ez=Ez, Hx=Hx, Hy=Hy)
 
-        dFdEz[self.mm_line.j, self.mm_line.k] = -self.mode_match.get_dFdEz()
-        dFdHx[self.mm_line.j, self.mm_line.k] = -self.mode_match.get_dFdHx()
-        dFdHy[self.mm_line.j, self.mm_line.k] = -self.mode_match.get_dFdHy()
+        dFdEz = -self.mode_match.get_dFdEz()
+        dFdHx = -self.mode_match.get_dFdHx()
+        dFdHy = -self.mode_match.get_dFdHy()
 
-        return (dFdEz, dFdHx, dFdHy)
+        return {sim.field_domains[0] : (dFdEz, dFdHx, dFdHy)}
 
     def get_update_boxes(self, sim, params):
         """Define custom update boxes.
@@ -215,7 +211,7 @@ class SiliconGrating2LAM(AdjointMethodPNF2D):
         """Out figure of merit contains no additional non-field dependence on
         the design variables so we just return zeros here.
 
-        See the AdjointMethod documentation for the mathematical details of
+        See the OptDef documentation for the mathematical details of
         grad p and to learn more about its use case.
         """
         return np.zeros(params.shape)
@@ -228,7 +224,7 @@ def plot_update(params, fom_list, sim, am):
     distribution, the electric field, and the full figure of merit history.
     """
     print('Done iteration %d.' % (len(fom_list)))
-    current_fom = -1*am.calc_fom(sim, params)
+    current_fom = -1*am.calc_fom(sim, params) / sim.source_power
     fom_list.append(current_fom)
 
     Ez, Hx, Hy = sim.saved_fields[1]
@@ -291,7 +287,7 @@ if __name__ == '__main__':
     y_center = H/2.0
 
     # input waveguide
-    wg = emopt.grid.Rectangle(w_wg_input/2.0, y_center, w_wg_input, h_wg)
+    wg = emopt.geometry.Rectangle(w_wg_input/2.0, y_center, w_wg_input, h_wg)
 
     # define the starting parameters of the 2 layer grating
     # notably the period and shift between top and bottom layers
@@ -315,20 +311,20 @@ if __name__ == '__main__':
     rect = None
 
     for i in range(Ng):
-        rect_top = emopt.grid.Rectangle(shift0 + period*i + df*period/2.0, \
+        rect_top = emopt.geometry.Rectangle(shift0 + period*i + df*period/2.0, \
                                         y_top, period*df, h_etch)
         rect_top.layer = 1
         rect_top.material_value = eps_core
         grating_top.append(rect_top)
 
-        rect_bot = emopt.grid.Rectangle(shift_bot+shift0+period*i+df*period/2.0, \
+        rect_bot = emopt.geometry.Rectangle(shift_bot+shift0+period*i+df*period/2.0, \
                                         y_bot, period*df, h_wg-h_etch)
         rect_bot.layer = 1
         rect_bot.material_value = eps_core
         grating_bot.append(rect_bot)
 
     # set the background material using a rectangle equal in size to the system
-    background = emopt.grid.Rectangle(X/2, Y/2, X, Y)
+    background = emopt.geometry.Rectangle(X/2, Y/2, X, Y)
 
     # set the relative layers of the permitivity primitives
     wg.layer = 1
@@ -366,11 +362,6 @@ if __name__ == '__main__':
     if(NOT_PARALLEL):
         print('Generating mode data...')
 
-    # We begin by setting up the source
-    Jz = np.zeros([M,N], dtype=np.complex128)
-    Mx = np.zeros([M,N], dtype=np.complex128)
-    My = np.zeros([M,N], dtype=np.complex128)
-
     # place the source in the simulation domain
     src_line = emopt.misc.DomainCoordinates(w_pml+2*dx, w_pml+2*dx, Y/2-w_src/2,
                                             Y/2+w_src/2, 0, 0, dx, dy, 1.0)
@@ -384,15 +375,8 @@ if __name__ == '__main__':
     # one we fundamental mode.  We have a way to determine this, however
     mindex = mode.find_mode_index(0)
 
-    # calculate the source from the mode fields
-    msrc = mode.get_source(mindex, dx, dy)
-
-    # set the source array explicitly. In the future, this might be managed in
-    # a more high-level manner.
-    Jz[src_line.j, src_line.k] = msrc[0]
-    Mx[src_line.j, src_line.k] = msrc[1]
-    My[src_line.j, src_line.k] = msrc[2]
-    sim.set_sources((Jz, Mx, My))
+    srcs = {src_line : mode}
+    sim.set_sources(srcs, mindex)
 
     ####################################################################################
     # Setup the mode match domain
@@ -415,7 +399,7 @@ if __name__ == '__main__':
     # We initialize our application-specific adjoint method object which is
     # responsible for computing the figure of merit and its gradient with
     # respect to the design parameters of the problem
-    am = SiliconGrating2LAM(sim, grating_top, grating_bot,
+    am = SiliconGrating2LOptDef(sim, grating_top, grating_bot,
                             y_top, y_bot,
                             w_wg_input, h_wg, Ng, eps_clad, mm_line)
 
@@ -430,7 +414,7 @@ if __name__ == '__main__':
     design_params[-1] = -shift_bot -(1-df)*period
     design_params[-2] = -(1-df)*period
 
-    am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
+    #am.check_gradient(design_params, indices=np.arange(0,len(design_params),4))
 
     fom_list = []
     callback = lambda x : plot_update(x, fom_list, sim, am)

@@ -61,16 +61,15 @@ using a linux distribution not listed, the process should be very similar.
 
 If running on Windows, you can install EMopt in the Windows Subsystem for Linux (WSL).
 
---------------------------
-Installing on Ubuntu 18.04
---------------------------
+--------------------------------------
+Installing on Ubuntu 18.04 / Debian 10
+--------------------------------------
 
 First, we install necessary packages using ``apt-get``::
 
     $ sudo apt-get update
     $ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev libeigen3-dev \
                            libboost-dev git python python3 python3-dev python3-pip python3-tk
-                           libopenblas-dev
 
 Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
 a script which expediates this process::
@@ -80,7 +79,9 @@ a script which expediates this process::
 
 Finally, we can install EMopt::
 
-    $ PIP_IGNORE_INSTALLED=0 pip3 install emopt --user
+    $ git clone https://github.com/anstmichaels/emopt.git
+    $ cd emopt
+    $ PIP_IGNORE_INSTALLED=0 pip3 install . --user
 
 Once this completes, EMopt should be installed and ready to go!
 
@@ -92,14 +93,17 @@ A few notes::
            the dependencies, we can call install_deps.py with the --upgrade flag.
     2. If you run into errors when running install_deps.py or pip3 install emopt, it is
            recommended you supply the '--version' flag.
-    3. For some reason, Debian/Ubuntu's version of pip will automatically reinstall all
+    3. For some reason, Ubuntu's version of pip will automatically reinstall all
            required packages. This breaks the EMopt installation since it requires PETSc and
            SLEPc be installed with custom configure options. For this reason, the environment
            variable PIP_IGNORE_INSTALLED must be set to 0 before running pip install.
+    4. On Debian 10, you may encounter an error saying
+           :code:`OSError: /.../Grid.so: cannot open shared object file: No such file or directory`
+           This can be fixed by running :code:`$ pip3 install emopt --user --no-binary :all --upgrade`
 
-----------------------
-Installing on CentOS 7
-----------------------
+-------------------------------
+Installing on CentOS 7 / RHEL 7
+-------------------------------
 
 First, we need to get access to epel-release repos which contain packages that we
 will need::
@@ -111,7 +115,7 @@ packages as well as openmpi, python, and tkinter::
 
     $ sudo yum groupinstall "Development Tools"
     $ sudo yum install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
-      python3-tkinter eigen3-devel boost169-devel openblas-devel
+      python3-tkinter eigen3-devel boost-devel libgfortran gcc-gfortran
 
 Once OpenMPI is installed, we need to load the appropriate module::
 
@@ -130,7 +134,9 @@ a script which expediates this process::
 
 Finally, we can install EMopt::
 
-    $ pip3 install emopt --user
+    $ git clone https://github.com/anstmichaels/emopt.git
+    $ cd emopt
+    $ pip3 install . --user
 
 Once this completes, EMopt should be installed and ready to go!
 
@@ -162,11 +168,11 @@ run emopt::
     $ sudo dnf groupinstall "Development Tools"
     $ sudo dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
     $ sudo dnf install openmpi openmpi-devel python2 python3 python3-pip python3-devel \
-      python3-tkinter eigen3-devel boost169-devel openblas-devel
+      python3-tkinter boost-devel libgfortran gcc-gfortran
 
 Once OpenMPI is installed, we need to load the appropriate module::
 
-    $ source /etc/profile.d/module.sh
+    $ . /etc/profile
     $ module load mpi/openmpi-x86_64
 
 If you use mpich instead, then you will need to choose the appropriate module name.
@@ -181,7 +187,9 @@ a script which expediates this process::
 
 Finally, we can install EMopt::
 
-    $ pip3 install emopt --user
+    $ git clone https://github.com/anstmichaels/emopt.git
+    $ cd emopt
+    $ pip3 install . --user
 
 Once this completes, EMopt should be installed and ready to go!
 
@@ -222,7 +230,44 @@ a script which expediates this process::
 
 Finally, we can install EMopt::
 
-    $ pip3 install emopt --user
+    $ git clone https://github.com/anstmichaels/emopt.git
+    $ cd emopt
+    $ pip3 install . --user
+
+Once this completes, EMopt should be installed and ready to go!
+
+-------------------------------
+SUSE Linux Enterprise Server 15
+-------------------------------
+
+First we need to install development tools (gcc, g++) so that we can compile the
+required packages as well as openmpi, python, and tkinter::
+
+    $ sudo zypper install -t pattern devel_basis
+    $ sudo zypper install gcc-fortran openmpi3 openmpi3-devel libgfortran5 python2-base \
+        python3-base python3-devel python3-pip python3-tkinter libboost*devel
+
+In order to use OpenMPI, we need to inform the system that we will be using OpenMPI3::
+
+    $ sudo mpi-selector --register openmpi --source-dir /usr/lib64/mpi/gcc/openmpi3/bin/
+    $ sudo mpi-selector --set openmpi3
+    $ exit # we need to exit the terminal and start a new one to get access to openmpi  
+
+If you use mpich instead, then you will need to choose the appropriate module name.
+If you reboot, you will need to load it again unless you add this line to your
+``.bashrc`` file (or equivalent).
+
+Next, we need to compile a few additional dependencies (PETSc and SLEPc). The EMopt includes
+a script which expediates this process::
+
+    $ curl -O https://raw.githubusercontent.com/anstmichaels/emopt/master/install_deps.py
+    $ python3 install_deps.py --user
+
+Finally, we can install EMopt::
+
+    $ git clone https://github.com/anstmichaels/emopt.git
+    $ cd emopt
+    $ pip3 install . --user
 
 Once this completes, EMopt should be installed and ready to go!
 

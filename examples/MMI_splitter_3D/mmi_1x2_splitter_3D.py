@@ -207,7 +207,8 @@ mode.bc = 'H0'
 mode.build()
 mode.solve()
 
-sim.set_sources(mode, input_slice)
+srcs = {input_slice : mode}
+sim.set_sources(srcs)
 
 #####################################################################################
 # Mode match for optimization

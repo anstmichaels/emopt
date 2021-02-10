@@ -36,12 +36,12 @@ machine.
 # We need to import a lot of things from emopt
 import emopt
 from emopt.misc import NOT_PARALLEL
-from emopt.adjoint_method import AdjointMethodPNF2D
+from emopt.opt_def import OptDefPNF2D
 
 import numpy as np
 from math import pi
 
-class SiliconGratingAM(AdjointMethodPNF2D):
+class SiliconGratingOptDef(OptDefPNF2D):
     """Compute the merit function and gradient of a grating coupler.
 
     Parameters
@@ -69,7 +69,7 @@ class SiliconGratingAM(AdjointMethodPNF2D):
     """
     def __init__(self, sim, grating_etch, wg, substrate, y_ts, w_in, h_wg, Y,
                  Ng, Nc, eps_clad, mm_line):
-        super(SiliconGratingAM, self).__init__(sim, step=1e-10)
+        super(SiliconGratingOptDef, self).__init__(sim, step=1e-10)
 
         # save the variables for later
         self.grating_etch = grating_etch
@@ -149,7 +149,7 @@ class SiliconGratingAM(AdjointMethodPNF2D):
         self.wg.width = w_in
         self.wg.x0 = w_in/2.0
 
-    def calc_f(self, sim, params):
+    def calc_fom(self, sim, params):
         """
         Compute the figure of merit.
 
@@ -174,25 +174,21 @@ class SiliconGratingAM(AdjointMethodPNF2D):
         self.current_fom = -self.mode_match.get_mode_match_forward(1.0)
         return self.current_fom
 
-    def calc_dfdx(self, sim, params):
+    def calc_dFdx(self, sim, params):
         """Calculate the derivative of the non-source-power-normalized figure
         of merit with respect to the electric and magnetic fields at each
         location in the grid.
         """
-        dFdEz = np.zeros([sim.M, sim.N], dtype=np.complex128)
-        dFdHx = np.zeros([sim.M, sim.N], dtype=np.complex128)
-        dFdHy = np.zeros([sim.M, sim.N], dtype=np.complex128)
-
         # Get the fields which were recorded 
         Ez, Hx, Hy = sim.saved_fields[0]
 
         self.mode_match.compute(Ez=Ez, Hx=Hx, Hy=Hy)
 
-        dFdEz[self.mm_line.j, self.mm_line.k] = -self.mode_match.get_dFdEz()
-        dFdHx[self.mm_line.j, self.mm_line.k] = -self.mode_match.get_dFdHx()
-        dFdHy[self.mm_line.j, self.mm_line.k] = -self.mode_match.get_dFdHy()
+        dFdEz = -self.mode_match.get_dFdEz()
+        dFdHx = -self.mode_match.get_dFdHx()
+        dFdHy = -self.mode_match.get_dFdHy()
 
-        return (dFdEz, dFdHx, dFdHy)
+        return {sim.field_domains[0] : (dFdEz, dFdHx, dFdHy)}
 
     def get_update_boxes(self, sim, params):
         """Define custom update boxes.
@@ -232,7 +228,7 @@ class SiliconGratingAM(AdjointMethodPNF2D):
         """Out figure of merit contains no additional non-field dependence on
         the design variables so we just return zeros here.
 
-        See the AdjointMethod documentation for the mathematical details of
+        See the OptDef documentation for the mathematical details of
         grad y and to learn more about its use case.
         """
         return np.zeros(params.shape)
@@ -246,7 +242,7 @@ def plot_update(params, fom_list, sim, am):
     distribution, the electric field, and the full figure of merit history.
     """
     print('Finished iteration %d' % (len(fom_list)+1))
-    current_fom = -1*am.calc_fom(sim, params)
+    current_fom = -1*am.calc_fom(sim, params) / sim.source_power
     fom_list.append(current_fom)
 
     Ez, Hx, Hy = sim.saved_fields[1]
@@ -384,7 +380,8 @@ if __name__ == '__main__':
     mindex = mode.find_mode_index(0)
 
     # set the current sources using the mode solver object
-    sim.set_sources(mode, src_line, mindex)
+    srcs = {src_line : mode}
+    sim.set_sources(srcs, mindex)
 
     ####################################################################################
     # Setup the mode match domain
@@ -416,17 +413,17 @@ if __name__ == '__main__':
     # We initialize our application-specific adjoint method object which is
     # responsible for computing the figure of merit and its gradient with
     # respect to the design parameters of the problem
-    am = SiliconGratingAM(sim, grating_etch, wg, substrate, y_ts,
+    od = SiliconGratingOptDef(sim, grating_etch, wg, substrate, y_ts,
                             w_wg_input, h_wg, Y, Ng, N_coeffs, eps_clad, mm_line)
 
-    am.check_gradient(design_params)
-    #am.check_gradient(design_params, indices=np.arange(0,len(design_params),2))
+    #od.check_gradient(design_params)
+    #od.check_gradient(design_params, indices=np.arange(0,len(design_params),2))
 
     fom_list = []
-    callback = lambda x : plot_update(x, fom_list, sim, am)
+    callback = lambda x : plot_update(x, fom_list, sim, od)
 
     # setup and run the optimization!
-    opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
+    opt = emopt.optimizer.Optimizer(od, design_params, tol=1e-5,
                                     callback_func=callback,
                                     opt_method='BFGS',
                                     Nmax=40)
