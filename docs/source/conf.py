@@ -63,7 +63,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'EMopt'
-copyright = u'2019, University of California, Berkeley'
+copyright = u'2019, Andrew Michaels'
 author = u'Andrew Michaels'
 
 # The version info for the project you're documenting, acts as replacement for
