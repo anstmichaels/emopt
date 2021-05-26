@@ -39,7 +39,7 @@ emopt_dep_file = ".emopt_deps"
 
 # Package Parameters
 EIGEN_VERSION = "3.3.7"
-BOOST_VERSION = "1_73_0"
+BOOST_VERSION = "1.73.0"
 PETSC_VERSION = "3.12.1"
 SLEPC_VERSION = "3.12.1"
 
@@ -120,9 +120,13 @@ def install_boost(include_dir):
     """
     print_message('Retrieving boost.geometry headers. This may take a few minutes...')
 
-    boost_url = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0_rc1.tar.gz"
+    #boost_url = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0_rc1.tar.gz"
 
-    boost_fname = "boost_" + BOOST_VERSION + ".tar.gz"
+    boost_ver__ = BOOST_VERSION.replace('.', '_') # change format for file name
+    boost_url = "https://boostorg.jfrog.io/artifactory/main/release/"+BOOST_VERSION\
+                +"/source/boost_"+boost_ver__+".tar.gz"
+
+    boost_fname = "boost_" + boost_ver__ + ".tar.gz"
     r = requests.get(boost_url, allow_redirects=True)
     with open(boost_fname, 'wb') as fsave:
         fsave.write(r.content)
@@ -130,7 +134,7 @@ def install_boost(include_dir):
     # unzip package
     call(['tar', 'xvzf', boost_fname])
 
-    boost_folder = "boost_" + BOOST_VERSION
+    boost_folder = "boost_" + boost_ver__
     os.chdir(boost_folder)
     call(['./bootstrap.sh'])
     call(['./b2', 'headers'])
