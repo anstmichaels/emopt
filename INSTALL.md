@@ -6,7 +6,7 @@ This is a guide on how to install EMopt and its dependencies
 
 ### Prerequisites
 
-**Optional:** Install miniconda to create an enviorment dedicated for EMopt.
+**Optional:** Install miniconda to create an environment dedicated for EMopt.
 
 * If using miniconda or anaconda, replace all instances of ``pip`` with ``conda``
 
@@ -24,7 +24,7 @@ conda activate emopt
  ```
 
 
-**Require:** Install (or update) required packages
+**Required:** Install (or update) required packages
 
 CentosOS:
   ```sh
@@ -41,7 +41,7 @@ sudo apt-get install build-essential gfortran openmpi-bin libopenmpi-dev python 
 ```
 
 
-**Require:** Then, install required python modules
+**Required:** Then, install required python modules
 
 ```sh
 pip install requests matplotlib numpy scipy mpi4py h5py
