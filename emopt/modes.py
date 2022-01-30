@@ -1155,7 +1155,13 @@ class ModeFullVector(ModeSolver):
                  backwards=False, verbose=True):
         super(ModeFullVector, self).__init__(wavelength, n0, neigs)
 
-        self.eps = eps
+        if(isinstance(eps, grid.Material2D) or
+           isinstance(eps, grid.Material3D) or
+           (isinstance(eps, list) and len(eps) == 3)):
+            self.eps = eps
+        else:
+            raise ValueError('The supplied permittivity is not valid.')
+
         self.mu = mu
         self.domain = domain
 
@@ -1319,6 +1325,13 @@ class ModeFullVector(ModeSolver):
             get_eps_x = lambda x,y : eps.get_value(k0+x+0.5, j0+y)
             get_eps_y = lambda x,y : eps.get_value(k0+x, j0+y+0.5)
             get_eps_z = lambda x,y : eps.get_value(k0+x, j0+y)
+            get_mu_x = lambda x,y : mu.get_value(k0+x, j0+y+0.5)
+            get_mu_y = lambda x,y : mu.get_value(k0+x+0.5, j0+y)
+            get_mu_z = lambda x,y : mu.get_value(k0+x+0.5, j0+y+0.5)
+        elif(isinstance(eps, list)):
+            get_eps_x = lambda x,y : eps[0].get_value(k0+x+0.5, j0+y)
+            get_eps_y = lambda x,y : eps[1].get_value(k0+x, j0+y+0.5)
+            get_eps_z = lambda x,y : eps[2].get_value(k0+x, j0+y)
             get_mu_x = lambda x,y : mu.get_value(k0+x, j0+y+0.5)
             get_mu_y = lambda x,y : mu.get_value(k0+x+0.5, j0+y)
             get_mu_z = lambda x,y : mu.get_value(k0+x+0.5, j0+y+0.5)
