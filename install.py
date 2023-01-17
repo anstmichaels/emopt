@@ -120,7 +120,7 @@ def install_boost(include_dir):
     """
     print_message('Retrieving boost.geometry headers. This may take a few minutes...')
 
-    boost_url = "https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0_rc1.tar.gz"
+    boost_url = "https://boostorg.jfrog.io/artifactory/main/release/1.73.0/source/boost_1_73_0.tar.gz"
 
     boost_fname = "boost_" + BOOST_VERSION + ".tar.gz"
     r = requests.get(boost_url, allow_redirects=True)

@@ -13,7 +13,7 @@ from petsc4py import PETSc
 import warnings, inspect
 
 __author__ = "Andrew Michaels"
-__license__ = "GPL License, Version 3.0"
+__license__ = "BSD-3"
 __version__ = "2019.5.6"
 __maintainer__ = "Andrew Michaels"
 __status__ = "development"

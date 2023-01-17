@@ -27,7 +27,7 @@ added.
 Andrew Michaels 
 
 ## License
-EMOpt is currently released under the GPL license (see LICENSE.md for details)
+EMOpt is currently released under the BSD-3 license (see LICENSE.md for details)
 
 ## References
 The methods employed by EMopt are described in:

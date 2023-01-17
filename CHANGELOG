@@ -1,4 +1,9 @@
-Releades on May 6, 2019
+Released on Januart 16, 2022
+----------------------------
+1. Transitioned license from GPLv3 to the much more permissive BSD-3.
+2. Updated boost download URL in install.py
+
+Released on May 6, 2019
 -----------------------
 
 This is a major update. Please read through each of these changes carefully and
