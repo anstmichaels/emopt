@@ -1,3 +1,14 @@
+# Note: new automatic differentiation code (AutoDiff)
+Several new modules and features implemented in .../emopt/experimental, with corresponding examples in .../examples/experimental.
+
+New adjoint_method.AdjointMethod derived classes in experimental.adjoint_method.AutoDiff and experimental.adjoint_method.Topology allow one to use AutoDiff based acceleration of the adjoint method gradient calculation and topology based optimization, respectively. Must invoke the experimental solvers and grid materials in experimental.fdfd, experimental.fdtd, experimental.grid for correct usage. Please see examples in .../examples/experimental.
+
+Note: Requires PyTorch installation in your local Python environment.
+Note: These modules are still under development (particularly experimental.adjoint_method.Topology). Please post an issue or email me for further discussion or help.
+
+For more information, please see:
+S. Hooten, T. Van Vaerenbergh, M. Fiorentino, R. Beausoleil, "Accelerated Adjoint Shape Optimization Via Automatic Differentiation" in Conference on Lasers and Electro-Optics (CLEO), 2023.
+
 # EMopt
 A toolkit for shape (and topology) optimization of 2D and 3D electromagnetic
 structures. 
