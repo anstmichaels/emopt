@@ -1,8 +1,7 @@
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
-from emopt.experimental.adjoint_method import TopologyPNF2D, Topology, TopologyPNF3D
+from emopt.experimental.adjoint_method import TopologyPNF3D
 from emopt.experimental.fdtd import FDTD
-from emopt.experimental.adjoint_method import sigmoid
 from emopt.experimental.grid import TopologyMaterial3D
 import numpy as np
 
@@ -46,11 +45,8 @@ def plot_update(params, fom_list, sim, am):
     current_fom = -1*am.calc_fom(sim, params)
     fom_list.append(current_fom)
 
-    #Ez, Hx, Hy = sim.saved_fields[1]
     Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[1]
     eps = sim.eps.get_values_in(sim.field_domains[1]).squeeze()
-    #Ez = np.squeeze(Ez)
-    #Ey = np.squeeze(Ey)
     Hz = np.squeeze(Hz)
 
     foms = {'E2' : fom_list}
@@ -74,8 +70,6 @@ if __name__ == '__main__':
     # define the system parameters
     ####################################################################################
     wavelength = 1.31
-    #X = 20.0
-    #X = 16.0
     X = 12.0
     Y = 8.0
     Z = 4.0
@@ -84,7 +78,6 @@ if __name__ == '__main__':
     dz = dx
 
     # create the simulation object.
-    # TE => Ez, Hx, Hy
     sim = FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44,
                       nconv=200)
     sim.Nmax = 1000*sim.Ncycle
@@ -122,7 +115,6 @@ if __name__ == '__main__':
 
     init_rect = emopt.grid.Rectangle(X/2, Y/2, 4.4+2*dx, 3.0+2*dy)
     init_rect.layer = 1
-    #init_rect.material_value = eps_si
     init_rect.material_value = eps_si/2
 
     bg = emopt.grid.Rectangle(X/2, Y/2, 2*X, 2*Y)
@@ -154,7 +146,7 @@ if __name__ == '__main__':
     src_line = emopt.misc.DomainCoordinates(w_pml+5*dx, w_pml+5*dx, Y/2-w_src/2,
                                  Y/2+w_src/2, w_pml, Z-w_pml, dx, dy, dz)
 
-    # Setup the mode solver.    
+    # Setup the mode solver.
     mode = emopt.modes.ModeFullVector(wavelength, eps, mu, src_line, n0=n_si, neigs=4)
 
     if(NOT_PARALLEL):
@@ -190,7 +182,7 @@ if __name__ == '__main__':
     mode_line = emopt.misc.DomainCoordinates(X-(w_pml+5*dx), X-(w_pml+5*dx), Y/2-w_mode/2,
                                  Y/2+w_mode/2, w_pml, Z-w_pml, dx, dy, dz)
 
-    # Setup the mode solver.    
+    # Setup the mode solver.
     mode_fom = emopt.modes.ModeFullVector(wavelength, eps, mu, mode_line, n0=n_si, neigs=4)
 
     if(NOT_PARALLEL):
@@ -208,13 +200,6 @@ if __name__ == '__main__':
     Hxm = mode_fom.get_field_interp(0, 'Hx')
     Hym = mode_fom.get_field_interp(0, 'Hy')
     Hzm = mode_fom.get_field_interp(0, 'Hz')
-    #if not NOT_PARALLEL:
-    #    Exm = emopt.misc.MathDummy()
-    #    Eym = emopt.misc.MathDummy()
-    #    Ezm = emopt.misc.MathDummy()
-    #    Hxm = emopt.misc.MathDummy()
-    #    Hym = emopt.misc.MathDummy()
-    #    Hzm = emopt.misc.MathDummy()
 
     mode_match = emopt.fomutils.ModeMatch([1,0,0], sim.dy, sim.dz, Exm, Eym, Ezm, Hxm, Hym, Hzm)
 
@@ -229,10 +214,7 @@ if __name__ == '__main__':
     # Setup the optimization
     ####################################################################################
     am = TopologyAM(sim, mode_match, mode_line, domain=optdomain, update_mu=False, eps_bounds=[eps_clad, eps_si], lam=0.0)
-    #am = TopologyAM(sim, mode_match, mode_line, domain=optdomain, update_mu=False, eps_bounds=None, lam=0.0)
-    #am = TopologyAM(sim, mode_match, mode_line, domain=optdomain, update_mu=False, eps_bounds=None)
     design_params = am.get_params()
-    #design_params = np.ones_like(design_params)*eps_si/2
     design_params = np.zeros_like(design_params)
     am.update_system(design_params)
 
@@ -243,8 +225,7 @@ if __name__ == '__main__':
         ar = am.sim.eps.get_values_in(full_field, squeeze=True)
         ax.imshow(ar.real)
         plt.show()
-    #assert False
-    #am.check_gradient(design_params, indices=np.arange(100)[::50], fd_step=1e-6)
+
     am.check_gradient(design_params, indices=np.arange(100)[::50], fd_step=1e-3)
 
     fom_list = []
