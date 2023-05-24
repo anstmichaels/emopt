@@ -252,9 +252,9 @@ class FDFD_TE(fdfd.FDFD_TE):
         Ez_adj = self.get_adjoint_field('Ez', domain)
         if sig_eps is not None:
             #grad_eps = 2*sig_eps[1]*np.imag(Ez_adj * sig_eps[0] * (1.0-sig_eps[0]) * Ez)
-            grad_eps = sig_eps[0] * (1.0-sig_eps[0]) * (lam/Ez.size + 2*sig_eps[1]*np.imag(Ez_adj  * Ez))
+            grad_eps = sig_eps[0] * (1.0-sig_eps[0]) * (lam/Ez.size + 2*sig_eps[1]*np.imag(Ez * Ez_adj))
         else:
-            grad_eps = 2*np.imag(Ez_adj * Ez)
+            grad_eps = 2*np.imag(Ez * Ez_adj)
 
         if update_mu:
             Hx = self.get_field('Hx', domain)
