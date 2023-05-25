@@ -10,7 +10,6 @@ __license__ = "BSD-3"
 __maintainer__ = "Sean Hooten"
 __status__ = "development"
 
-
 class AutoDiffMaterial2D(Material2D):
     def __init__(self, dx, dy, func, v):
         super().__init__()

@@ -235,7 +235,7 @@ class FDFD_TE(fdfd.FDFD_TE):
         A.assemblyBegin()
         A.assemblyEnd()
 
-    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, planar=None, lam=0):
+    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, planar=False, lam=0):
         # NOTE: Below is not the most efficent way to be doing things,
         #       we should be doing multiplication with PETSc vectors.
         #       currently going to perform multiplication only on head node
@@ -250,11 +250,18 @@ class FDFD_TE(fdfd.FDFD_TE):
 
         Ez = self.get_field('Ez', domain)
         Ez_adj = self.get_adjoint_field('Ez', domain)
-        if sig_eps is not None:
-            #grad_eps = 2*sig_eps[1]*np.imag(Ez_adj * sig_eps[0] * (1.0-sig_eps[0]) * Ez)
-            grad_eps = sig_eps[0] * (1.0-sig_eps[0]) * (lam/Ez.size + 2*sig_eps[1]*np.imag(Ez * Ez_adj))
+        #if sig_eps is not None:
+        #    #grad_eps = 2*sig_eps[1]*np.imag(Ez_adj * sig_eps[0] * (1.0-sig_eps[0]) * Ez)
+        #    #grad_eps = sig_eps[0] * (1.0-sig_eps[0]) * (lam/Ez.size + 2*sig_eps[1]*np.imag(Ez * Ez_adj))
+        #    mult = sig_eps[1] * sig_eps[0] * (1.0 - sig_eps[0]) 
+        #else:
+        #    mult = 1
+        #    #grad_eps = 2*np.imag(Ez * Ez_adj)
+
+        if planar:
+            grad_eps = 2 * sig_eps * np.imag(np.sum(Ez * Ez_adj, axis=0))
         else:
-            grad_eps = 2*np.imag(Ez * Ez_adj)
+            grad_eps = 2 * sig_eps * np.imag(Ez * Ez_adj)
 
         if update_mu:
             Hx = self.get_field('Hx', domain)
@@ -262,10 +269,17 @@ class FDFD_TE(fdfd.FDFD_TE):
             Hx_adj = self.get_adjoint_field('Hx', domain)
             Hy_adj = self.get_adjoint_field('Hy', domain)
 
-            if sig_mu is not None:
-                grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * (Hx*Hx_adj + Hy*Hy_adj) )
+            #if sig_mu is not None:
+            #    #grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * (Hx*Hx_adj + Hy*Hy_adj) )
+            #    mult = sig_mu[1] * sig_mu[0] * (1.0 - sig_mu[0])
+            #else:
+            #    mult = 1
+            #    #grad_mu = -2*np.imag(Hx*Hx_adj + Hy*Hy_adj)
+            
+            if planar:
+                grad_mu = -2 * sig_mu * np.imag(np.sum(Hx * Hx_adj, axis=0) + np.sum(Hy * Hy_adj, axis=0))
             else:
-                grad_mu = -2*np.imag(Hx*Hx_adj + Hy*Hy_adj)
+                grad_mu = -2 * sig_mu * np.imag(Hx * Hx_adj + Hy * Hy_adj)
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:
@@ -301,7 +315,7 @@ class FDFD_TM(fdfd.FDFD_TM):
     def update(self, bbox=None):
         FDFD_TE.update(self, bbox=bbox)
 
-    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None):
+    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, planar=False, lam=None):
         # NOTE: Below is not the most efficent way to be doing things,
         #       we should be doing multiplication with PETSc vectors.
         #       currently going to perform multiplication only on head node
@@ -315,19 +329,33 @@ class FDFD_TM(fdfd.FDFD_TM):
         Ex_adj = self.get_adjoint_field('Ex', domain)
         Ey = self.get_field('Ey', domain)
         Ey_adj = self.get_adjoint_field('Ey', domain)
-        if sig_eps is not None:
-            grad_eps = 2*sig_eps[1]*np.imag(sig_eps[0] * (1.0 - sig_eps[0]) * (Ex*Ex_adj + Ey*Ey_adj))
+        #if sig_eps is not None:
+        #    #grad_eps = 2*sig_eps[1]*np.imag(sig_eps[0] * (1.0 - sig_eps[0]) * (Ex*Ex_adj + Ey*Ey_adj))
+        #    mult = sig_eps[1] * sig_eps[0] * (1.0 - sig_eps[0])
+        #else:
+        #    #grad_eps = 2*np.imag(Ex*Ex_adj + Ey*Ey_adj)
+        #    mult = 1
+
+        if planar:
+            grad_eps = 2 * sig_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + np.sum(Ey * Ey_adj, axis=0))
         else:
-            grad_eps = 2*np.imag(Ex*Ex_adj + Ey*Ey_adj)
+            grad_eps = 2 * sig_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj)
 
         if update_mu:
             Hz = self.get_field('Hz', domain)
             Hz_adj = self.get_adjoint_field('Hz', domain)
 
-            if sig_mu is not None:
-                grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * Hz * Hz_adj )
+            #if sig_mu is not None:
+            #    #grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * Hz * Hz_adj )
+            #    mult = sig_mu[1] * sig_mu[0] * (1.0 - sig_mu[0])
+            #else:
+            #    #grad_mu = -2*np.imag(Hz*Hz_adj)
+            #    mult = 1
+
+            if planar:
+                grad_mu = -2 * sig_mu * np.imag(np.sum(Hz * Hz_adj, axis=0))
             else:
-                grad_mu = -2*np.imag(Hz*Hz_adj)
+                grad_mu = -2 * sig_mu * np.imag(Hz * Hz_adj)
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:
@@ -352,7 +380,7 @@ class FDFD_3D(fdfd.FDFD_3D):
     def __init__(self, *args, **kwargs):
         super(FDFD_3D, self).__init__(*args, **kwargs)
 
-    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None):
+    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, planar=False, lam=None):
         # NOTE: Assumes isotropic materials
 
         Ex = self.get_field('Ex', domain)
@@ -362,10 +390,17 @@ class FDFD_3D(fdfd.FDFD_3D):
         Ez = self.get_field('Ez', domain)
         Ez_adj = self.get_adjoint_field('Ez', domain)
 
-        if sig_eps is not None:
-            grad_eps = 2*sig_eps[1]*np.imag(sig_eps[0] * (1.0 - sig_eps[0]) * (Ex*Ex_adj + Ey*Ey_adj + Ez*Ez_adj))
+        #if sig_eps is not None:
+        #    #grad_eps = 2*sig_eps[1]*np.imag(sig_eps[0] * (1.0 - sig_eps[0]) * (Ex*Ex_adj + Ey*Ey_adj + Ez*Ez_adj))
+        #    mult = sig_eps[1] * sig_eps[0] * (1.0 - sig_eps[0])
+        #else:
+        #    #grad_eps = 2*np.imag(Ex*Ex_adj + Ey*Ey_adj + Ez*Ez_adj)
+        #    mult = 1
+
+        if planar:
+            grad_eps = 2 * sig_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + np.sum(Ey * Ey_adj, axis=0) + np.sum(Ez * Ez_adj, axis=0))
         else:
-            grad_eps = 2*np.imag(Ex*Ex_adj + Ey*Ey_adj + Ez*Ez_adj)
+            grad_eps = 2 * sig_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj + Ez * Ez_adj)
 
         if update_mu:
             Hx = self.get_field('Hx', domain)
@@ -375,10 +410,15 @@ class FDFD_3D(fdfd.FDFD_3D):
             Hz = self.get_field('Hz', domain)
             Hz_adj = self.get_adjoint_field('Hz', domain)
 
-            if sig_mu is not None:
-                grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * (Hx*Hx_adj + Hy*Hy_adj + Hz*Hz_adj))
+            if planar:
+                grad_mu = -2 * sig_mu * np.imag(np.sum(Hx * Hx_adj, axis=0) + np.sum(Hy * Hy_adj, axis=0) + np.sum(Hz * Hz_adj, axis=0))
             else:
-                grad_mu = -2*np.imag(Hx*Hx_adj + Hy*Hy_adj + Hz*Hz_adj)
+                grad_mu = -2 * sig_mu * np.imag(Hx * Hx_adj + Hy * Hy_adj + Hz * Hz_adj)
+
+            #if sig_mu is not None:
+            #    grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * (Hx*Hx_adj + Hy*Hy_adj + Hz*Hz_adj))
+            #else:
+            #    grad_mu = -2*np.imag(Hx*Hx_adj + Hy*Hy_adj + Hz*Hz_adj)
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:

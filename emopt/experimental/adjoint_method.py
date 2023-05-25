@@ -118,7 +118,7 @@ AutoDiffPNF3D = _AutoDiffGenerator(am.AdjointMethodPNF3D)
 # Please see additional convenience Topology AM classes below
 
 def _TopologyGenerator(BaseAM):
-    # Generator for Autodiff class
+    # Generator for Toplogy class
     assert issubclass(BaseAM, am.AdjointMethod)
     class _Topology(BaseAM):
         def __init__(self, sim, domain=None, update_mu=False, eps_bounds=None, mu_bounds=None, planar=False, penalty_multiplier=0):
@@ -143,40 +143,43 @@ def _TopologyGenerator(BaseAM):
 
         def get_params(self):
             self._grid_eps = np.copy(self.sim.eps.grid)
+            self._gse = self._grid_eps.shape
 
             if self._epsb:
                 params = inverse_scaled_sigmoid(self._grid_eps.real, self._epsb[0], self._epsb[1])
             else:
                 params = np.copy(self._grid_eps.real)
 
-            #if self._planar is not None:
-            #    params = np.mean(params, axis=self._planar).ravel()
-            #else:
-            #    params = params.ravel()
-            params = params.ravel()
+            if self._planar:
+                params = np.mean(params, axis=0).ravel()
+            else:
+                params = params.ravel()
+            self._pse = params.size
 
             if self._update_mu:
                 self._grid_mu = np.copy(self.sim.mu.grid)
+                self._gsm = self._grid_mu.shape
                 if self._mub:
                     params_mu = inverse_scaled_sigmoid(self._grid_mu.real, self._mub[0], self._mub[1])
                 else:
                     params_mu = np.copy(self._grid_mu.real)
 
-                #if self._planar is not None:
-                #    params_mu = np.mean(params_mu, axis=self._planar).ravel()
-                #else:
-                #    params_mu = params_mu.ravel()
-                params_mu = params_mu.ravel()
+                if self._planar:
+                    params_mu = np.mean(params_mu, axis=0).ravel()
+                else:
+                    params_mu = params_mu.ravel()
 
                 params = np.concatenate([params, params_mu], axis=0)
+                self._psm = params_mu.size
 
             return params
 
         def update_system(self, params):
             if self._update_mu:
-                peps = params[:self._grid_eps.size].reshape(self._grid_eps.shape)
-                pmu = params[self._grid_eps.size:].reshape(self._grid_mu.shape)
-
+                peps = params[:self._pse]
+                pmu = params[self._pse:]
+                #peps = params[:self._grid_eps.size].reshape(self._grid_eps.shape)
+                #pmu = params[self._grid_eps.size:].reshape(self._grid_mu.shape)
                 if self._epsb:
                     new_grid_eps = scaled_sigmoid(peps, self._epsb[0], self._epsb[1])
                 else:
@@ -187,49 +190,75 @@ def _TopologyGenerator(BaseAM):
                 else:
                     new_grid_mu = pmu
 
-                self.sim.eps.grid = new_grid_eps
-                self.sim.mu.grid = new_grid_mu
+                if self._planar:
+                    new_grid_eps = new_grid_eps.reshape(self._gse[1:])
+                    new_grid_mu = new_grid_mu.reshape(self._gsm[1:])
+                    self.sim.eps.grid = np.broadcast_to(new_grid_eps[np.newaxis, ...], self._gse)
+                    self.sim.mu.grid = np.broadcast_to(new_grid_mu[np.newaxis, ...], self._gsm)
+                else:
+                    self.sim.eps.grid = new_grid_eps.reshape(self._gse)
+                    self.sim.mu.grid = new_grid_mu.reshape(self._gsm)
             else:
-                peps = params.reshape(self._grid_eps.shape)
+                peps = params
+
                 if self._epsb:
                     new_grid_eps = scaled_sigmoid(peps, self._epsb[0], self._epsb[1])
                 else:
                     new_grid_eps = peps
-                self.sim.eps.grid = new_grid_eps
+
+                if self._planar:
+                    new_grid_eps = new_grid_eps.reshape(self._gse[1:])
+                    self.sim.eps.grid = np.broadcast_to(new_grid_eps[np.newaxis, ...], self._gse)
+                else:
+                    self.sim.eps.grid = new_grid_eps.reshape(self._gse)
 
         def calc_gradient(self, sim, params):
             if NOT_PARALLEL:
                 if self._update_mu:
                     if self._epsb:
                         delta_eps = self._epsb[1] - self._epsb[0]
-                        #sig_eps = params.reshape(self._grid_eps.shape)
-                        sig_eps = sigmoid(params[:self._grid_eps.size].reshape(self._grid_eps.shape))
-                        sig_eps = (sig_eps, delta_eps)
+                        #sig_eps = sigmoid(params[:self._grid_eps.size].reshape(self._grid_eps.shape))
+                        if self._planar:
+                            sig_eps = sigmoid(params[:self._pse].reshape(self._gse[1:]))
+                            #sig_eps = sigmoid(np.broadcast_to(params[:self._pse].reshape(self._gse[1:])[np.newaxis, ...], self._gse))
+                        else:
+                            sig_eps = sigmoid(params[:self._pse].reshape(self._gse))
+                        #sig_eps = (sig_eps, delta_eps)
+                        sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
                     else:
-                        sig_eps = None
+                        sig_eps = 1
 
                     if self._mub:
                         delta_mu = self._mub[1] - self._mub[0]
-                        #sig_mu = params[self._grid_eps.size:].reshape(self._grid_mu.shape)
-                        sig_mu = sigmoid(params[self._grid_eps.size:].reshape(self._grid_mu.shape))
-                        sig_mu = (sig_mu, delta_mu)
+                        #sig_mu = sigmoid(params[self._grid_eps.size:].reshape(self._grid_mu.shape))
+                        if self._planar:
+                            #sig_mu = sigmoid(np.broadcast_to(params[self._pse:].reshape(self._gsm[1:])[np.newaxis, ...], self._gsm))
+                            sig_mu = sigmoid(params[self._pse:].reshape(self._gsm[1:]))
+                        else:
+                            sig_mu = sigmoid(params[self._pse:].reshape(self._gsm))
+                        #sig_mu = (sig_mu, delta_mu)
+                        sig_mu = delta_mu * sig_mu * (1.0 - sig_mu)
                     else:
-                        sig_mu = None
+                        sig_mu = 1
                 else:
-                    sig_mu = None
+                    sig_mu = 1
 
                     if self._epsb:
                         delta_eps = self._epsb[1] - self._epsb[0]
-                        #sig_eps = params.reshape(self._grid_eps.shape)
-                        sig_eps = sigmoid(params.reshape(self._grid_eps.shape))
-                        sig_eps = (sig_eps, delta_eps)
+                        if self._planar:
+                            #sig_eps = sigmoid(np.broadcast_to(params.reshape(self._gse[1:])[np.newaxis, ...], self._gse))
+                            sig_eps = sigmoid(params.reshape(self._gse[1:]))
+                        else:
+                            sig_eps = sigmoid(params.reshape(self._gse))
+                        #sig_eps = (sig_eps, delta_eps)
+                        sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
                     else:
-                        sig_eps = None
+                        sig_eps = 1
             else:
-                sig_eps = None
-                sig_mu = None
+                sig_eps = 1
+                sig_mu = 1
 
-            gradient = sim.calc_ydAx_topology(self._domain, self._update_mu, sig_eps=sig_eps, sig_mu=sig_mu, lam=self._lam)
+            gradient = sim.calc_ydAx_topology(self._domain, self._update_mu, sig_eps=sig_eps, sig_mu=sig_mu, planar=self._planar, lam=self._lam)
             return gradient
     return _Topology
 
