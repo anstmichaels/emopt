@@ -121,7 +121,7 @@ def _TopologyGenerator(BaseAM):
     # Generator for Toplogy class
     assert issubclass(BaseAM, am.AdjointMethod)
     class _Topology(BaseAM):
-        def __init__(self, sim, domain=None, update_mu=False, eps_bounds=None, mu_bounds=None, planar=False, penalty_multiplier=0):
+        def __init__(self, sim, domain=None, update_mu=False, eps_bounds=None, mu_bounds=None, planar=False, area_penalty=0):
             super().__init__(sim)
             assert isinstance(self.sim.eps, TopologyMaterial2D) or isinstance(self.sim.eps, TopologyMaterial3D)
 
@@ -139,7 +139,7 @@ def _TopologyGenerator(BaseAM):
             self._epsb = eps_bounds
             self._mub = mu_bounds
             self._planar = planar
-            self._lam = penalty_multiplier
+            self._lam = area_penalty
 
         def get_params(self):
             self._grid_eps = np.copy(self.sim.eps.grid)
@@ -216,7 +216,7 @@ def _TopologyGenerator(BaseAM):
             if NOT_PARALLEL:
                 if self._update_mu:
                     if self._epsb:
-                        delta_eps = self._epsb[1] - self._epsb[0]
+                        del_eps = self._epsb[1] - self._epsb[0]
                         #sig_eps = sigmoid(params[:self._grid_eps.size].reshape(self._grid_eps.shape))
                         if self._planar:
                             sig_eps = sigmoid(params[:self._pse].reshape(self._gse[1:]))
@@ -224,12 +224,16 @@ def _TopologyGenerator(BaseAM):
                         else:
                             sig_eps = sigmoid(params[:self._pse].reshape(self._gse))
                         #sig_eps = (sig_eps, delta_eps)
-                        sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
+                        #sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
+                        self._sig_eps = np.copy(sig_eps)
+                        sig_eps = sig_eps * (1.0 - sig_eps)
                     else:
-                        sig_eps = 1
+                        del_eps = 1
+                        sig_eps = np.array([1])
+                        self._sig_eps = sig_eps
 
                     if self._mub:
-                        delta_mu = self._mub[1] - self._mub[0]
+                        del_mu = self._mub[1] - self._mub[0]
                         #sig_mu = sigmoid(params[self._grid_eps.size:].reshape(self._grid_mu.shape))
                         if self._planar:
                             #sig_mu = sigmoid(np.broadcast_to(params[self._pse:].reshape(self._gsm[1:])[np.newaxis, ...], self._gsm))
@@ -237,37 +241,72 @@ def _TopologyGenerator(BaseAM):
                         else:
                             sig_mu = sigmoid(params[self._pse:].reshape(self._gsm))
                         #sig_mu = (sig_mu, delta_mu)
-                        sig_mu = delta_mu * sig_mu * (1.0 - sig_mu)
+                        #sig_mu = delta_mu * sig_mu * (1.0 - sig_mu)
+                        sig_mu = sig_mu * (1.0 - sig_mu)
                     else:
-                        sig_mu = 1
+                        del_mu = 1
+                        #sig_mu = 1
+                        sig_mu = np.array([1])
                 else:
+                    del_mu = 1
                     sig_mu = 1
 
                     if self._epsb:
-                        delta_eps = self._epsb[1] - self._epsb[0]
+                        del_eps = self._epsb[1] - self._epsb[0]
                         if self._planar:
                             #sig_eps = sigmoid(np.broadcast_to(params.reshape(self._gse[1:])[np.newaxis, ...], self._gse))
                             sig_eps = sigmoid(params.reshape(self._gse[1:]))
                         else:
                             sig_eps = sigmoid(params.reshape(self._gse))
                         #sig_eps = (sig_eps, delta_eps)
-                        sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
+                        #sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
+                        self._sig_eps = np.copy(sig_eps)
+                        sig_eps = sig_eps * (1.0 - sig_eps)
                     else:
-                        sig_eps = 1
+                        del_eps = 1
+                        #sig_eps = 1
+                        sig_eps = np.array([1])
+                        self._sig_eps = sig_eps
             else:
-                sig_eps = 1
-                sig_mu = 1
+                #sig_eps = 1
+                #sig_mu = 1
+                #del_eps = 1
+                #del_mu = 1
+                #self._sig_eps = sig_eps
+                #sig_eps = MathDummy()
+                #sig_mu = MathDummy()
+                #del_eps = MathDummy()
+                #del_mu = MathDummy()
+                #self._sig_eps = 1
+                sig_eps = np.array([1])
+                sig_mu = np.array([1])
+                del_eps = np.array([1])
+                del_mu = np.array([1])
+                self._sig_eps = 1
 
-            gradient = sim.calc_ydAx_topology(self._domain, self._update_mu, sig_eps=sig_eps, sig_mu=sig_mu, planar=self._planar, lam=self._lam)
+            gradient = sim.calc_ydAx_topology(self._domain, self._update_mu, sig_eps=sig_eps, sig_mu=sig_mu, del_eps=del_eps, del_mu=del_mu, planar=self._planar, lam=self._lam)
             return gradient
+
+        def calc_penalty(self, sim, params):
+            lam = self._lam
+            if lam == 0:
+                return 0
+            else:
+                #return lam * np.mean(self._sig_eps)
+                return lam * np.mean(sigmoid(params))
+
+        def calc_grad_p(self, sim, params):
+            # this is computed directly in calc_gradient
+            return np.zeros_like(params)
+
     return _Topology
 
 
 ### CONVENIENCE TOPOLOGY AM CLASSES ###
 Topology = _TopologyGenerator(am.AdjointMethod)
+TopologyFM2D = _TopologyGenerator(am.AdjointMethodFM2D)
 TopologyPNF2D = _TopologyGenerator(am.AdjointMethodPNF2D)
 TopologyPNF3D = _TopologyGenerator(am.AdjointMethodPNF3D)
-TopologyFM2D = _TopologyGenerator(am.AdjointMethodFM2D)
 ### CONVENIENCE TOPOLOGY AM CLASSES ###
 
 ### CONVENIENCE FUNCTIONS ###
