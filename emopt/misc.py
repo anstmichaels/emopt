@@ -69,7 +69,7 @@ def n_SiO2(wavelength):
     """Load SiO2 refractive index vs wavlength and interpolate at desired wavelength.
     A piecewise cubic fit is used for the interpolation.
 
-    Source: I. H. Malitson. Interspecimen comparison of the refractive index of fused 
+    Source: I. H. Malitson. Interspecimen comparison of the refractive index of fused
     silica, J. Opt. Soc. Am. 55, 1205-1208 (1965)
     via refractiveindex.info
 
@@ -247,15 +247,15 @@ class DomainCoordinates(object):
             The grid spacing along z
         """
 
-        ilist = np.arange(i1, i2, 1, dtype=np.int)
+        ilist = np.arange(i1, i2, 1, dtype=np.int64)
         self._z = dz * ilist.astype(np.double)
         self._i = slice(i1, i2)
 
-        jlist = np.arange(j1, j2, 1, dtype=np.int)
+        jlist = np.arange(j1, j2, 1, dtype=np.int64)
         self._y = dy * jlist.astype(np.double)
         self._j = slice(j1, j2)
 
-        klist = np.arange(k1, k2, 1, dtype=np.int)
+        klist = np.arange(k1, k2, 1, dtype=np.int64)
         self._x = dx * klist.astype(np.double)
         self._k = slice(k1, k2)
 

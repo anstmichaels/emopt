@@ -662,7 +662,7 @@ class FDTD(MaxwellSolver):
         #
         # Returns four tuples or four None
         #   None if no overlap
-        #   (global start indices), (local start indices), 
+        #   (global start indices), (local start indices),
         #        (domain start indices), (widths of overlap)
         pos, lens = self._da.getCorners()
         k0, j0, i0 = pos
@@ -1018,7 +1018,7 @@ class FDTD(MaxwellSolver):
         self._Hx.fill(0); self._Hy.fill(0); self._Hz.fill(0)
 
         da = self._da
-        Tn = np.int(self._Ncycle*3/4)
+        Tn = np.int64(self._Ncycle*3/4)
         p = 0
 
         Ex0 = np.zeros(self._nconv); Ey0 = np.zeros(self._nconv); Ez0 = np.zeros(self._nconv)
