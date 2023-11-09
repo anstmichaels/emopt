@@ -1,8 +1,31 @@
+"""
+This module defines Material distribution objects for use with experimental
+AutoDiff enhanced optimization and Topology optimization methods.
+
+If performing AutoDiff enhanced optimization use either the AutoDiffMaterialXD
+classes, or the HybridMaterialXD classes (X=2,3 for 2D,3D). The former assumes
+that the full simulation material distribution is defined by PyTorch compatible
+functions, defined by the user. The latter assumes that only part of the
+simulation domain is defined by PyTorch compatible functions, the rest uses
+conventional Material classes from emopt.grid.
+
+***See _grid.py for helper functions to define differentiable shapes and effective
+logic operations (AutoDiffGeo).***
+
+If performing Topology optimization, use the TopologyMaterialXD class (X=2,3 for
+2D,3D). They work similarly to HybridMaterialXD classes, where the user can define
+a specific region where topology optimization is applicable, and use conventional
+emopt.grid objects elsewhere.
+
+Examples
+--------
+See emopt/examples/experimental/ for detailed examples.
+"""
 import numpy as np
-from ..grid import Material2D, Material3D
 from math import floor, ceil
+from ..grid import Material2D, Material3D
+from ..misc import DomainCoordinates
 import torch
-from scipy.interpolate import RegularGridInterpolator
 
 __author__ = "Sean Hooten"
 __copyright__ = 'Copyright 2023 Hewlett Packard Enterprise Development LP.'
@@ -11,6 +34,33 @@ __maintainer__ = "Sean Hooten"
 __status__ = "development"
 
 class AutoDiffMaterial2D(Material2D):
+    """Create a 2D material that is functionally defined by the user in a
+    way that supports PyTorch Autograd.
+
+    ***See _grid.py for helper functions to define differentiable shapes and effective
+    logic operations (AutoDiffGeo).***
+
+    Parameters
+    ----------
+    dx : float
+        The grid spacing of the underlying grid in the x direction.
+    dy : float
+        The grid spacing of the underlying grid in the y direction.
+    func : callable
+        Function with args: func(v, list_coords, bg=None)
+            v is a torch.tensor of variables/structural parameters
+            list_coords = [y, x] are torch.tensor of y- and x- coordinates
+            where len(x.shape)=1 and len(y.shape)=1.
+            bg are background permittivity/permeability values at the provided
+            y- and x- coordinates (use None for this class).
+            func should return a torch.tensor with
+                output.shape = (y.shape[0], x.shape[0])
+    v : np.ndarray or torch.tensor
+        initial variables / structural parameters
+
+    Attributes
+    ----------
+    """
     def __init__(self, dx, dy, func, v):
         super().__init__()
         self._dx = dx
@@ -53,11 +103,35 @@ class AutoDiffMaterial2D(Material2D):
         return arr
 
 class HybridMaterial2D(Material2D):
-    # WARNING: WILL RESULT IN UNDEFINED BEHAVIOR FOR MODE CALCULATIONS
-    # Cross-section that includes two materials for mode definition should not be used
-    # this is an unintended side effect of the way EMopt was originally written.
+    """Create a 2D material where a subdomain is functionally defined by the user in a
+    way that supports PyTorch Autograd. The remainder of the domain is defined, for
+    example, by a emopt.grid.StructuredMaterial2D object.
 
-    def __init__(self, mats: Material2D, matf: AutoDiffMaterial2D, fdomain):
+    ***See _grid.py for helper functions to define differentiable shapes and effective
+    logic operations (AutoDiffGeo).***
+
+    WARNING: May result in undefined behavior if a mode calculation plane intersects
+    fdomain below.
+
+    Parameters
+    ----------
+    mats : emopt.grid.Material2D
+        One of the conventional Material classes to define background (static) shapes
+        in the material distribution.
+    matf : emopt.experimental.grid.AutoDiffMaterial2D
+        A functionally-defined material distribution to be used with PyTorch Autograd
+        over a designable region.
+    fdomain : emopt.misc.DomainCoordinates
+        A domain where the AutoDiffMaterial2D material is active.
+
+    Attributes
+    ----------
+    """
+
+    def __init__(self,
+            mats: Material2D,
+            matf: AutoDiffMaterial2D,
+            fdomain: DomainCoordinates):
         super().__init__()
         self._mats = mats
         self._matf = matf
@@ -114,11 +188,37 @@ class HybridMaterial2D(Material2D):
         return arr
 
 class TopologyMaterial2D(Material2D):
-    # NOTE: This assumes that staggered grids all share the same value as unstaggered grid positions (with reference to Ez or Hz in TE and TM respectively)
-    def __init__(self, mats: Material2D, domain):
+    """Create a 2D material that supports topology optimizations. Similar to
+    HybridMaterial2D above, but the provided subdomain will be used in
+    topology optimizations (requires minimal interaction from the user to
+    update the materials). Will initialize the subdomain with structures
+    defined by the background Material2D.
+
+    NOTE: This assumes that staggered grids all share the same value as unstaggered
+    grid positions (with reference to Ez or Hz in TE and TM respectively)
+
+    WARNING: May result in undefined behavior if a mode calculation plane intersects
+    fdomain below.
+
+    Parameters
+    ----------
+    mats : emopt.grid.Material2D
+        One of the conventional Material classes to define background (static) shapes
+        in the material distribution.
+    fdomain : emopt.misc.DomainCoordinates
+        A domain where topology optimization is used. Initializes to mats.
+
+    Attributes
+    ----------
+    grid : np.ndarray
+        The designable grid of material values defined over fdomain.
+    """
+    def __init__(self,
+            mats: Material2D,
+            fdomain: DomainCoordinates):
         super().__init__()
         self._mats = mats
-        self._fd = domain
+        self._fd = fdomain
         self._grid = self._mats.get_values_in(domain, squeeze=True)
 
     @property
@@ -133,7 +233,7 @@ class TopologyMaterial2D(Material2D):
     def get_value(self, x, y):
         if contains_index_2D(x,y, self._fd.k1, self._fd.k2,
                                   self._fd.j1, self._fd.j2):
-            return self._grid[ceil(y-0.5), floor(x+0.5)] 
+            return self._grid[ceil(y-0.5), floor(x+0.5)]
         else:
             return self._mats.get_value(x, y)
 
