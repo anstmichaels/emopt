@@ -9,7 +9,7 @@ functions, defined by the user. The latter assumes that only part of the
 simulation domain is defined by PyTorch compatible functions, the rest uses
 conventional Material classes from emopt.grid.
 
-***See _grid.py for helper functions to define differentiable shapes and effective
+***See autodiff_geometry.py for helper functions to define differentiable shapes and effective
 logic operations (AutoDiffGeo).***
 
 If performing Topology optimization, use the TopologyMaterialXD class (X=2,3 for
@@ -37,7 +37,7 @@ class AutoDiffMaterial2D(Material2D):
     """Create a 2D material that is functionally defined by the user in a
     way that supports PyTorch Autograd.
 
-    ***See _grid.py for helper functions to define differentiable shapes and effective
+    ***See autodiff_geometry.py for helper functions to define differentiable shapes and effective
     logic operations (AutoDiffGeo).***
 
     Parameters
@@ -113,7 +113,7 @@ class HybridMaterial2D(Material2D):
     from above. The remainder of the domain is defined, for example, by a
     emopt.grid.StructuredMaterial2D object.
 
-    ***See _grid.py for helper functions to define differentiable shapes and effective
+    ***See autodiff_geometry.py for helper functions to define differentiable shapes and effective
     logic operations (AutoDiffGeo).***
 
     WARNING: May result in undefined behavior if a mode calculation plane either is not
@@ -285,7 +285,7 @@ class AutoDiffMaterial3D(Material3D):
     """Create a 3D material that is functionally defined by the user in a
     way that supports PyTorch Autograd.
 
-    ***See _grid.py for helper functions to define differentiable shapes and effective
+    ***See autodiff_geometry.py for helper functions to define differentiable shapes and effective
     logic operations (AutoDiffGeo).***
 
     Parameters
@@ -368,7 +368,7 @@ class HybridMaterial3D(Material3D):
     from above. The remainder of the domain is defined, for example, by a
     emopt.grid.StructuredMaterial3D object.
 
-    ***See _grid.py for helper functions to define differentiable shapes and effective
+    ***See autodiff_geometry.py for helper functions to define differentiable shapes and effective
     logic operations (AutoDiffGeo).***
 
     WARNING: May result in undefined behavior if a mode calculation plane either is not
@@ -390,9 +390,9 @@ class HybridMaterial3D(Material3D):
     Attributes
     ----------
     """
-    def __init__(self, 
-                 mats: Material3D, 
-                 matf: AutoDiffMaterial3D, 
+    def __init__(self,
+                 mats: Material3D,
+                 matf: AutoDiffMaterial3D,
                  fdomain: DomainCoordinates
                  ):
         super().__init__()
@@ -486,8 +486,8 @@ class TopologyMaterial3D(Material3D):
     grid : np.ndarray
         The designable grid of material values defined over fdomain.
     """
-    def __init__(self, 
-                 mats: Material3D, 
+    def __init__(self,
+                 mats: Material3D,
                  fdomain: DomainCoordinates
                  ):
         super().__init__()
