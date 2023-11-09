@@ -1,3 +1,15 @@
+"""
+This module defines derived classes of the FDFD solvers in emopt.fdfd for
+use with new experimental topology and AutoDiff-enhanced optimization methods
+available in emopt.experimental.adjoint_method. It enables: support for
+functionally-defined material distributions, and improved calculation of
+the adjoint variables method gradient using backpropagation.
+Note: currently requires PyTorch for correct functionality.
+
+Examples
+--------
+See emopt/examples/experimental/ for detailed examples.
+"""
 from .. import fdfd
 from ..fdfd import PETSc
 from ..misc import RANK, MathDummy, NOT_PARALLEL, DomainCoordinates, warning_message, info_message
@@ -12,14 +24,24 @@ __maintainer__ = "Sean Hooten"
 __status__ = "development"
 
 class FDFD_TE(fdfd.FDFD_TE):
+    """Derived class to simulate Maxwell's equations in 2D with TE-polarized
+    fields. Please see emopt.fdfd.FDFD_TE for full documentation (it is used
+    the same way, except implements some additional methods for topology /
+    AutoDiff-enhanced optimization).
+    This class should be used for simulations that use either of the following:
+        emopt.experimental.grid classes for simulation material distributions
+        emopt.experimental.adjoint_method classes for inverse design
+    """
     def __init__(self, *args, **kwargs):
-        self.real_materials=True
         super(FDFD_TE, self).__init__(*args, **kwargs)
 
     def build(self):
-        # Re-writing this for speed
-
-        # store local versions of class variables for a bit of speedup
+        """(Re)Build the system matrix. This has been rewritten for improved
+        speed at the expense of more memory usage. Basically instead of calling
+        the permittivity/permeability grid objects for each individual
+        coordinate, we instead vectorize the operation by calling update
+        immediately after initializing the system matrix :math:`A`.
+        """
         A = self._A
         M = self._M
         N = self._N
@@ -61,11 +83,7 @@ class FDFD_TE(fdfd.FDFD_TE):
                 jHy0 = ig*Nc + 2
                 jHy1 = (ig+1)*Nc + 2
 
-                #j1 = i+1
-                #j2 = (y-1)*N + x
-
                 # Diagonal element is the permittivity at (x,y)
-                #A[i,jEz] = 1j * eps.get_value(x,y)
                 A[i,jEz] = 1j
 
                 A[i,jHx1] = -ody_Ez[y,x]
@@ -118,7 +136,6 @@ class FDFD_TE(fdfd.FDFD_TE):
 
                 # diagonal element is permeability at (x,y)
                 # if(simple_mu): A[i, j0] = -1j
-                #A[i,jHx] = -1j * mu.get_value(x,y+0.5)
                 A[i,jHx] = -1j
 
                 A[i, jEz0] = -ody_Hx[y,x]
@@ -156,7 +173,6 @@ class FDFD_TE(fdfd.FDFD_TE):
                 j1 = i-1
 
                 # diagonal is permeability at (x,y)
-                #A[i,jHy] = -1j * mu.get_value(x-0.5,y)
                 A[i,jHy] = -1j
                 A[i,jEz1] = -odx_Hy[y,x]
 
@@ -195,8 +211,15 @@ class FDFD_TE(fdfd.FDFD_TE):
         self._built = True
 
     def update(self, bbox=None):
+        """Update only the material values stored in A.
+        See emopt.fdfd.FDFD_TE.update for full documentation.
+
+        This has been rewritten for improved speed/convenience. The update is done
+        in Python instead of calling any C code, but seems to be fast. Note this is
+        currently memory inefficient, calculates the full grid on each MPI node,
+        then downselects what it needs to update :math:`A` locally.
+        """
         # implementing the update in python for simplicity
-        # Note this is currently inefficient, calculates the full grid on each MPI node, then downselects what it needs.
         A = self._A
         M = self._M
         N = self._N
@@ -235,41 +258,112 @@ class FDFD_TE(fdfd.FDFD_TE):
         A.assemblyBegin()
         A.assemblyEnd()
 
-    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, del_eps=1, del_mu=1, planar=False, lam=0):
-        # NOTE: Below is not the most efficent way to be doing things,
-        #       we should be doing multiplication with PETSc vectors.
-        #       currently going to perform multiplication only on head node
-        # Something like this would be improved (nonworking code):
-        # x = self.x
-        # y = self.x_adj
-        # product = PETSc.Vec().create()
-        # product = product.pointwiseMult(x,y)
+    def calc_ydAx_topology(self,
+            domain: DomainCoordinates,
+            update_mu: bool,
+            sig_eps: np.ndarray = None,
+            sig_mu: np.ndarray = None,
+            del_eps: float = 1.,
+            del_mu: float = 1.,
+            planar: bool = False,
+            lam: float = 0.) -> np.ndarray:
+        """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
 
-        #x = self.fields
-        #y = self.fields_adj
+        The gradient for bounded topology optimization can be expressed, more
+        specifically, as:
+        grad = 2 * omega * (sig_eps * del_eps * Im(E o E^adj) - sig_mu * del_mu * Im(H o H^adj))
+        where sig_eps = the derivative of sigmoid of variables for permittivity
+              sig_mu = the derivative of sigmoid of variables for permeability
+              o = the Hadamard (element-wise) product.
+              del_eps = the permittivity range (max - min)
+              del_mu = the permeability range (max - min)
+        This class also allows for planar devices (e.g. for compatibility with
+        photolithography). Furthermore, one may use a penalty multiplier lam,
+        which penalizes spurious features (ultimately, lam>0 tries to guide designs
+        towards features with the lower bound of the permittivity or permeability).
+
+        NOTE: Below is not the most efficent way to be doing things,
+              we should be doing multiplication with PETSc vectors for
+              parallelization. Currently performing multiplication only on head node
+              Something like this would be improved (nonworking code):
+                  x = self.x
+                  y = self.x_adj
+                  product = PETSc.Vec().create()
+                  product = product.pointwiseMult(x,y)
+
+        NOTE: Currently we assume that staggered grid coordinates have same material
+        value as grid center.
+
+        Parameters
+        ----------
+        domain : DomainCoordinates
+            The designable grid domain.
+
+        update_mu : bool
+            Use True if mu is also designable. Default = False.
+
+        sig_eps : np.ndarray
+            The derivative of sigmoid of the design parameters for permittivity
+            (should take the same shape local designable grid as the field arrays).
+            If None, assumes that the problem is unbounded. Default = None.
+
+        sig_mu : np.ndarray
+            The derivative of sigmoid of the design parameters for permeability
+            (should take the same shape local designable grid as the field arrays).
+            If None, assumes that the problem is unbounded. Default = None.
+            Note: if update_mu=False, this will be ignored.
+
+        del_eps : float
+            The difference between maximum and minimum permittivity for bi-level
+            bounded topology optimization.
+
+        del_mu : float
+            The difference between maximum and minimum permeability for bi-level
+            bounded topology optimization.
+
+        planar : float
+            If True, assumes that the local designable region should be constrained
+            to extruded shapes (common for integrated photonics). In 2D, this assumes
+            that the structure is effectively 1D extruded. Currently assumes that the
+            structure has nontrivial features in the x direction.
+            Default = False.
+
+        lam : float
+            A penalty value that can be used to penalize spurious design features.
+            If lam > 0, drives the design towards features with lower bound of
+            permittivity/permeability. Use carefully, it will trade-off with the
+            true design objective. Default = 0.
+
+        Returns
+        -------
+        np.ndarray
+            The gradient of the objective with respect to permittivity/permeability
+            pixels.
+        """
 
         Ez = self.get_field('Ez', domain)
         Ez_adj = self.get_adjoint_field('Ez', domain)
 
         if planar:
-            #grad_eps = 2 * sig_eps * np.imag(np.sum(Ez * Ez_adj, axis=0))
-            grad_eps = sig_eps * (lam/sig_eps.size + 2 * del_eps * np.imag(np.sum(Ez * Ez_adj, axis=0)))
+            grad_eps = sig_eps * (lam/sig_eps.size + \
+                    2 * del_eps * np.imag(np.sum(Ez * Ez_adj, axis=0)))
         else:
-            #dgrad_eps = 2 * sig_eps * np.imag(Ez * Ez_adj)
-            grad_eps = sig_eps * (lam/sig_eps.size + 2 * del_eps * np.imag(Ez * Ez_adj))
+            grad_eps = sig_eps * (lam/sig_eps.size + \
+                    2 * del_eps * np.imag(Ez * Ez_adj))
 
         if update_mu:
             Hx = self.get_field('Hx', domain)
             Hy = self.get_field('Hy', domain)
             Hx_adj = self.get_adjoint_field('Hx', domain)
             Hy_adj = self.get_adjoint_field('Hy', domain)
-            
+
             if planar:
-                #grad_mu = -2 * sig_mu * np.imag(np.sum(Hx * Hx_adj, axis=0) + np.sum(Hy * Hy_adj, axis=0))
-                grad_mu = -2 * del_mu * sig_mu * np.imag(np.sum(Hx * Hx_adj, axis=0) + np.sum(Hy * Hy_adj, axis=0))
+                grad_mu = sig_mu * (lam/sig_mu.size - \
+                        2 * del_mu * (np.imag(np.sum(Hx * Hx_adj, axis=0) + \
+                                              np.sum(Hy * Hy_adj, axis=0))))
             else:
-                #grad_mu = -2 * sig_mu * np.imag(Hx * Hx_adj + Hy * Hy_adj)
-                grad_mu = -2 * del_mu * sig_mu * np.imag(Hx * Hx_adj + Hy * Hy_adj)
+                grad_mu =  sig_mu * (lam/sig_mu.size - \
+                        2 * del_mu * (np.imag(Hx * Hx_adj + Hy * Hy_adj)))
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:
@@ -277,7 +371,47 @@ class FDFD_TE(fdfd.FDFD_TE):
 
         return grad
 
-    def calc_ydAx_autograd(self, domain, update_mu, eps_autograd, mu_autograd):
+    def calc_ydAx_autograd(self,
+            domain: DomainCoordinates,
+            update_mu: bool,
+            eps_autograd: list,
+            mu_autograd: list) -> torch.tensor:
+        """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
+        for reverse-mode AutoDiff enhanced optimizations.
+
+        NOTE: Below is not the most efficent way to be doing things,
+              we should be doing multiplication with PETSc vectors for
+              parallelization. Currently performing multiplication only on head node
+              Something like this would be improved (nonworking code):
+                  x = self.x
+                  y = self.x_adj
+                  product = PETSc.Vec().create()
+                  product = product.pointwiseMult(x,y)
+
+        Parameters
+        ----------
+        domain : DomainCoordinates
+            The designable grid domain.
+
+        update_mu : bool
+            Use True if mu is also designable. Default = False.
+
+        eps_autograd : list of torch.tensor
+            list of The permittivity distribution arrays, in this case defined at grid
+            center for Ez component. Index [0] corresponds to Ez component. In principle,
+            this should be sampled from a emopt.experimental.grid.AutoDiffMaterial2D object.
+
+        mu_autograd : list of torch.tensor
+            list of permeability distribution arrays, defined at staggered coordinates
+            in x and y. Index [0] corresponds to Hy component, index [1] corresponds
+            to Hx component. In principle, these should be sampled from a
+            emopt.experimental.grid.AutoDiffMaterial2D object.
+
+        Returns
+        -------
+        torch.tensor
+            pseudo_FOM for use in reverse-mode AutoDiff to compute the gradient.
+        """
         Ez = torch.as_tensor(self.get_field('Ez', domain))
         Ez_adj = torch.as_tensor(self.get_adjoint_field('Ez', domain))
         pseudoloss = eps_autograd[0] * Ez * Ez_adj
@@ -290,8 +424,15 @@ class FDFD_TE(fdfd.FDFD_TE):
         return 2 * pseudoloss.imag.sum()
 
 class FDFD_TM(fdfd.FDFD_TM):
+    """Derived class to simulate Maxwell's equations in 2D with TM-polarized
+    fields. Please see emopt.fdfd.FDFD_TM for full documentation (it is used
+    the same way, except implements some additional methods for topology /
+    AutoDiff-enhanced optimization).
+    This class should be used for simulations that use either of the following:
+        emopt.experimental.grid classes for simulation material distributions
+        emopt.experimental.adjoint_method classes for inverse design
+    """
     def __init__(self, *args, **kwargs):
-        self.real_materials=True
         super(FDFD_TM, self).__init__(*args, **kwargs)
 
     def build(self):
@@ -300,42 +441,111 @@ class FDFD_TM(fdfd.FDFD_TM):
     def update(self, bbox=None):
         FDFD_TE.update(self, bbox=bbox)
 
-    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, del_eps=1, del_mu=1, planar=False, lam=None):
-        # NOTE: Below is not the most efficent way to be doing things,
-        #       we should be doing multiplication with PETSc vectors.
-        #       currently going to perform multiplication only on head node
-        # Something like this would be improved (nonworking code):
-        # x = self.x
-        # y = self.x_adj
-        # product = PETSc.Vec().create()
-        # product = product.pointwiseMult(x,y)
+    def calc_ydAx_topology(self,
+            domain: DomainCoordinates,
+            update_mu: bool,
+            sig_eps: np.ndarray = None,
+            sig_mu: np.ndarray = None,
+            del_eps: float = 1.,
+            del_mu: float = 1.,
+            planar: bool = False,
+            lam: float = 0.):
+        """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
 
+        The gradient for bounded topology optimization can be expressed, more
+        specifically, as:
+        grad = 2 * omega * (sig_eps * del_eps * Im(E o E^adj) - sig_mu * del_mu * Im(H o H^adj))
+        where sig_eps = the derivative of sigmoid of variables for permittivity
+              sig_mu = the derivative of sigmoid of variables for permeability
+              o = the Hadamard (element-wise) product.
+              del_eps = the permittivity range (max - min)
+              del_mu = the permeability range (max - min)
+        This class also allows for planar devices (e.g. for compatibility with
+        photolithography). Furthermore, one may use a penalty multiplier lam,
+        which penalizes spurious features (ultimately, lam>0 tries to guide designs
+        towards features with the lower bound of the permittivity or permeability).
+
+        NOTE: Below is not the most efficent way to be doing things,
+              we should be doing multiplication with PETSc vectors for
+              parallelization. Currently performing multiplication only on head node
+              Something like this would be improved (nonworking code):
+                  x = self.x
+                  y = self.x_adj
+                  product = PETSc.Vec().create()
+                  product = product.pointwiseMult(x,y)
+
+        NOTE: Currently we assume that staggered grid coordinates have same material
+        value as grid center.
+
+        Parameters
+        ----------
+        domain : DomainCoordinates
+            The designable grid domain.
+
+        update_mu : bool
+            Use True if mu is also designable. Default = False.
+
+        sig_eps : np.ndarray
+            The derivative of sigmoid of the design parameters for permittivity
+            (should take the same shape local designable grid as the field arrays).
+            If None, assumes that the problem is unbounded. Default = None.
+
+        sig_mu : np.ndarray
+            The derivative of sigmoid of the design parameters for permeability
+            (should take the same shape local designable grid as the field arrays).
+            If None, assumes that the problem is unbounded. Default = None.
+            Note: if update_mu=False, this will be ignored.
+
+        del_eps : float
+            The difference between maximum and minimum permittivity for bi-level
+            bounded topology optimization.
+
+        del_mu : float
+            The difference between maximum and minimum permeability for bi-level
+            bounded topology optimization.
+
+        planar : float
+            If True, assumes that the local designable region should be constrained
+            to extruded shapes (common for integrated photonics). In 2D, this assumes
+            that the structure is effectively 1D extruded. Currently assumes that the
+            structure has nontrivial features in the x direction.
+            Default = False.
+
+        lam : float
+            A penalty value that can be used to penalize spurious design features.
+            If lam > 0, drives the design towards features with lower bound of
+            permittivity/permeability. Use carefully, it will trade-off with the
+            true design objective. Default = 0.
+
+        Returns
+        -------
+        np.ndarray
+            The gradient of the objective with respect to permittivity/permeability
+            pixels.
+        """
         Ex = self.get_field('Ex', domain)
         Ex_adj = self.get_adjoint_field('Ex', domain)
         Ey = self.get_field('Ey', domain)
         Ey_adj = self.get_adjoint_field('Ey', domain)
 
         if planar:
-            #grad_eps = 2 * sig_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + np.sum(Ey * Ey_adj, axis=0))
-            grad_eps = sig_eps * (lam/sig_eps.size + 2 * del_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + np.sum(Ey * Ey_adj, axis=0)))
+            grad_eps = sig_eps * (lam/sig_eps.size + \
+                    2 * del_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + \
+                                          np.sum(Ey * Ey_adj, axis=0)))
         else:
-            #grad_eps = 2 * sig_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj)
-            grad_eps = sig_eps * (lam/sig_eps.size + 2 * del_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj))
-            #if NOT_PARALLEL:
-            #    import matplotlib.pyplot as plt
-            #    f = plt.figure()
-            #    ax = f.add_subplot(111)
-            #    ax.imshow(sig_eps * lam/sig_eps.size)
-            #    plt.show()
+            grad_eps = sig_eps * (lam/sig_eps.size + \
+                    2 * del_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj))
 
         if update_mu:
             Hz = self.get_field('Hz', domain)
             Hz_adj = self.get_adjoint_field('Hz', domain)
 
             if planar:
-                grad_mu = -2 * sig_mu * np.imag(np.sum(Hz * Hz_adj, axis=0))
+                grad_mu = sig_mu * (lam/sig_mu.size - \
+                        2 * del_mu * np.imag(np.sum(Hz * Hz_adj, axis=0))
             else:
-                grad_mu = -2 * sig_mu * np.imag(Hz * Hz_adj)
+                grad_mu = sig_mu * (lam/sig_mu.size - \
+                        2 * del_mu * np.imag(Hz * Hz_adj)
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:
@@ -343,7 +553,47 @@ class FDFD_TM(fdfd.FDFD_TM):
 
         return grad
 
-    def calc_ydAx_autograd(self, domain, update_mu, eps_autograd, mu_autograd):
+    def calc_ydAx_autograd(self,
+        domain: DomainCoordinates,
+        update_mu: bool,
+        eps_autograd: list,
+        mu_autograd: list) -> torch.tensor:
+        """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
+        for reverse-mode AutoDiff enhanced optimizations.
+
+        NOTE: Below is not the most efficent way to be doing things,
+              we should be doing multiplication with PETSc vectors for
+              parallelization. Currently performing multiplication only on head node
+              Something like this would be improved (nonworking code):
+                  x = self.x
+                  y = self.x_adj
+                  product = PETSc.Vec().create()
+                  product = product.pointwiseMult(x,y)
+
+        Parameters
+        ----------
+        domain : DomainCoordinates
+            The designable grid domain.
+
+        update_mu : bool
+            Use True if mu is also designable. Default = False.
+
+        eps_autograd : list of torch.tensor
+            list of permittivity distribution arrays, defined at staggered coordinates
+            in x and y. Index [0] corresponds to Ey component, index[1] corresponds
+            to Ex component. In principle, this should be sampled from a
+            emopt.experimental.grid.AutoDiffMaterial2D object.
+
+        mu_autograd : list of torch.tensor
+            list of permeability distribution arrays, in this case defined at grid
+            center for Hz component. Index [0] corresponds to Hz component. In principle,
+            this should be sampled from a emopt.experimental.grid.AutoDiffMaterial2D object.
+
+        Returns
+        -------
+        torch.tensor
+            pseudo_FOM for use in reverse-mode AutoDiff to compute the gradient.
+        """
         Ex = torch.as_tensor(self.get_field('Ex', domain))
         Ex_adj = torch.as_tensor(self.get_adjoint_field('Ex', domain))
         Ey = torch.as_tensor(self.get_field('Ey', domain))
@@ -355,13 +605,101 @@ class FDFD_TM(fdfd.FDFD_TM):
             pseudoloss = pseudoloss - mu_autograd[0] * Hz * Hz_adj
         return 2*pseudoloss.imag.sum()
 
-
 class FDFD_3D(fdfd.FDFD_3D):
+    """Derived class to simulate Maxwell's equations in 3D. Please see
+    emopt.fdfd.FDFD_3D for full documentation (it is used the same way, except
+    implements some additional methods for topology / AutoDiff-enhanced optimization).
+    This class should be used for simulations that use either of the following:
+        emopt.experimental.grid classes for simulation material distributions
+        emopt.experimental.adjoint_method classes for inverse design
+
+    NOTE: Currently untested. Recommended to try emopt.experimental.fdtd.FDTD
+    """
     def __init__(self, *args, **kwargs):
         super(FDFD_3D, self).__init__(*args, **kwargs)
 
-    def calc_ydAx_topology(self, domain, update_mu, sig_eps=None, sig_mu=None, planar=False, lam=None):
-        # NOTE: Assumes isotropic materials
+    def calc_ydAx_topology(self,
+            domain: DomainCoordinates,
+            update_mu: bool,
+            sig_eps: np.ndarray = None,
+            sig_mu: np.ndarray = None,
+            del_eps: float = 1.,
+            del_mu: float = 1.,
+            planar: bool = False,
+            lam: float = 0.) -> np.ndarray:
+        """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
+
+        The gradient for bounded topology optimization can be expressed, more
+        specifically, as:
+        grad = 2 * omega * (sig_eps * del_eps * Im(E o E^adj) - sig_mu * del_mu * Im(H o H^adj))
+        where sig_eps = the derivative of sigmoid of variables for permittivity
+              sig_mu = the derivative of sigmoid of variables for permeability
+              o = the Hadamard (element-wise) product.
+              del_eps = the permittivity range (max - min)
+              del_mu = the permeability range (max - min)
+        This class also allows for planar devices (e.g. for compatibility with
+        photolithography). Furthermore, one may use a penalty multiplier lam,
+        which penalizes spurious features (ultimately, lam>0 tries to guide designs
+        towards features with the lower bound of the permittivity or permeability).
+
+        NOTE: Below is not the most efficent way to be doing things,
+              we should be doing multiplication with PETSc vectors for
+              parallelization. Currently performing multiplication only on head node
+              Something like this would be improved (nonworking code):
+                  x = self.x
+                  y = self.x_adj
+                  product = PETSc.Vec().create()
+                  product = product.pointwiseMult(x,y)
+
+        NOTE: Currently we assume that staggered grid coordinates have same material
+        value as grid center.
+
+        Parameters
+        ----------
+        domain : DomainCoordinates
+            The designable grid domain.
+
+        update_mu : bool
+            Use True if mu is also designable. Default = False.
+
+        sig_eps : np.ndarray
+            The derivative of sigmoid of the design parameters for permittivity
+            (should take the same shape local designable grid as the field arrays).
+            If None, assumes that the problem is unbounded. Default = None.
+
+        sig_mu : np.ndarray
+            The derivative of sigmoid of the design parameters for permeability
+            (should take the same shape local designable grid as the field arrays).
+            If None, assumes that the problem is unbounded. Default = None.
+            Note: if update_mu=False, this will be ignored.
+
+        del_eps : float
+            The difference between maximum and minimum permittivity for bi-level
+            bounded topology optimization.
+
+        del_mu : float
+            The difference between maximum and minimum permeability for bi-level
+            bounded topology optimization.
+
+        planar : float
+            If True, assumes that the local designable region should be constrained
+            to extruded shapes (common for integrated photonics). In 3D, this assumes
+            that the structure is effectively 2D extruded. Currently assumes that the
+            structure has nontrivial features in the x-y directions.
+            Default = False.
+
+        lam : float
+            A penalty value that can be used to penalize spurious design features.
+            If lam > 0, drives the design towards features with lower bound of
+            permittivity/permeability. Use carefully, it will trade-off with the
+            true design objective. Default = 0.
+
+        Returns
+        -------
+        np.ndarray
+            The gradient of the objective with respect to permittivity/permeability
+            pixels.
+        """
 
         Ex = self.get_field('Ex', domain)
         Ex_adj = self.get_adjoint_field('Ex', domain)
@@ -370,17 +708,14 @@ class FDFD_3D(fdfd.FDFD_3D):
         Ez = self.get_field('Ez', domain)
         Ez_adj = self.get_adjoint_field('Ez', domain)
 
-        #if sig_eps is not None:
-        #    #grad_eps = 2*sig_eps[1]*np.imag(sig_eps[0] * (1.0 - sig_eps[0]) * (Ex*Ex_adj + Ey*Ey_adj + Ez*Ez_adj))
-        #    mult = sig_eps[1] * sig_eps[0] * (1.0 - sig_eps[0])
-        #else:
-        #    #grad_eps = 2*np.imag(Ex*Ex_adj + Ey*Ey_adj + Ez*Ez_adj)
-        #    mult = 1
-
         if planar:
-            grad_eps = 2 * sig_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + np.sum(Ey * Ey_adj, axis=0) + np.sum(Ez * Ez_adj, axis=0))
+            grad_eps = sig_eps * (lam/sig_eps.size + \
+                    2 * del_eps * np.imag(np.sum(Ex * Ex_adj, axis=0) + \
+                                          np.sum(Ey * Ey_adj, axis=0) + \
+                                          np.sum(Ez * Ez_adj, axis=0)))
         else:
-            grad_eps = 2 * sig_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj + Ez * Ez_adj)
+            grad_eps = sig_eps * (lam/sig_eps.size + \
+                    2* del_eps * np.imag(Ex * Ex_adj + Ey * Ey_adj + Ez * Ez_adj))
 
         if update_mu:
             Hx = self.get_field('Hx', domain)
@@ -391,14 +726,13 @@ class FDFD_3D(fdfd.FDFD_3D):
             Hz_adj = self.get_adjoint_field('Hz', domain)
 
             if planar:
-                grad_mu = -2 * sig_mu * np.imag(np.sum(Hx * Hx_adj, axis=0) + np.sum(Hy * Hy_adj, axis=0) + np.sum(Hz * Hz_adj, axis=0))
+                grad_mu = sig_mu * (lam/sig_mu.size - \
+                        2 * del_mu * np.imag(np.sum(Hx * Hx_adj, axis=0) + \
+                                             np.sum(Hy * Hy_adj, axis=0) + \
+                                             np.sum(Hz * Hz_adj, axis=0)))
             else:
-                grad_mu = -2 * sig_mu * np.imag(Hx * Hx_adj + Hy * Hy_adj + Hz * Hz_adj)
-
-            #if sig_mu is not None:
-            #    grad_mu = -2*sig_mu[1]*np.imag(sig_mu[0] * (1.0 - sig_mu[0]) * (Hx*Hx_adj + Hy*Hy_adj + Hz*Hz_adj))
-            #else:
-            #    grad_mu = -2*np.imag(Hx*Hx_adj + Hy*Hy_adj + Hz*Hz_adj)
+                grad_mu = sig_mu * (lam/sig_mu.size - \
+                        2 * del_mu * np.imag(Hx * Hx_adj + Hy * Hy_adj + Hz * Hz_adj))
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:
@@ -406,7 +740,46 @@ class FDFD_3D(fdfd.FDFD_3D):
 
         return grad
 
-    def calc_ydAx_autograd(self, domain, update_mu, eps_autograd, mu_autograd):
+    def calc_ydAx_autograd(self,
+            domain: DomainCoordinates,
+            update_mu: bool,
+            eps_autograd: list,
+            mu_autograd: list) -> torch.tensor:
+        """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
+        for reverse-mode AutoDiff enhanced optimizations.
+
+        NOTE: Below is not the most efficent way to be doing things,
+              we should be doing multiplication with PETSc vectors for
+              parallelization. Currently performing multiplication only on head node
+              Something like this would be improved (nonworking code):
+                  x = self.x
+                  y = self.x_adj
+                  product = PETSc.Vec().create()
+                  product = product.pointwiseMult(x,y)
+
+        Parameters
+        ----------
+        domain : DomainCoordinates
+            The designable grid domain.
+
+        update_mu : bool
+            Use True if mu is also designable. Default = False.
+
+        eps_autograd : list of torch.tensor
+            list of permittivity distribution arrays, defined at staggered coordinates in
+            x,y,z. In principle, this should be sampled from a emopt.experimental.grid.
+            AutoDiffMaterial3D object.
+
+        mu_autograd : list of torch.tensor
+            list of permeability distribution arrays, defined at staggered coordinates in
+            x,y,z. In principle, this should be sampled from a emopt.experimental.grid.
+            AutoDiffMaterial3D object.
+
+        Returns
+        -------
+        torch.tensor
+            pseudo_FOM for use in reverse-mode AutoDiff to compute the gradient.
+        """
         Ex = torch.as_tensor(self.get_field('Ex', domain))
         Ex_adj = torch.as_tensor(self.get_adjoint_field('Ex', domain))
         Ey = torch.as_tensor(self.get_field('Ey', domain))
