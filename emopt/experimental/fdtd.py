@@ -1,3 +1,15 @@
+"""
+This module defines derived classes of the FDTD solvers in emopt.fdfd for
+use with new experimental topology and AutoDiff-enhanced optimization methods
+available in emopt.experimental.adjoint_method. It enables: support for
+functionally-defined material distributions, and improved calculation of
+the adjoint variables method gradient using backpropagation.
+Note: currently requires PyTorch for correct functionality.
+
+Examples
+--------
+See emopt/examples/experimental/ for detailed examples.
+"""
 from .. import fdtd
 from ..misc import NOT_PARALLEL
 
