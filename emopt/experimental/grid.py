@@ -61,12 +61,17 @@ class AutoDiffMaterial2D(Material2D):
     Attributes
     ----------
     """
-    def __init__(self, dx, dy, func, v):
+    def __init__(self,
+                 dx: float,
+                 dy: float,
+                 func: callable,
+                 v: np.ndarray
+                 ):
         super().__init__()
         self._dx = dx
         self._dy = dy
         self._func = func
-        self._v = v
+        self.v = v
 
     @property
     def v(self):
@@ -104,14 +109,17 @@ class AutoDiffMaterial2D(Material2D):
 
 class HybridMaterial2D(Material2D):
     """Create a 2D material where a subdomain is functionally defined by the user in a
-    way that supports PyTorch Autograd. The remainder of the domain is defined, for
-    example, by a emopt.grid.StructuredMaterial2D object.
+    way that supports PyTorch Autograd, e.g. by providing an AutoDiffMaterial2D instance
+    from above. The remainder of the domain is defined, for example, by a
+    emopt.grid.StructuredMaterial2D object.
 
     ***See _grid.py for helper functions to define differentiable shapes and effective
     logic operations (AutoDiffGeo).***
 
-    WARNING: May result in undefined behavior if a mode calculation plane intersects
-    fdomain below.
+    WARNING: May result in undefined behavior if a mode calculation plane either is not
+    fully contained within fdomain below, or is not fully removed from fdomain. In
+    other words, the mode calculation plane touches both the AutoDiffMaterial2D
+    instance and the StructuredMaterial2D instance.
 
     Parameters
     ----------
@@ -127,11 +135,11 @@ class HybridMaterial2D(Material2D):
     Attributes
     ----------
     """
-
     def __init__(self,
-            mats: Material2D,
-            matf: AutoDiffMaterial2D,
-            fdomain: DomainCoordinates):
+                 mats: Material2D,
+                 matf: AutoDiffMaterial2D,
+                 fdomain: DomainCoordinates
+                 ):
         super().__init__()
         self._mats = mats
         self._matf = matf
@@ -197,8 +205,10 @@ class TopologyMaterial2D(Material2D):
     NOTE: This assumes that staggered grids all share the same value as unstaggered
     grid positions (with reference to Ez or Hz in TE and TM respectively)
 
-    WARNING: May result in undefined behavior if a mode calculation plane intersects
-    fdomain below.
+    WARNING: May result in undefined behavior if a mode calculation plane either is not
+    fully contained within fdomain below, or is not fully removed from fdomain. In
+    other words, the mode calculation plane touches both the fdomain coordinates
+    instance and the StructuredMaterial2D instance can cause errors.
 
     Parameters
     ----------
@@ -214,12 +224,13 @@ class TopologyMaterial2D(Material2D):
         The designable grid of material values defined over fdomain.
     """
     def __init__(self,
-            mats: Material2D,
-            fdomain: DomainCoordinates):
+                 mats: Material2D,
+                 fdomain: DomainCoordinates
+                 ):
         super().__init__()
         self._mats = mats
         self._fd = fdomain
-        self._grid = self._mats.get_values_in(domain, squeeze=True)
+        self._grid = self._mats.get_values_in(fdomain, squeeze=True)
 
     @property
     def grid(self):
@@ -228,7 +239,8 @@ class TopologyMaterial2D(Material2D):
     @grid.setter
     def grid(self, new_grid):
         self._grid = new_grid
-        #self._interpolator = RegularGridInterpolator((self._y, self._x), self._grid, bounds_error=False, fill_value=None)
+        #self._interpolator = RegularGridInterpolator((self._y, self._x), \
+        # self._grid, bounds_error=False, fill_value=None)
 
     def get_value(self, x, y):
         if contains_index_2D(x,y, self._fd.k1, self._fd.k2,
@@ -269,15 +281,49 @@ class TopologyMaterial2D(Material2D):
 
         return arr
 
-
 class AutoDiffMaterial3D(Material3D):
-    def __init__(self, dx, dy, dz, func, v):
+    """Create a 3D material that is functionally defined by the user in a
+    way that supports PyTorch Autograd.
+
+    ***See _grid.py for helper functions to define differentiable shapes and effective
+    logic operations (AutoDiffGeo).***
+
+    Parameters
+    ----------
+    dx : float
+        The grid spacing of the underlying grid in the x direction.
+    dy : float
+        The grid spacing of the underlying grid in the y direction.
+    dz : float
+        The grid spacing of the underlying grid in the z direction.
+    func : callable
+        Function with args: func(v, list_coords, bg=None)
+            v is a torch.tensor of variables/structural parameters
+            list_coords = [z, y, x] are torch.tensor of z-, y-, and x- coordinates
+            where len(x.shape)=1, len(y.shape)=1, len(z.shape)=1.
+            bg are background permittivity/permeability values at the provided
+            z-, y-, and x- coordinates (use None for this class).
+            func should return a torch.tensor with
+                output.shape = (z.shape[0], y.shape[0], x.shape[0])
+    v : np.ndarray or torch.tensor
+        initial variables / structural parameters
+
+    Attributes
+    ----------
+    """
+    def __init__(self,
+                 dx: float,
+                 dy: float,
+                 dz: float,
+                 func: callable,
+                 v: np.ndarray
+                 ):
         super().__init__()
         self._dx = dx
         self._dy = dy
         self._dz = dz
         self._func = func
-        self._v = v
+        self.v = v
 
     @property
     def v(self):
@@ -317,11 +363,38 @@ class AutoDiffMaterial3D(Material3D):
         return arr
 
 class HybridMaterial3D(Material3D):
-    # WARNING: WILL RESULT IN UNDEFINED BEHAVIOR FOR MODE CALCULATIONS
-    # Cross-section that includes two materials for mode definition should not be used
-    # this is an unintended side effect of the way EMopt was originally written.
+    """Create a 3D material where a subdomain is functionally defined by the user in a
+    way that supports PyTorch Autograd, e.g. by providing an AutoDiffMaterial3D instance
+    from above. The remainder of the domain is defined, for example, by a
+    emopt.grid.StructuredMaterial3D object.
 
-    def __init__(self, mats: Material3D, matf: AutoDiffMaterial3D, fdomain):
+    ***See _grid.py for helper functions to define differentiable shapes and effective
+    logic operations (AutoDiffGeo).***
+
+    WARNING: May result in undefined behavior if a mode calculation plane either is not
+    fully contained within fdomain below, or is not fully removed from fdomain. In
+    other words, the mode calculation plane touches both the AutoDiffMaterial3D
+    instance and the StructuredMaterial3D instance can cause errors.
+
+    Parameters
+    ----------
+    mats : emopt.grid.Material3D
+        One of the conventional Material classes to define background (static) shapes
+        in the material distribution.
+    matf : emopt.experimental.grid.AutoDiffMaterial3D
+        A functionally-defined material distribution to be used with PyTorch Autograd
+        over a designable region.
+    fdomain : emopt.misc.DomainCoordinates
+        A domain where the AutoDiffMaterial3D material is active.
+
+    Attributes
+    ----------
+    """
+    def __init__(self, 
+                 mats: Material3D, 
+                 matf: AutoDiffMaterial3D, 
+                 fdomain: DomainCoordinates
+                 ):
         super().__init__()
         self._mats = mats
         self._matf= matf
@@ -338,7 +411,6 @@ class HybridMaterial3D(Material3D):
 
     def get_value(self, x, y, z):
         mat = self._mats.get_value(x, y, z)
-        #if self._fd.contains_index(x, y, z):
         if contains_index(x,y,z, self._fd.k1, self._fd.k2,
                                  self._fd.j1, self._fd.j2,
                                  self._fd.i1, self._fd.i2):
@@ -387,11 +459,41 @@ class HybridMaterial3D(Material3D):
         return arr
 
 class TopologyMaterial3D(Material3D):
-    def __init__(self, mats: Material3D, domain):
+    """Create a 3D material that supports topology optimizations. Similar to
+    HybridMaterial3D above, but the provided subdomain will be used in
+    topology optimizations (requires minimal interaction from the user to
+    update the materials). Will initialize the subdomain with structures
+    defined by the background Material3D.
+
+    NOTE: This assumes that staggered grids all share the same value as unstaggered
+    grid positions (with reference to Ez or Hz in TE and TM respectively)
+
+    WARNING: May result in undefined behavior if a mode calculation plane either is not
+    fully contained within fdomain below, or is not fully removed from fdomain. In
+    other words, the mode calculation plane touches both the fdomain coordinates
+    instance and the StructuredMaterial3D instance can cause errors.
+
+    Parameters
+    ----------
+    mats : emopt.grid.Material2D
+        One of the conventional Material classes to define background (static) shapes
+        in the material distribution.
+    fdomain : emopt.misc.DomainCoordinates
+        A domain where topology optimization is used. Initializes to mats.
+
+    Attributes
+    ----------
+    grid : np.ndarray
+        The designable grid of material values defined over fdomain.
+    """
+    def __init__(self, 
+                 mats: Material3D, 
+                 fdomain: DomainCoordinates
+                 ):
         super().__init__()
         self._mats = mats
-        self._fd = domain
-        self._grid = self._mats.get_values_in(domain, squeeze=True)
+        self._fd = fdomain
+        self._grid = self._mats.get_values_in(fdomain, squeeze=True)
 
     @property
     def grid(self):
@@ -400,7 +502,8 @@ class TopologyMaterial3D(Material3D):
     @grid.setter
     def grid(self, new_grid):
         self._grid = new_grid
-        #self._interpolator = RegularGridInterpolator((self._z, self._y, self._x), self._grid, bounds_error=False, fill_value=None)
+        #self._interpolator = RegularGridInterpolator((self._z, self._y, self._x), \
+        # self._grid, bounds_error=False, fill_value=None)
 
     def get_value(self, x, y, z):
         if contains_index(x,y,z, self._fd.k1, self._fd.k2,
@@ -450,7 +553,6 @@ class TopologyMaterial3D(Material3D):
             arr[indi1:indi2, indj1:indj2, indk1:indk2] = self._grid[gi1:gi2, gj1:gj2, gk1:gk2]
 
         return arr
-
 
 def contains_index_2D(k, j, k1, k2, j1, j2):
     return (k+1 > k1 and k+1 <= k2) and \
