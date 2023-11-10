@@ -259,14 +259,15 @@ class FDFD_TE(fdfd.FDFD_TE):
         A.assemblyEnd()
 
     def calc_ydAx_topology(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            sig_eps: np.ndarray = None,
-            sig_mu: np.ndarray = None,
-            del_eps: float = 1.,
-            del_mu: float = 1.,
-            planar: bool = False,
-            lam: float = 0.) -> np.ndarray:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           sig_eps: np.ndarray = None,
+                           sig_mu: np.ndarray = None,
+                           del_eps: float = 1.,
+                           del_mu: float = 1.,
+                           planar: bool = False,
+                           lam: float = 0.
+                           ) -> np.ndarray:
         """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
 
         The gradient for bounded topology optimization can be expressed, more
@@ -372,10 +373,11 @@ class FDFD_TE(fdfd.FDFD_TE):
         return grad
 
     def calc_ydAx_autograd(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            eps_autograd: list,
-            mu_autograd: list) -> torch.tensor:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           eps_autograd: list,
+                           mu_autograd: list
+                           ) -> torch.Tensor:
         """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
         for reverse-mode AutoDiff enhanced optimizations.
 
@@ -442,14 +444,15 @@ class FDFD_TM(fdfd.FDFD_TM):
         FDFD_TE.update(self, bbox=bbox)
 
     def calc_ydAx_topology(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            sig_eps: np.ndarray = None,
-            sig_mu: np.ndarray = None,
-            del_eps: float = 1.,
-            del_mu: float = 1.,
-            planar: bool = False,
-            lam: float = 0.):
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           sig_eps: np.ndarray = None,
+                           sig_mu: np.ndarray = None,
+                           del_eps: float = 1.,
+                           del_mu: float = 1.,
+                           planar: bool = False,
+                           lam: float = 0.
+                           ) -> np.ndarray:
         """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
 
         The gradient for bounded topology optimization can be expressed, more
@@ -542,10 +545,10 @@ class FDFD_TM(fdfd.FDFD_TM):
 
             if planar:
                 grad_mu = sig_mu * (lam/sig_mu.size - \
-                        2 * del_mu * np.imag(np.sum(Hz * Hz_adj, axis=0))
+                        2 * del_mu * np.imag(np.sum(Hz * Hz_adj, axis=0)))
             else:
                 grad_mu = sig_mu * (lam/sig_mu.size - \
-                        2 * del_mu * np.imag(Hz * Hz_adj)
+                        2 * del_mu * np.imag(Hz * Hz_adj))
 
             grad = np.concatenate([grad_eps.ravel(), grad_mu.ravel()], axis=0)
         else:
@@ -554,10 +557,11 @@ class FDFD_TM(fdfd.FDFD_TM):
         return grad
 
     def calc_ydAx_autograd(self,
-        domain: DomainCoordinates,
-        update_mu: bool,
-        eps_autograd: list,
-        mu_autograd: list) -> torch.tensor:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           eps_autograd: list,
+                           mu_autograd: list
+                           ) -> torch.tensor:
         """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
         for reverse-mode AutoDiff enhanced optimizations.
 
@@ -619,14 +623,15 @@ class FDFD_3D(fdfd.FDFD_3D):
         super(FDFD_3D, self).__init__(*args, **kwargs)
 
     def calc_ydAx_topology(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            sig_eps: np.ndarray = None,
-            sig_mu: np.ndarray = None,
-            del_eps: float = 1.,
-            del_mu: float = 1.,
-            planar: bool = False,
-            lam: float = 0.) -> np.ndarray:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           sig_eps: np.ndarray = None,
+                           sig_mu: np.ndarray = None,
+                           del_eps: float = 1.,
+                           del_mu: float = 1.,
+                           planar: bool = False,
+                           lam: float = 0.
+                           ) -> np.ndarray:
         """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
 
         The gradient for bounded topology optimization can be expressed, more
@@ -741,10 +746,11 @@ class FDFD_3D(fdfd.FDFD_3D):
         return grad
 
     def calc_ydAx_autograd(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            eps_autograd: list,
-            mu_autograd: list) -> torch.tensor:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           eps_autograd: list,
+                           mu_autograd: list
+                           ) -> torch.tensor:
         """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
         for reverse-mode AutoDiff enhanced optimizations.
 

@@ -11,7 +11,7 @@ Examples
 See emopt/examples/experimental/ for detailed examples.
 """
 from .. import fdtd
-from ..misc import NOT_PARALLEL
+from ..misc import NOT_PARALLEL, DomainCoordinates
 
 import numpy as np
 import torch
@@ -35,14 +35,15 @@ class FDTD(fdtd.FDTD):
         super(FDTD, self).__init__(*args, **kwargs)
 
     def calc_ydAx_topology(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            sig_eps: np.ndarray = None,
-            sig_mu: np.ndarray = None,
-            del_eps: float = 1.,
-            del_mu: float = 1.,
-            planar: bool = False,
-            lam: float = 0.) -> np.ndarray:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           sig_eps: np.ndarray = None,
+                           sig_mu: np.ndarray = None,
+                           del_eps: float = 1.,
+                           del_mu: float = 1.,
+                           planar: bool = False,
+                           lam: float = 0.
+                           ) -> np.ndarray:
         """Calculates gradient = -2 * Re(y^T dA/dp * x) for topology optimizations.
 
         The gradient for bounded topology optimization can be expressed, more
@@ -157,10 +158,11 @@ class FDTD(fdtd.FDTD):
         return grad
 
     def calc_ydAx_autograd(self,
-            domain: DomainCoordinates,
-            update_mu: bool,
-            eps_autograd: list,
-            mu_autograd: list) -> torch.tensor:
+                           domain: DomainCoordinates,
+                           update_mu: bool,
+                           eps_autograd: list,
+                           mu_autograd: list
+                           ) -> torch.tensor:
         """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
         for reverse-mode AutoDiff enhanced optimizations.
 
