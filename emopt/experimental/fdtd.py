@@ -162,7 +162,7 @@ class FDTD(fdtd.FDTD):
                            update_mu: bool,
                            eps_autograd: list,
                            mu_autograd: list
-                           ) -> torch.tensor:
+                           ) -> torch.Tensor:
         """Calculates pseudo_FOM = 2 * sum(Im(eps o E o E^adj) - Im(mu o H o H^adj))
         for reverse-mode AutoDiff enhanced optimizations.
 
@@ -183,19 +183,19 @@ class FDTD(fdtd.FDTD):
         update_mu : bool
             Use True if mu is also designable. Default = False.
 
-        eps_autograd : list of torch.tensor
+        eps_autograd : list of torch.Tensor
             list of permittivity distribution arrays, defined at staggered coordinates in
             x,y,z. In principle, this should be sampled from a emopt.experimental.grid.
             AutoDiffMaterial3D object.
 
-        mu_autograd : list of torch.tensor
+        mu_autograd : list of torch.Tensor
             list of permeability distribution arrays, defined at staggered coordinates in
             x,y,z. In principle, this should be sampled from a emopt.experimental.grid.
             AutoDiffMaterial3D object.
 
         Returns
         -------
-        torch.tensor
+        torch.Tensor
             pseudo_FOM for use in reverse-mode AutoDiff to compute the gradient.
         """
         Ex = torch.as_tensor(self.get_field('Ex', domain))
