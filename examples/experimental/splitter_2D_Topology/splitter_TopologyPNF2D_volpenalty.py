@@ -1,9 +1,7 @@
 """A simple 1x2 splitter optimized with Topology optimization.
 Here we simulate the device in 2D FDFD_TM for performance.
-
-Please see accompanying files in this directory for alternative
-implementation choices, including a penalty that can remove
-spurious features.
+Here we implement a "volume penalty" which penalizes spurious
+features in the topology optimization. 
 """
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
@@ -43,15 +41,18 @@ class TopologyAM(TopologyPNF2D):
 
         return (dFdHz, dFdEx, dFdEy)
 
-def plot_update(params, fom_list, sim, am):
+def plot_update(params, fom_list, penalty_list, sim, am):
     print('Finished iteration %d' % (len(fom_list)+1))
-    current_fom = -1*am.calc_fom(sim, params)
+    current_penalty = am.current_vol_penalty
+    current_fom = -1*(am.calc_fom(sim, params) - current_penalty)
+
     fom_list.append(current_fom)
+    penalty_list.append(current_penalty)
 
     Hz, Ex, Ey = sim.saved_fields[1]
     eps = sim.eps.get_values_in(sim.field_domains[1])
 
-    foms = {'Mode Match' : fom_list}
+    foms = {'Mode Match' : fom_list, 'Vol. Penalty': penalty_list}
     emopt.io.plot_iteration(np.flipud(Hz.real), np.flipud(eps.real), sim.Xreal,
                             sim.Yreal, foms, fname='current_result1.pdf',
                             dark=False)
@@ -59,6 +60,7 @@ def plot_update(params, fom_list, sim, am):
     data = {}
     data['params'] = params
     data['foms'] = fom_list
+    data['penalty'] = penalty_list
 
     i = len(fom_list)
     fname = 'data/topology_results'
@@ -206,13 +208,16 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the optimization
     ####################################################################################
+    vol_penalty = 0.2 # penalty on "volume" of silicon in the design region
+
     # define the topology optimization object
     am = TopologyAM(sim, 
                     mode_match, 
                     mode_line, 
                     domain=optdomain, 
                     update_mu=False, 
-                    eps_bounds=[eps_clad, eps_si])
+                    eps_bounds=[eps_clad, eps_si],
+                    vol_penalty=vol_penalty)
 
     # get the design parameters (built in)
     design_params = am.get_params(squish=0.02)
@@ -222,7 +227,8 @@ if __name__ == '__main__':
     # am.check_gradient(design_params, indices=np.arange(100)[::2], fd_step=1e-4)
 
     fom_list = []
-    callback = lambda x : plot_update(x, fom_list, sim, am)
+    penalty_list = []
+    callback = lambda x : plot_update(x, fom_list, penalty_list, sim, am)
 
     # setup and run the optimization!
     opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
