@@ -305,7 +305,7 @@ def _TopologyGenerator(BaseAM):
             in the x direction). If the simulation is 3D, it will extrude along the z direction
             (non trivial features in the xy plane). If False, all pixels in domain will
             be independent degrees-of-freedom. Default = False.
-        volume_penalty : float
+        vol_penalty : float
             Can be used to penalize spurious features in the topology-optimized design. 
             If > 0, it will tend to drive the design towards the lower bound of eps_bounds.
             If < 0, it will tend to drive the design towards the upper bound of eps_bounds.
@@ -329,7 +329,7 @@ def _TopologyGenerator(BaseAM):
                      eps_bounds: tuple = None, 
                      mu_bounds: tuple = None, 
                      planar: bool = False, 
-                     area_penalty: float = 0.
+                     vol_penalty: float = 0.
                      ):
             super().__init__(sim)
 
@@ -357,10 +357,18 @@ def _TopologyGenerator(BaseAM):
             self._epsb = eps_bounds
             self._mub = mu_bounds
             self._planar = planar
-            self._lam = area_penalty
+            self._lam = vol_penalty
 
-        def get_params(self):
+        def get_params(self, squish=0.05):
             """Get the current parameter vector, can be passed to the emopt optimizer.
+
+            Parameters
+            ----------
+            squish : float
+                If initial design has material values that are exactly equal to the bounds,
+                then errors will result. Squish is a percentage of (upper bound - lower bound)
+                used to adjust the material values before inverting the sigmoid, to avoid
+                numerical issues of this kind.
 
             Returns
             -------
@@ -371,7 +379,8 @@ def _TopologyGenerator(BaseAM):
             self._gse = self._grid_eps.shape
 
             if self._epsb:
-                params = inverse_scaled_sigmoid(self._grid_eps.real, self._epsb[0], self._epsb[1])
+                params = inverse_scaled_sigmoid(self._grid_eps.real, self._epsb[0], self._epsb[1],
+                                                squish=squish)
             else:
                 params = np.copy(self._grid_eps.real)
 
@@ -385,7 +394,8 @@ def _TopologyGenerator(BaseAM):
                 self._grid_mu = np.copy(self.sim.mu.grid)
                 self._gsm = self._grid_mu.shape
                 if self._mub:
-                    params_mu = inverse_scaled_sigmoid(self._grid_mu.real, self._mub[0], self._mub[1])
+                    params_mu = inverse_scaled_sigmoid(self._grid_mu.real, self._mub[0], self._mub[1],
+                                                       squish=squish)
                 else:
                     params_mu = np.copy(self._grid_mu.real)
 
@@ -412,8 +422,6 @@ def _TopologyGenerator(BaseAM):
             if self._update_mu:
                 peps = params[:self._pse]
                 pmu = params[self._pse:]
-                #peps = params[:self._grid_eps.size].reshape(self._grid_eps.shape)
-                #pmu = params[self._grid_eps.size:].reshape(self._grid_mu.shape)
                 if self._epsb:
                     new_grid_eps = scaled_sigmoid(peps, self._epsb[0], self._epsb[1])
                 else:
@@ -464,14 +472,10 @@ def _TopologyGenerator(BaseAM):
                 if self._update_mu:
                     if self._epsb:
                         del_eps = self._epsb[1] - self._epsb[0]
-                        #sig_eps = sigmoid(params[:self._grid_eps.size].reshape(self._grid_eps.shape))
                         if self._planar:
                             sig_eps = sigmoid(params[:self._pse].reshape(self._gse[1:]))
-                            #sig_eps = sigmoid(np.broadcast_to(params[:self._pse].reshape(self._gse[1:])[np.newaxis, ...], self._gse))
                         else:
                             sig_eps = sigmoid(params[:self._pse].reshape(self._gse))
-                        #sig_eps = (sig_eps, delta_eps)
-                        #sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
                         self._sig_eps = np.copy(sig_eps)
                         sig_eps = sig_eps * (1.0 - sig_eps)
                     else:
@@ -481,18 +485,13 @@ def _TopologyGenerator(BaseAM):
 
                     if self._mub:
                         del_mu = self._mub[1] - self._mub[0]
-                        #sig_mu = sigmoid(params[self._grid_eps.size:].reshape(self._grid_mu.shape))
                         if self._planar:
-                            #sig_mu = sigmoid(np.broadcast_to(params[self._pse:].reshape(self._gsm[1:])[np.newaxis, ...], self._gsm))
                             sig_mu = sigmoid(params[self._pse:].reshape(self._gsm[1:]))
                         else:
                             sig_mu = sigmoid(params[self._pse:].reshape(self._gsm))
-                        #sig_mu = (sig_mu, delta_mu)
-                        #sig_mu = delta_mu * sig_mu * (1.0 - sig_mu)
                         sig_mu = sig_mu * (1.0 - sig_mu)
                     else:
                         del_mu = 1
-                        #sig_mu = 1
                         sig_mu = np.array([1])
                 else:
                     del_mu = 1
@@ -501,30 +500,16 @@ def _TopologyGenerator(BaseAM):
                     if self._epsb:
                         del_eps = self._epsb[1] - self._epsb[0]
                         if self._planar:
-                            #sig_eps = sigmoid(np.broadcast_to(params.reshape(self._gse[1:])[np.newaxis, ...], self._gse))
                             sig_eps = sigmoid(params.reshape(self._gse[1:]))
                         else:
                             sig_eps = sigmoid(params.reshape(self._gse))
-                        #sig_eps = (sig_eps, delta_eps)
-                        #sig_eps = delta_eps * sig_eps * (1.0 - sig_eps)
                         self._sig_eps = np.copy(sig_eps)
                         sig_eps = sig_eps * (1.0 - sig_eps)
                     else:
                         del_eps = 1
-                        #sig_eps = 1
                         sig_eps = np.array([1])
                         self._sig_eps = sig_eps
             else:
-                #sig_eps = 1
-                #sig_mu = 1
-                #del_eps = 1
-                #del_mu = 1
-                #self._sig_eps = sig_eps
-                #sig_eps = MathDummy()
-                #sig_mu = MathDummy()
-                #del_eps = MathDummy()
-                #del_mu = MathDummy()
-                #self._sig_eps = 1
                 sig_eps = np.array([1])
                 sig_mu = np.array([1])
                 del_eps = np.array([1])
@@ -542,15 +527,31 @@ def _TopologyGenerator(BaseAM):
             return gradient
 
         def calc_penalty(self, sim, params):
+            """
+            Calculate the penalty term associated with
+            vol_penalty. The user should call this via
+            super() if they desire to override calc_penalty.
+            The penalty value can be accessed with
+            self.current_vol_penalty
+
+            Parameters
+            ----------
+            sim : emopt.experimental.fdfd and emopt.experimental.fdtd
+                Simulation object
+            params : numpy.ndarray
+                1D array containing design parameter values (one value per design
+                parameter)
+            """
             lam = self._lam
             if lam == 0:
-                return 0
+                self.current_vol_penalty = 0
             else:
-                #return lam * np.mean(self._sig_eps)
-                return lam * np.mean(sigmoid(params))
+                self.current_vol_penalty = lam * np.mean(sigmoid(params))
+            return self.current_vol_penalty
 
         def calc_grad_p(self, sim, params):
-            # this is computed directly in calc_gradient
+            # this is computed directly in calc_gradient,
+            # no need to update.
             return np.zeros_like(params)
 
     return _Topology
@@ -576,7 +577,15 @@ def sigmoid(x):
 def scaled_sigmoid(x, lb, ub):
     return lb + (ub-lb)*sigmoid(x)
 
-def inverse_scaled_sigmoid(x, lb, ub):
-    arg = (x - lb)/(ub-lb)
+def inverse_scaled_sigmoid(x, lb, ub, squish=0.05):
+    # Give ourselves a bit of breathing room
+    # for initialization.
+    # This effectively will squish the output
+    # variables to something finite.
+    delt = ub - lb
+    ubb = ub + squish*delt
+    lbb = lb - squish*delt
+    #arg = (x - lb)/(ub-lb)
+    arg = (x - lbb)/(ubb-lbb)
     assert np.all(arg>=0.0) and np.all(arg<=1.0)
     return np.log(arg/(1.0-arg))
