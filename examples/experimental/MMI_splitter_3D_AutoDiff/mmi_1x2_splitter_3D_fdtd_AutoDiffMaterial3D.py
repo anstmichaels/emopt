@@ -3,53 +3,43 @@ from emopt.misc import NOT_PARALLEL, run_on_master
 from emopt.experimental.fdtd import FDTD
 from emopt.experimental.adjoint_method import AutoDiffPNF3D
 from emopt.experimental.grid import AutoDiffMaterial3D
+import emopt.experimental.autodiff_geometry as adg
 from functools import partial
 
 import numpy as np
 from math import pi
 import torch
 
-def rect(v, k, x, y):
-    x_sig = torch.sigmoid(k * (x - v[0])) * torch.sigmoid(-k * (x - v[1]))
-    y_sig = torch.sigmoid(k * (y - v[2])) * torch.sigmoid(-k * (y - v[3]))
-    return x_sig.unsqueeze(0) * y_sig.unsqueeze(-1)
-
-def depth(z, k, v):
-    z = torch.sigmoid(k * (z - v[0])) * torch.sigmoid(-k * (z - v[1]))
-    return z
+nl = adg.nl_lin
 
 def create_eps_grid(v, coords, k, zmin, zmax, wg_i, wg_o1, wg_o2,
                     eps_l, delta_eps, bg=None):
     z, y, x = coords
-    zdepth = depth(z, 4*k, [zmin, zmax])
 
-    in_wg = rect(wg_i, k, x, y)
-    out_wg1 = rect(wg_o1, k, x, y)
-    out_wg2 = rect(wg_o2, k, x, y)
-    mmi = rect(v, k, x, y)
+    # Define waveguide rectangles
+    in_wg = adg.rect2d(k, x, y, wg_i, nl=nl)
+    out_wg1 = adg.rect2d(k, x, y, wg_o1, nl=nl)
+    out_wg2 = adg.rect2d(k, x, y, wg_o2, nl=nl)
+    mmi = adg.rect2d(k, x, y, v, nl=nl)
 
-    shape = torch.sigmoid(k * (in_wg + out_wg1 + out_wg2 + mmi - 0.5))
-    shape = shape.unsqueeze(0) * zdepth.unsqueeze(-1).unsqueeze(-1)
+    # Combine and extrude
+    # We choose to use union_b here. It provides a smooth differentiable
+    # union as opposed to piecewise differentiable main union function.
+    # This represenation gives higher gradient accuracy for this problem
+    # which consists only of cuboids with shear sides.
+    shape = adg.union_b([in_wg, out_wg1, out_wg2, mmi])
+    shape = adg.depth(shape, k, z, [zmin, zmax], nl=nl)
+
+    # Scale to desired material values
     eps = eps_l + delta_eps * shape
+
     return eps
 
 class MMISplitterAdjointMethod(AutoDiffPNF3D):
-    def __init__(self, sim, domain, fom_domain, mode_match, eps_l, eps_h, k, zmin, zmax, wg_i, wg_o1, wg_o2):
-        super().__init__(sim, domain=domain, update_mu=False)
+    def __init__(self, sim, domain, fom_domain, mode_match):
+        super().__init__(sim, domain=domain)
         self.mode_match = mode_match
         self.fom_domain = fom_domain
-
-        self.eps_l = eps_l
-        self.eps_h = eps_h
-        self.delta_eps = eps_h - eps_l
-        self.k = k
-
-        self.zmin = zmin
-        self.zmax = zmax
-
-        self.wg_i = wg_i
-        self.wg_o1 = wg_o1
-        self.wg_o2 = wg_o2
 
     @run_on_master
     def calc_f(self, sim, params):
@@ -75,7 +65,7 @@ class MMISplitterAdjointMethod(AutoDiffPNF3D):
         return [self.fom_domain]
 
     def calc_grad_p(self, sim, params):
-        return np.zeros(len(params))
+        return np.zeros_like(params)
 
 def plot_update(params, fom_list, sim, am):
     print('Finished iteration %d' % (len(fom_list)+1))
@@ -89,7 +79,7 @@ def plot_update(params, fom_list, sim, am):
 
     foms = {'eff' : fom_list}
     emopt.io.plot_iteration(np.flipud(Ey.real), np.flipud(eps.real), sim.X-2*sim.w_pml[0],
-                            sim.Y-2*sim.w_pml[0], foms, fname='current_result_new.pdf',
+                            sim.Y-2*sim.w_pml[0], foms, fname='current_result.pdf',
                             dark=False)
 
 
@@ -100,22 +90,21 @@ if __name__=='__main__':
     ####################################################################################
     # Simulation parameters
     ####################################################################################
-    X = 5.0   # simulation size along x
-    Y = 4.0 # simulation size along y
+    X = 6.0   # simulation size along x
+    Y = 5.0 # simulation size along y
     Z = 2.5   # simulation size along z
     dx = 0.04 # grid spacing along x
     dy = 0.04 # grid spacing along y
     dz = 0.04 # grid spacing along z
 
     wavelength = 1.55
-    #wavelength = 1.31
 
     #####################################################################################
     # Setup simulation
     #####################################################################################
     # Setup the simulation--rtol tells the iterative solver when to stop. 5e-5
     # yields reasonably accurate results/gradients
-    sim = FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-5, min_rindex=1.44,
+    sim = FDTD(X,Y,Z,dx,dy,dz,wavelength, rtol=1e-4, min_rindex=1.44,
                           nconv=200)
     sim.Nmax = 1000*sim.Ncycle
     w_pml = dx * 20 # set the PML width
@@ -124,9 +113,9 @@ if __name__=='__main__':
     # need to make sure to set the PML width at the minimum y boundary is set to
     # zero. Currently, FDTD cannot compute accurate gradients using symmetry in z
     # :(
-    #sim.w_pml = [w_pml, w_pml, w_pml, w_pml, w_pml, w_pml]
-    sim.w_pml = [w_pml, w_pml, 0, w_pml, w_pml, w_pml]
-    sim.bc = '0H0'
+    sim.w_pml = [w_pml, w_pml, w_pml, w_pml, w_pml, w_pml]
+    #sim.w_pml = [w_pml, w_pml, 0, w_pml, w_pml, w_pml]
+    #sim.bc = '0H0'
 
     # get actual simulation dimensions
     X = sim.X
@@ -146,19 +135,21 @@ if __name__=='__main__':
     eps_si = n_si**2
     eps_clad = n_clad**2
 
-    w_wg = 0.45
+    w_wg = 0.5
     #L_in = X/2+1
     #L_out = X/2+1
-    L_in = X/2-0.5
-    L_out = X/2-0.5
-    L_mmi = 2.0
-    w_mmi = 2.0
+    #L_in = X/2-0.5
+    #L_out = X/2-0.5
+    L_in = X/2.
+    L_out = X/2.
+    L_mmi = 2.5
+    w_mmi = 2.05
     h_si = 0.22
     #h_si = 0.3
 
     zmin = Z/2.0 - h_si/2.0
     zmax = Z/2.0 + h_si/2.0
-    k = 20.0
+    k = 1.0/dx
     wg_i = [-5.0, L_in, Y/2-w_wg/2.0, Y/2+w_wg/2.0]
     #wg_i = [-5.0, X+5.0, Y/2-w_wg/2.0, Y/2+w_wg/2.0]
     wg_o1 = [X-L_out, X+5.0, Y/2 + w_wg - w_wg/2.0, Y/2 + w_wg + w_wg/2.0]
@@ -175,18 +166,18 @@ if __name__=='__main__':
     sim.set_materials(eps, mu)
     sim.build()
 
-    #eps = eps.get_values_in(domain).squeeze().real
-    #if NOT_PARALLEL:
-    #    import matplotlib.pyplot as plt
-    #    f = plt.figure()
-    #    ax1 = f.add_subplot(131)
-    #    ax2 = f.add_subplot(132)
-    #    ax3 = f.add_subplot(133)
-    #    ax1.imshow(eps[:, :, eps.shape[2]//2].squeeze(), cmap='Blues')
-    #    ax2.imshow(eps[:, eps.shape[1]//2, :].squeeze(), cmap='Blues')
-    #    ax3.imshow(eps[eps.shape[0]//2, :, :].squeeze(), cmap='Blues')
-    #    plt.tight_layout()
-    #    plt.show()
+    epsa = eps.get_values_in(domain).squeeze().real
+    if NOT_PARALLEL:
+        import matplotlib.pyplot as plt
+        f = plt.figure()
+        ax1 = f.add_subplot(131)
+        ax2 = f.add_subplot(132)
+        ax3 = f.add_subplot(133)
+        ax1.imshow(epsa[:, :, epsa.shape[2]//2].squeeze(), cmap='Blues')
+        ax2.imshow(epsa[:, epsa.shape[1]//2, :].squeeze(), cmap='Blues')
+        ax3.imshow(epsa[epsa.shape[0]//2, :, :].squeeze(), cmap='Blues')
+        plt.tight_layout()
+        plt.show()
 
     #####################################################################################
     # Setup the sources
@@ -199,7 +190,7 @@ if __name__=='__main__':
 
     # The mode boundary conditions should match the simulation boundary conditins.
     # Mode is in the y-z plane, so the boundary conditions are HE
-    mode.bc = 'H0'
+    #mode.bc = 'H0'
     mode.build()
     mode.solve()
     sim.set_sources(mode, input_slice)
@@ -217,7 +208,7 @@ if __name__=='__main__':
                                        neigs=4)
 
     # Need to be consistent with boundary conditions!
-    fom_mode.bc = 'H0'
+    #fom_mode.bc = 'H0'
     fom_mode.build()
     fom_mode.solve()
 
@@ -237,9 +228,12 @@ if __name__=='__main__':
     #####################################################################################
     full_field = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml,
                                               Z/2, Z/2, dx, dy, dz)
-    sim.field_domains = [fom_slice, full_field]
+    full_field_xz = emopt.misc.DomainCoordinates(w_pml, X-w_pml, Y/2., Y/2.,
+                                              w_pml, Z-w_pml, dx, dy, dz)
+    sim.field_domains = [fom_slice, full_field, full_field_xz]
 
-    am = MMISplitterAdjointMethod(sim, domain, fom_slice, mode_match, eps_clad, eps_si, k, zmin, zmax, wg_i, wg_o1, wg_o2)
+    #am = MMISplitterAdjointMethod(sim, domain, fom_slice, mode_match, eps_clad, eps_si, k, zmin, zmax, wg_i, wg_o1, wg_o2)
+    am = MMISplitterAdjointMethod(sim, domain, fom_slice, mode_match)
     am.update_system(design_params)
     am.check_gradient(design_params, fd_step=1e-6)
 
