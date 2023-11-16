@@ -1,8 +1,7 @@
 # Note: new automatic differentiation code (AutoDiff)
-*Please see our preprint for a detailed description of new features*
-S. Hooten, P. Sun, L. Gantz, M. Fiorentino, R. Beausoleil, T. Van Vaerenbergh, "Automatic Differentiation Accelerated Shape Optimization Approaches to Photonic Inverse Design on Rectilinear Simulation Grids." arXiv cs.CE, 2311.05646 (2023).
+*Please see our preprint for a detailed description of new features*:
 
-Link [here](https://arxiv.org/abs/2311.05646).
+S. Hooten, P. Sun, L. Gantz, M. Fiorentino, R. Beausoleil, T. Van Vaerenbergh, "Automatic Differentiation Accelerated Shape Optimization Approaches to Photonic Inverse Design on Rectilinear Simulation Grids." arXiv cs.CE, 2311.05646 (2023). Link [here](https://arxiv.org/abs/2311.05646).
 
 Several new modules and features implemented in .../emopt/experimental, with corresponding examples in .../examples/experimental.
 
