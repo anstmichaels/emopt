@@ -1,3 +1,12 @@
+"""A simple 1x2 splitter optimized with Topology optimization.
+We simulate in 3D FDTD. Note that this version does not constrain
+voxels to obey 2D lithographic patterning (all voxels are allowed
+to vary independently). Please see splitter_TopologyPNF3D_planar.py
+for a more conventional optimization of this type.
+
+Example usage:
+mpirun -n 16 python splitter_TopologyPNF3D.py
+"""
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
 from emopt.experimental.adjoint_method import TopologyPNF3D
@@ -5,9 +14,21 @@ from emopt.experimental.fdtd import FDTD
 from emopt.experimental.grid import TopologyMaterial3D
 import numpy as np
 
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--planar', default=True, type=bool, help='Constrain to planar 2D lithographically defined device')
+parser.add_argument('--vol_penalty', default=0., type=float, help='Penalty on spurious feature in design')
+args = parser.parse_args()
+
+PLANAR = args.planar
+VOL_PEN = args.vol_penalty
+
 class TopologyAM(TopologyPNF3D):
-    def __init__(self, sim, mode_match, mm_line, domain=None, update_mu=False, eps_bounds=None, mu_bounds=None, lam=0):
-        super().__init__(sim, domain=domain, update_mu=update_mu, eps_bounds=eps_bounds, mu_bounds=mu_bounds, penalty_multiplier=lam)
+    def __init__(self, sim, mode_match, mm_line, domain=None, update_mu=False, 
+                 eps_bounds=None, mu_bounds=None, planar=True, vol_penalty=0):
+        super().__init__(sim, domain=domain, update_mu=update_mu, eps_bounds=eps_bounds, 
+                         mu_bounds=mu_bounds, planar=planar, vol_penalty=vol_penalty)
         self.mode_match = mode_match
         self.current_fom = 0.0
         self.fom_domain = mm_line
@@ -15,43 +36,47 @@ class TopologyAM(TopologyPNF3D):
     @run_on_master
     def calc_f(self, sim, params):
         Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[0]
-
         self.mode_match.compute(Ex, Ey, Ez, Hx, Hy, Hz)
         fom = -1*self.mode_match.get_mode_match_forward(1.0)
-
         return fom
 
     @run_on_master
     def calc_dfdx(self, sim, params):
-        Psrc = sim.source_power
-
         dfdEx = -1*self.mode_match.get_dFdEx()
         dfdEy = -1*self.mode_match.get_dFdEy()
         dfdEz = -1*self.mode_match.get_dFdEz()
         dfdHx = -1*self.mode_match.get_dFdHx()
         dfdHy = -1*self.mode_match.get_dFdHy()
         dfdHz = -1*self.mode_match.get_dFdHz()
-
         return [(dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)]
 
     def get_fom_domains(self):
         return [self.fom_domain]
 
-    def calc_grad_p(self, sim, params):
-        return np.zeros(params.shape)
-
-def plot_update(params, fom_list, sim, am):
+def plot_update(params, fom_list, penalty_list, sim, am):
     print('Finished iteration %d' % (len(fom_list)+1))
-    current_fom = -1*am.calc_fom(sim, params)
+    total_fom = am.calc_fom(sim, params)
+    current_penalty = am.current_vol_penalty
+    current_fom = -1*(total_fom - current_penalty)
+    penalty_list.append(current_penalty)
     fom_list.append(current_fom)
+
+    foms = {'Mode Match' : fom_list, 'Vol. Penalty' : penalty_list}
 
     Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[1]
     eps = sim.eps.get_values_in(sim.field_domains[1]).squeeze()
-    Hz = np.squeeze(Hz)
+    Ey = np.squeeze(Ey)
 
-    foms = {'E2' : fom_list}
-    emopt.io.plot_iteration(np.flipud(Hz.real), np.flipud(eps.real), sim.X,
-                            sim.Y, foms, fname='current_result1.pdf',
+    emopt.io.plot_iteration(np.flipud(Ey.real), np.flipud(eps.real), sim.X,
+                            sim.Y, foms, fname='current_result_xy_planar{}_volpen{}.pdf'.format(PLANAR, VOL_PEN),
+                            dark=False)
+
+    Ex, Ey, Ez, Hx, Hy, Hz = sim.saved_fields[2]
+    eps = sim.eps.get_values_in(sim.field_domains[2]).squeeze()
+    Ey = np.squeeze(Ey)
+
+    emopt.io.plot_iteration(np.flipud(Ey.real), np.flipud(eps.real), sim.X,
+                            sim.Y, foms, fname='current_result_xz_planar{}_volpen{}.pdf'.format(PLANAR, VOL_PEN),
                             dark=False)
 
     #data = {}
@@ -168,6 +193,8 @@ if __name__ == '__main__':
     ####################################################################################
     full_field = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, 0.5*Z, 0.5*Z,
                                               dx, dy, dz)
+    full_field_xz = emopt.misc.DomainCoordinates(w_pml, X-w_pml, Y/2., Y/2., w_pml, Z-w_pml,
+                                              dx, dy, dz)
     w_mode = 6.0
 
     if NOT_PARALLEL:
@@ -203,7 +230,7 @@ if __name__ == '__main__':
 
     mode_match = emopt.fomutils.ModeMatch([1,0,0], sim.dy, sim.dz, Exm, Eym, Ezm, Hxm, Hym, Hzm)
 
-    sim.field_domains = [mode_line, full_field]
+    sim.field_domains = [mode_line, full_field, full_field_xz]
 
     ####################################################################################
     # Build the system
@@ -213,9 +240,9 @@ if __name__ == '__main__':
     ####################################################################################
     # Setup the optimization
     ####################################################################################
-    am = TopologyAM(sim, mode_match, mode_line, domain=optdomain, update_mu=False, eps_bounds=[eps_clad, eps_si], lam=0.0)
-    design_params = am.get_params()
-    design_params = np.zeros_like(design_params)
+    am = TopologyAM(sim, mode_match, mode_line, domain=optdomain, update_mu=False, eps_bounds=[eps_clad, eps_si],
+                    planar=PLANAR, vol_penalty=VOL_PEN)
+    design_params = am.get_params(squish=0.02)
     am.update_system(design_params)
 
     if NOT_PARALLEL:
@@ -226,10 +253,11 @@ if __name__ == '__main__':
         ax.imshow(ar.real)
         plt.show()
 
-    am.check_gradient(design_params, indices=np.arange(100)[::50], fd_step=1e-3)
+    #am.check_gradient(design_params, indices=np.arange(100)[::50], fd_step=1e-3)
 
     fom_list = []
-    callback = lambda x : plot_update(x, fom_list, sim, am)
+    penalty_list = []
+    callback = lambda x : plot_update(x, fom_list, penalty_list, sim, am)
 
     # setup and run the optimization!
     opt = emopt.optimizer.Optimizer(am, design_params, tol=1e-5,
