@@ -1,3 +1,22 @@
+"""Optimization of a MMI 1x2 splitter in 3D using the CW-FDTD solver with
+AutoDiff-compatible shape representations for accelerated optimization.
+
+This optimization involves varying the width and height of a silicon slab in
+order to fine tune multimode interference with the ultimate goal of splitting
+light from a single input waveguide equally between two output waveguides:
+
+        --------------------
+        |                  -------------
+        |                  -------------
+---------        MMI       |
+---------      Splitter    |
+        |                  -------------
+        |                  -------------
+        --------------------
+
+Example usage:
+$ mpirun -n 16 python mmi_1x2_splitter_3D_fdtd_AutoDiffPNF3D.py
+"""
 import emopt
 from emopt.misc import NOT_PARALLEL, run_on_master
 from emopt.experimental.fdtd import FDTD
@@ -10,10 +29,13 @@ import numpy as np
 from math import pi
 import torch
 
-nl = adg.nl_lin
+nl = adg.nl_lin # we use the piecewise linear nonlinear function.
+                # Provides exact boundary smoothing for this problem.
 
 def create_eps_grid(v, coords, k, zmin, zmax, wg_i, wg_o1, wg_o2,
                     eps_l, delta_eps, bg=None):
+    # User-defined geometry. We build the MMI with 4 rectangles,
+    # combine them, then extrude the resulting shape.
     z, y, x = coords
 
     # Define waveguide rectangles

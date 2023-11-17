@@ -1,8 +1,5 @@
 """A simple 1x2 splitter optimized with Topology optimization.
-We simulate in 3D FDTD. Note that this version does not constrain
-voxels to obey 2D lithographic patterning (all voxels are allowed
-to vary independently). Please see splitter_TopologyPNF3D_planar.py
-for a more conventional optimization of this type.
+We simulate in 3D FDTD. 
 
 Example usage:
 mpirun -n 16 python splitter_TopologyPNF3D.py
