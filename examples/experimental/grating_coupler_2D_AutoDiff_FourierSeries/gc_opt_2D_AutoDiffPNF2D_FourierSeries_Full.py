@@ -1,8 +1,18 @@
+"""Fourier-series-parameterized grating coupler optimized with 
+AutoDiff-compatible geometry definitions.
+
+This example follows examples/Silicon_Grating_Coupler/gc_opt.py
+from the main emopt library.
+
+Example usage:
+mpirun -n 8 python g_opt_2D_AutoDiffPNF2D_FourierSeries_Full.py
+"""
 import emopt
 from emopt.misc import NOT_PARALLEL
+import emopt.experimental.autodiff_geometry as adg
 from emopt.experimental.adjoint_method import AutoDiffPNF2D
 from emopt.experimental.fdfd import FDFD_TE
-from emopt.experimental.grid import HybridMaterial2D, AutoDiffMaterial2D
+from emopt.experimental.grid import AutoDiffMaterial2D
 import matplotlib.pyplot as plt
 from functools import partial
 
@@ -11,105 +21,51 @@ from math import pi
 
 import torch
 
-def fseries(i, coeffs, Nc, Ng):
-    sins = np.zeros(Nc)
-    coss = np.zeros(Nc)
-    for j in range(Nc):
-        if j==0:
-            sins[j] = 1.0
-        else:
-            sins[j] = np.sin(np.pi/2.0 * i * j * 1.0/Ng)
-            sins[j] = np.sin(np.pi/2.0 * i * j * 1.0/Ng)
+nl = adg.nl_lin
 
-        coss[j] = np.cos(np.pi/2.0 * i * j * 1.0/Ng)
+def fseries(coeffs, Nc, Ng):
+    ii = torch.arange(Ng).view(-1,1)
+    jj = torch.arange(Nc).view(1,-1)
+    sins = torch.sin(np.pi/2.0 * ii * jj * 1.0 / Ng)
+    sins[:,0] = 1.0
+    coss = torch.cos(np.pi/2.0 * ii * jj * 1.0 / Ng)
+    retval = coeffs[:Nc].view(1,-1) * sins + coeffs[Nc:].view(1,-1) * coss
+    return retval.sum(-1)
 
-    sins = torch.as_tensor(sins)
-    coss = torch.as_tensor(coss)
-    retval = coeffs[:Nc] * sins + coeffs[Nc:] * coss
-    return retval.sum()
-
-def build_rects(x, y, periods, widths, ymin, ymax, Ng, k, w_wg_input):
+def build_rects(x, periods, widths, Ng, k, wg_input_x):
     rects = []
-    pos = w_wg_input
+    pos = wg_input_x + 0.
     for i in range(Ng):
-       rects.append(rect(x, y, pos, widths[i], ymin, ymax, k))
-       pos = pos + periods[i]
-    return rects
-
-def depth(shape, y, k, ymin, ymax):
-    d = torch.sigmoid(k * (y - ymin)) * torch.sigmoid(-k * (y - ymax))
-    return shape.view(1,-1) * d.view(-1,1)
-
-def depth_1side(shape, y, k, ymax):
-    d = torch.sigmoid(-k * (y - ymax))
-    return shape.view(1,-1) * d.view(-1,1)
-
-def rect(x, y, pos, width, ymin, ymax, k):
-    b = pos+width/2.0
-    a = pos-width/2.0
-    #r = 0.5*(torch.erf(k*(b-x)) + torch.erf(k*(x-a)))
-    r = torch.sigmoid(k*(b-x)) * torch.sigmoid(k*(x-a))
-    if (ymin is not None) and (ymax is not None):
-        r = depth(r, y, k, ymin, ymax)
-    return r
-
-def combine(list_of_rects, k):
-    return torch.sigmoid(k*(sum(list_of_rects) - 0.5))
+        rects.append(adg.rect1d(k, x, [pos, pos+widths[i]], nl=nl))
+        pos = pos + periods[i]
+    return adg.union(rects)
 
 def create_eps_grid(v, coords, Nc, Ng, k, w_in, eps_l, eps_h, wg_y_min, wg_y_max, bg=None):
     y, x = coords
 
-    widths = []
-    periods = []
-    for i in range(Ng):
-        widths.append(fseries(i, v[:2*Nc], Nc, Ng))
-        periods.append(fseries(i, v[2*Nc:-2], Nc, Ng))
+    # Get widths and periods from Fourier decomposition over parameters
+    widths = fseries(v[:2*Nc], Nc, Ng)
+    periods = fseries(v[2*Nc:-3], Nc, Ng)
 
+    # Get other parameters
     wg_input_x = w_in + v[-1]
     h_etch = v[-2]
+    box_height = v[-3]
 
-    wg_xmax = wg_input_x + sum(periods)
+    # Define the substrate
+    subs = adg.step1d(k, y, wg_y_min - box_height, reverse=True, nl=nl).view(-1,1)
 
-    grat = torch.sigmoid(-k * (x - wg_xmax)) # defines wg in x
-    SiO2_rects = build_rects(x, y, periods, widths, None, None, Ng, k, wg_input_x)
-    grat = grat - sum(SiO2_rects) # this just gives us Si rectangles
-    grat = depth(grat, y, k, wg_y_max - h_etch, wg_y_max)
+    # Define the waveguide (extruded 1d step function)
+    wg_xmax = wg_input_x + periods.sum()
+    wg = adg.step1d(k, x, wg_xmax, reverse=True, nl=nl)
+    wg = adg.depth(wg, k, y, [wg_y_min, wg_y_max], nl=nl)
 
-    wg_bot = torch.sigmoid(-k * (x - wg_xmax)) # defines wg in x
-    wg_bot = depth(wg_bot, y, k, wg_y_min, wg_y_max-h_etch) # defines wg in x
+    # Define the etches (each constrained to have same depth)
+    SiO2_rects = build_rects(x, periods, widths, Ng, k, wg_input_x)
+    SiO2_rects = adg.depth(SiO2_rects, k, y, [wg_y_max - h_etch, wg_y_max], nl=nl)
 
-    k2 = 20.0
-    #shape = torch.sigmoid(k2 * (wg_bot + grat - 0.5))
-    shape = wg_bot + grat
-    eps = eps_l + (eps_h - eps_l) * shape
-
-    return eps
-
-def create_eps_grid_sidewall(v, coords, Nc, Ng, k, w_in, eps_l, eps_h, wg_y_min, wg_y_max, bg=None):
-    y, x = coords
-
-    widths = []
-    periods = []
-    for i in range(Ng):
-        widths.append(fseries(i, v[:2*Nc], Nc, Ng))
-        periods.append(fseries(i, v[2*Nc:-2], Nc, Ng))
-
-    wg_input_x = w_in + v[-1]
-    h_etch = v[-2]
-
-    wg_xmax = wg_input_x + sum(periods)
-
-    grat = torch.sigmoid(-k * (x - wg_xmax)) # defines wg in x
-    SiO2_rects = build_rects(x, y, periods, widths, None, None, Ng, k, wg_input_x)
-    grat = grat - sum(SiO2_rects) # this just gives us Si rectangles
-    grat = depth(grat, y, k, wg_y_max - h_etch, wg_y_max)
-
-    wg_bot = torch.sigmoid(-k * (x - wg_xmax)) # defines wg in x
-    wg_bot = depth(wg_bot, y, k, wg_y_min, wg_y_max-h_etch) # defines wg in x
-
-    k2 = 20.0
-    shape = torch.sigmoid(k2 * (wg_bot + grat - 0.5))
-    #shape = wg_bot + grat
+    # Put the total shape together
+    shape = subs + wg - SiO2_rects
     eps = eps_l + (eps_h - eps_l) * shape
 
     return eps
@@ -185,24 +141,22 @@ def plot_update(params, fom_list, sim, am):
                             sim.Yreal, foms, fname='current_result.pdf',
                             dark=False)
 
-    data = {}
-    data['Ez'] = Ez
-    data['Hx'] = Hx
-    data['Hy'] = Hy
-    data['eps'] = eps
-    data['params'] = params
-    data['foms'] = fom_list
+    #data = {}
+    #data['Ez'] = Ez
+    #data['Hx'] = Hx
+    #data['Hy'] = Hy
+    #data['eps'] = eps
+    #data['params'] = params
+    #data['foms'] = fom_list
 
-    i = len(fom_list)
-    fname = 'data/gc_opt_results'
-    emopt.io.save_results(fname, data)
+    #i = len(fom_list)
+    #fname = 'data/gc_opt_results'
+    #emopt.io.save_results(fname, data)
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float64)
     torch.set_default_tensor_type('torch.DoubleTensor')
-    torch.set_num_interop_threads(40)
-    torch.set_num_threads(40)
-    torch.set_anomaly_enabled(True)
+
     ####################################################################################
     # define the system parameters
     ####################################################################################
@@ -231,65 +185,31 @@ if __name__ == '__main__':
     n_si = np.sqrt(eps_si)
     n_clad = np.sqrt(eps_clad)
 
-    # the effective indices are precomputed for simplicity.  We can compute
-    # these values using emopt.modes
-    #neff = 2.86
-    #neff_etched = 2.10
     neff = 3.0
     neff_etched = 2.3
     n0 = np.sqrt(eps_clad)
 
-    # set up the initial dimensions of the waveguide structure that we are exciting
     h_wg = 0.3
     h_etch = 0.18 # etch depth
     w_wg_input = 5.0
+    h_BOX = 2.0
     Ng = 30 #number of grating teeth
 
-    # set the center position of the top silicon and the etches
     y_ts = Y/2.0
 
-    # define the starting parameters of the partially-etched grating
-    # notably the period and shift between top and bottom layers
     df = 0.8
     theta = 8.0/180.0*pi
     period = wavelength / (df * neff + (1-df)*neff_etched - n0*np.sin(theta))
 
-    # grating waveguide
-    #Lwg = Ng*period + w_wg_input + 1.5
-    #wg = emopt.grid.Rectangle(Lwg/2.0, y_ts, Lwg, h_wg)
-    #wg.layer = 2
-    #wg.material_value = eps_si
-
-    # define substrate
-    h_BOX = 2.0
-    h_subs = Y/2.0 - h_wg/2.0 - h_BOX
-    substrate = emopt.grid.Rectangle(X/2.0, h_subs/2.0, X, h_subs)
-    substrate.layer = 2
-    substrate.material_value = eps_si # silicon
-
-    # set the background material using a rectangle equal in size to the system
-    background = emopt.grid.Rectangle(X/2, Y/2, X, Y)
-    background.layer = 3
-    background.material_value = eps_clad
-
-    # assembled the primitives in a StructuredMaterial to be used by the FDFD solver
-    # This Material defines the distribution of the permittivity within the simulated
-    # environment
-    eps_struct = emopt.grid.StructuredMaterial2D(X, Y, dx, dy)
-
-    #eps_struct.add_primitive(wg)
-    eps_struct.add_primitive(substrate)
-    eps_struct.add_primitive(background)
-
     Nc = 5
     N_coeffs = 5
-    design_params = np.zeros(4*Nc+2) # position and width
+    design_params = np.zeros(4*Nc+3) # position and width
     design_params[0] = (1.0-df)*period
     design_params[2*Nc] = period
-    design_params[-2] = h_etch
-    design_params[-1] = 0.0 # offset relative to w_wg_input
-    k = 200.0
-    #k = 50.0
+    design_params[-3] = h_BOX + 1e-3
+    design_params[-2] = h_etch + 1e-3
+    design_params[-1] = 0.0 + 1e-3 # offset relative to w_wg_input
+    k = 1.0/dx
 
     wg_y_min = y_ts - h_wg/2.0
     wg_y_max = y_ts + h_wg/2.0
@@ -297,19 +217,12 @@ if __name__ == '__main__':
     func = partial(create_eps_grid,
                    Nc=Nc, Ng=Ng, k=k, w_in=w_wg_input, eps_l=eps_clad, eps_h=eps_si, wg_y_min=wg_y_min, wg_y_max=wg_y_max)
 
-    eps_f = AutoDiffMaterial2D(dx, dy, func, torch.as_tensor(design_params).squeeze())
-
-    # set up the magnetic permeability -- just 1.0 everywhere
-    ymax = y_ts + h_wg/2 + 5*dy
-    ymin = y_ts - h_wg/2 - 5*dy
-    #fdomain = emopt.misc.DomainCoordinates(w_pml+5*dx, Lwg-2*dx, ymin, ymax, 0, 0, dx, dy, 1.0)
-    fdomain = emopt.misc.DomainCoordinates(0, X-w_pml, ymin, ymax, 0, 0, dx, dy, 1.0)
-
-    eps = HybridMaterial2D(eps_struct, eps_f, fdomain)
+    eps = AutoDiffMaterial2D(dx, dy, func, torch.as_tensor(design_params).squeeze())
     mu = emopt.grid.ConstantMaterial2D(1.0)
 
     # add the materials and build the system
     sim.set_materials(eps, mu)
+    fdomain = emopt.misc.DomainCoordinates(w_pml, X-w_pml, w_pml, Y-w_pml, 0, 0, dx, dy, 1.0)
 
     ####################################################################################
     # Setup the sources
@@ -355,8 +268,9 @@ if __name__ == '__main__':
     ####################################################################################
 
     am = SiliconGratingAutograd(sim, fdomain, mm_line)
+    #am = SiliconGratingAutograd(sim, mm_line)
     am.update_system(design_params)
-    am.check_gradient(design_params, fd_step=1e-6)
+    am.check_gradient(design_params, fd_step=1e-8)
 
     fom_list = []
     callback = lambda x : plot_update(x, fom_list, sim, am)
