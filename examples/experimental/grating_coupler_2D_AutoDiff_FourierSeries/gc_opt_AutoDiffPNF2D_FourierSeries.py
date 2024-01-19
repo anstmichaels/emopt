@@ -1,29 +1,53 @@
-"""Fourier-series-parameterized grating coupler optimized with 
+"""Fourier-series parameterized grating coupler optimized with
 AutoDiff-compatible geometry definitions.
 
-This example follows examples/Silicon_Grating_Coupler/gc_opt.py
-from the main emopt library.
+Because we use rectangles to define the scattering elements, we may
+exactly approximate conventional boundary smoothing with AutoDiff-
+compatible geometry elements, using a piecewise linear boundary function.
+
+To test the corresponds, the user may specify either the standard EMopt
+representation or the AutoDiff representation of the blazed grating in
+the command line using the --version flag. Furthermore, the permittivty
+distributions can be directly compared using the --test flag.
 
 Example usage:
-mpirun -n 8 python g_opt_2D_AutoDiffPNF2D_FourierSeries_Full.py
+mpirun -n 8 python g_opt_2D_AutoDiffPNF2D_BlazedGrating.py
+mpirun -n 8 python g_opt_2D_AutoDiffPNF2D_BlazedGrating.py --version 'AutoDiff'
+mpirun -n 8 python g_opt_2D_AutoDiffPNF2D_BlazedGrating.py --version 'Standard'
+mpirun -n 8 python g_opt_2D_AutoDiffPNF2D_BlazedGrating.py --version 'AutoDiff' --test True
 """
-import emopt
-from emopt.misc import NOT_PARALLEL
-import emopt.experimental.autodiff_geometry as adg
-from emopt.experimental.adjoint_method import AutoDiffPNF2D
-from emopt.experimental.fdfd import FDFD_TE
-from emopt.experimental.grid import AutoDiffMaterial2D
+import time
+from math import pi
+import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial
-
-import numpy as np
-from math import pi
-
 import torch
+
+import emopt
+from emopt.misc import NOT_PARALLEL
+from emopt.experimental.adjoint_method import AutoDiffPNF2D
+from emopt.experimental.fdfd import FDFD_TE
+from emopt.experimental.grid import HybridMaterial2D, AutoDiffMaterial2D
+import emopt.experimental.autodiff_geometry as adg
+from emopt.experimental.optimizer import TimedOptimizer
+
+STEP = 1e-8
+
+# Import the library
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--Ng', type=int, default=30)
+parser.add_argument('--Nc', type=int, default=5)
+args = parser.parse_args()
+
+###################################################################
+# EMopt-AutoDiff
+###################################################################
 
 nl = adg.nl_lin
 
 def fseries(coeffs, Nc, Ng):
+    # Compute Fourier series sums given coefficients
     ii = torch.arange(Ng).view(-1,1)
     jj = torch.arange(Nc).view(1,-1)
     sins = torch.sin(np.pi/2.0 * ii * jj * 1.0 / Ng)
@@ -32,9 +56,10 @@ def fseries(coeffs, Nc, Ng):
     retval = coeffs[:Nc].view(1,-1) * sins + coeffs[Nc:].view(1,-1) * coss
     return retval.sum(-1)
 
-def build_rects(x, periods, widths, Ng, k, wg_input_x):
+def build_rects(x, periods, widths, Ng, k, w_wg_input):
+    # build rects corresponding to etches in grating
     rects = []
-    pos = wg_input_x + 0.
+    pos = w_wg_input
     for i in range(Ng):
         rects.append(adg.rect1d(k, x, [pos, pos+widths[i]], nl=nl))
         pos = pos + periods[i]
@@ -136,22 +161,12 @@ def plot_update(params, fom_list, sim, am):
     Ez, Hx, Hy = sim.saved_fields[1]
     eps = sim.eps.get_values_in(sim.field_domains[1])
 
+    Ng = args.Ng; Nc=args.Nc
     foms = {'Insertion Loss' : fom_list}
     emopt.io.plot_iteration(np.flipud(Ez.real), np.flipud(eps.real), sim.Xreal,
-                            sim.Yreal, foms, fname='current_result.pdf',
+                            sim.Yreal, foms,
+                            fname='current_result_Ng{}_Nc{}.pdf'.format(Ng,Nc),
                             dark=False)
-
-    #data = {}
-    #data['Ez'] = Ez
-    #data['Hx'] = Hx
-    #data['Hy'] = Hy
-    #data['eps'] = eps
-    #data['params'] = params
-    #data['foms'] = fom_list
-
-    #i = len(fom_list)
-    #fname = 'data/gc_opt_results'
-    #emopt.io.save_results(fname, data)
 
 if __name__ == '__main__':
     torch.set_default_dtype(torch.float64)
@@ -193,7 +208,7 @@ if __name__ == '__main__':
     h_etch = 0.18 # etch depth
     w_wg_input = 5.0
     h_BOX = 2.0
-    Ng = 30 #number of grating teeth
+    Ng = args.Ng # number of grating teeth (default 30)
 
     y_ts = Y/2.0
 
@@ -201,8 +216,7 @@ if __name__ == '__main__':
     theta = 8.0/180.0*pi
     period = wavelength / (df * neff + (1-df)*neff_etched - n0*np.sin(theta))
 
-    Nc = 5
-    N_coeffs = 5
+    Nc = args.Nc # number of Fourier coefficients (default 5)
     design_params = np.zeros(4*Nc+3) # position and width
     design_params[0] = (1.0-df)*period
     design_params[2*Nc] = period
@@ -215,7 +229,8 @@ if __name__ == '__main__':
     wg_y_max = y_ts + h_wg/2.0
 
     func = partial(create_eps_grid,
-                   Nc=Nc, Ng=Ng, k=k, w_in=w_wg_input, eps_l=eps_clad, eps_h=eps_si, wg_y_min=wg_y_min, wg_y_max=wg_y_max)
+                   Nc=Nc, Ng=Ng, k=k, w_in=w_wg_input,
+                   eps_l=eps_clad, eps_h=eps_si, wg_y_min=wg_y_min, wg_y_max=wg_y_max)
 
     eps = AutoDiffMaterial2D(dx, dy, func, torch.as_tensor(design_params).squeeze())
     mu = emopt.grid.ConstantMaterial2D(1.0)
@@ -268,7 +283,6 @@ if __name__ == '__main__':
     ####################################################################################
 
     am = SiliconGratingAutograd(sim, fdomain, mm_line)
-    #am = SiliconGratingAutograd(sim, mm_line)
     am.update_system(design_params)
     am.check_gradient(design_params, fd_step=1e-8)
 
