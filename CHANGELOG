@@ -1,4 +1,81 @@
-Released on Januart 16, 2023
+Released on March 5, 2024
+-------------------------
+1. New streamlined installation script leveraging mamba: setup.sh
+
+2. New installation instructions on readthedocs.
+
+3. Fixed minor bugs relating to depcrecated np.int (now need to explicitly define
+np.int64).
+
+4. Updated src Makefile to compile with c++14 (seems to work fine with boost 1.73.0,
+errors were encountered with the mamba version of boost when using c++11).
+
+5. Updated README.md with preprint on new features.
+
+6. Minor update to setup.py.
+
+7. Added TimedOptimizer to emopt.experimental.optimizer to conveniently track some 
+additional info during optimizations. 
+
+8. New experimental free form topology optimization and automatic differentiation 
+enhanced feature-mapping optimization methods have been implemented in 
+emopt.experimental with corresponding examples in examples/experimental. These
+new methods require PyTorch. Detailed descriptions follow.
+
+9. Several new AdjointMethod derived classes can be found in
+emopt.experimental.adjoint_method. This includes several AutoDiff classes
+and Topology classes, which will have similar suffixes to the based AdjointMethod
+classes (e.g. AutodiffPNF2D and TopologyPNF2D for power-normalized optimizations
+in 2D).
+
+10. The AutoDiff* classes allow one to perform feature-mapping toplogy
+optimizations leveraging automatic differentiation for extremely fast gradient
+calculations. When defining variables that map to global geometric features, you 
+may potentially see orders of magnitude improvement over the base AdjointMethod
+classes. However, these classes require the user to define material grids in a
+different way, leveraging one of: AutoDiffMaterial2D, AutoDiffMaterial3D,
+HybridMaterial2D, or HybridMaterial3D from emopt.experimental.grid. The basic
+idea is that the material grid in some design region is now functionally-defined
+by compositions of piecewise-differentiable functions, leveraging PyTorch for 
+fast backpropagation of shape sensitivies. We have provided many shape primitive 
+objects that can be combined and extended for most shape optimization applications 
+(e.g. in a way that is very similar to the way one currently uses the AdjointMethod 
+classes with StructuredMaterial grids) in emopt.experimental.autodiff_geometry.
+Note that one downside of using the feature-mapping approach is that it will only
+provide an approximation of volumetric boundary smoothing (except in cases where
+one only defines rectangles and cuboids, in which case the approxiation is exact). 
+However, if using a fine enough mesh, the effect will be experimentally negligible 
+(and in fact, will converge to the exact representation as dx->0).
+
+11. The Topology* classes allow one to perform free-form density based topology
+optimization, where each voxel in a user-defined region is allowed to evolve
+as an independent degree of freedom. Bounds can be defined on the material values.
+In 3D simulations, the user can force the output of  to be planar (e.g. extruded 
+2D region) by setting planar=True. By default, this will only enforce planarity 
+along the z axis. Similar can be done in 2D, except "planarity" will be enforced 
+along the y axis. There is also a vol_penalty parameter that enforces a penalty 
+on the "volume" of material in the design region (which takes on the value of the 
+upper bound, e.g. it will penalize the amount of silicon in a design region with 
+SiO2 cladding). Setting this value will drive the optimization towards removing 
+spurious features in the design. The Topology optimizers must be invoked with a 
+TopologyMaterial2D or TopologyMaterial3D from emopt.experimental.grid to define 
+the design region. Conventional StruturedMaterial* grid materials may be defined 
+outside of the topology region. Note that these features are still in development. 
+For example, if one defines a waveguide that has height not equal to an integer 
+multiple of the grid discretization, then the Topology optimizer will not 
+automatically take the smaller "overlap volume" for boundary smoothing at the 
+faces of design region into consideration, which may result in undesirable
+discontinuities. There also may be issues relating to symmetry that have not yet
+been worked out.
+
+12. Examples leveraging new experimental features can be found in examples/experimental.
+For AutoDiff, examples include: a Fourier-series featurized grating coupler in 2D,
+a 2D blazed grating coupler, a 2D fast transition taper, and a 3D 1x2 MMI. 
+For Topology, examples include: a 2D 1x2 splitter, a 3D 1x2 splitter.
+
+13. docstrings of experimental modules have been included for readthedocs indexing.
+
+Released on January 16, 2023
 ----------------------------
 1. Transitioned license from GPLv3 to the much more permissive BSD-3.
 2. Updated boost download URL in install.py
