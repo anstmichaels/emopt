@@ -23,8 +23,23 @@ Details on how to install and use EMopt can be found
 periodically as the documentation is constantly being improved and examples
 added.
 
+New: please see the new `mamba`-based install script `setup.sh` for
+streamlined installation.
+
+## Free-Form Topology and AutoDiff-Enhanced Feature-Mapping Approaches
+
+New optional experimental modules for topology optimization and automatic 
+differentiation enhanced feature-mapping approaches are implemented in 
+emopt/experimental, with corresponding examples in examples/experimental. 
+The AutoDiff methods can result in large improvements in optimization speed for 
+designs with variables that parameterize global geometric features. Please see 
+our preprint below and examples for correct usage. Note: Requires PyTorch 
+installation. These features are still in development.
+
 ## Authors
 Andrew Michaels 
+
+Sean Hooten (Topology and AutoDiff methods)
 
 ## License
 EMOpt is currently released under the BSD-3 license (see LICENSE.md for details)
@@ -37,3 +52,7 @@ Andrew Michaels and Eli Yablonovitch, "Leveraging continuous material averaging 
 An example of applying these methods to real design problems can be found in:
 
 Andrew Michaels and Eli Yablonovitch, "Inverse design of near unity efficiency perfectly vertical grating couplers," Opt. Express 26, 4766-4779 (2018)
+
+Shape optimization feature-mapping methods accelerated by automatic differentiation:
+
+S. Hooten, P. Sun, L. Gantz, M. Fiorentino, R. Beausoleil, T. Van Vaerenbergh, "Automatic Differentiation Accelerated Shape Optimization Approaches to Photonic Inverse Design on Rectilinear Simulation Grids." arXiv [cs.CE], 2311.05646 (2023). Link [here](https://arxiv.org/abs/2311.05646).

@@ -1410,7 +1410,7 @@ class FDFD_TE(FDFD):
 
         x_all = np.arange(w_pml_l, N-w_pml_r)
         y_all = np.arange(w_pml_b, M-w_pml_t)
-        y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int)
+        y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int64)
 
         if(not self.real_materials):
             eps = self._eps.get_values(0, N, 0, M)
@@ -1668,7 +1668,7 @@ class FDFD_TM(FDFD_TE):
         Parameters
         ----------
         src : tuple of numpy.ndarray
-            The current sources in the form (Mz_adj, Jx_adj, Jy_adj).  Each array 
+            The current sources in the form (Mz_adj, Jx_adj, Jy_adj).  Each array
             in the tiple should be a 2D numpy.ndarry with dimensions MxN.
         """
         # In order to properly make use of the TE subclass, we need to flip the
@@ -1894,7 +1894,7 @@ class FDFD_TM(FDFD_TE):
 
         x_all = np.arange(w_pml_l, N-w_pml_r)
         y_all = np.arange(w_pml_b, M-w_pml_t)
-        y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int)
+        y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int64)
 
         if(not self.real_materials):
             eps = self._eps_actual.get_values(0, N, 0, M)

@@ -1040,7 +1040,7 @@ class ModeMatch(object):
         self.Hy = np.zeros(self.fshape, dtype=np.complex128)
         self.Hz = np.zeros(self.fshape, dtype=np.complex128)
 
-    ## Some of the calculations are redundant, so we calculate most things in advance and 
+    ## Some of the calculations are redundant, so we calculate most things in advance and
     # save them for future access.
     def compute(self, Ex=None, Ey=None, Ez=None, Hx=None, Hy=None, Hz=None):
         """Compute the mode match and other underlying quantities.
@@ -1256,22 +1256,22 @@ def interpolated_dFdx_2D(sim, dFdEzi, dFdHxi, dFdHyi):
     # Unfortunately, special boundary conditions complicate matters
     # It is easiest to handle this separately
     # Note only the first condition below has been tested..
-    if(type(sim) == fdfd.FDFD_TM):
-        if((sim.bc[1] == 'H' and type(sim) == fdfd.FDFD_TM) or \
-           (sim.bc[1] == 'E' and type(sim) == fdfd.FDFD_TE)):
+    if(isinstance(sim, fdfd.FDFD_TM)):
+        if ((sim.bc[1] == 'H' and isinstance(sim, fdfd.FDFD_TM)) or \
+            (sim.bc[1] == 'E' and isinstance(sim, fdfd.FDFD_TE))):
             dFdHx[0,:] = 0.0
-        elif((sim.bc[1] == 'E' and type(sim) == fdfd.FDFD_TM) or \
-             (sim.bc[1] == 'H' and type(sim) == fdfd.FDFD_TE)):
+        elif((sim.bc[1] == 'E' and isinstance(sim, fdfd.FDFD_TM)) or \
+             (sim.bc[1] == 'H' and isinstance(sim, fdfd.FDFD_TE))):
             dFdHx[0,:] = dFdHx[0,:]*2.0
         elif(sim.bc[1] == 'P'):
             dFdHx[0,:] += dFdHx[-1,:]/2.0
             dFdHx[-1,:] += dFdHx[0,:]/2.0
 
-        if((sim.bc[0] == 'H' and type(sim) == fdfd.FDFD_TM) or \
-           (sim.bc[0] == 'E' and type(sim) == fdfd.FDFD_TE)):
+        if((sim.bc[0] == 'H' and isinstance(sim, fdfd.FDFD_TM)) or \
+           (sim.bc[0] == 'E' and isinstance(sim, fdfd.FDFD_TE))):
             dFdHy[:,-1] = 0.0
-        elif((sim.bc[0] == 'E' and type(sim) == fdfd.FDFD_TM) or \
-             (sim.bc[0] == 'H' and type(sim) == fdfd.FDFD_TE)):
+        elif((sim.bc[0] == 'E' and isinstance(sim, fdfd.FDFD_TM)) or \
+             (sim.bc[0] == 'H' and isinstance(sim, fdfd.FDFD_TE))):
             dFdHy[:,-1] = dFdHy[:,-1]*2.0
         elif(sim.bc[0] == 'P'):
             dFdHy[:,-1] += dFdHy[:,0]/2.0
@@ -1376,7 +1376,7 @@ def interpolated_dFdx_3D(sim, domain, dFdExi, dFdEyi, dFdEzi, dFdHxi, dFdHyi, dF
     dFdEz = dFdEz[1:, 0:-1, 0:-1]
 
     # This one might have a problem... It leads to a higher gradient error in
-    # initial tests 
+    # initial tests
     dFdHx = np.zeros(shape, dtype=np.complex128)
     dFdHx[1:-1, 1:-1, 1:-1] += dFdHxi/2.0
     dFdHx[1:-1, 0:-2, 1:-1] += dFdHxi/2.0
@@ -1512,7 +1512,7 @@ def power_norm_dFdx_TE(sim, f, dfdEz, dfdHx, dfdHy):
 
     x_all = np.arange(w_pml_l, N-w_pml_r)
     y_all = np.arange(w_pml_b, M-w_pml_t)
-    y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int)
+    y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int64)
 
     dPdEz = np.zeros([M, N], dtype=np.complex128)
     dPdHx = np.zeros([M, N], dtype=np.complex128)
@@ -1623,7 +1623,7 @@ def power_norm_dFdx_TM(sim, f, dfdHz, dfdEx, dfdEy):
 
     x_all = np.arange(w_pml_l, N-w_pml_r)
     y_all = np.arange(w_pml_b, M-w_pml_t)
-    y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int)
+    y_all = y_all.reshape(y_all.shape[0], 1).astype(np.int64)
 
     dPdHz = np.zeros([M, N], dtype=np.complex128)
     dPdEx = np.zeros([M, N], dtype=np.complex128)
@@ -1920,7 +1920,7 @@ def power_norm_dFdx_3D(sim, f, domain, dfdEx, dfdEy, dfdEz, dfdHx, dfdHy, dfdHz)
     return [adj_sources, adj_domains]
 
 def power_norm_dFdx(sim, f, dfdA1, dfdA2, dfdA3):
-    if(type(sim) == fdfd.FDFD_TM):
-        power_norm_dFdx_TM(sim, f, dfdAi, dfdA2, dfdA3)
-    elif(type(sim) == fdfd.FDFD_TE):
-        power_norm_dFdx_TE(sim, f, dfdAi, dfdA2, dfdA3)
+    if(isinstance(sim, fdfd.FDFD_TM)):
+        power_norm_dFdx_TM(sim, f, dfdA1, dfdA2, dfdA3)
+    elif(isinstance(sim, fdfd.FDFD_TE)):
+        power_norm_dFdx_TE(sim, f, dfdA1, dfdA2, dfdA3)

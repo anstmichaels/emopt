@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.command.install import install as SetuptoolsInstall
 import subprocess, os, sys
 
@@ -14,7 +14,7 @@ class MakeInstall(SetuptoolsInstall):
         else:
             pass # install dependencies as needed
         subprocess.call('make')
-        SetuptoolsInstall.do_egg_install(self)
+        SetuptoolsInstall.run(self)
 
 setup(name='emopt',
       version='2023.01.16',
@@ -24,8 +24,9 @@ setup(name='emopt',
       author='Andrew Michaels',
       author_email='amichaels@berkeley.edu',
       license='BSD-3',
-      packages=['emopt'],
-      package_data={'emopt':['*.so', '*.csv', 'data/*']},
+      packages=find_packages(),
+      package_data={'':['*.so', '*.csv', 'data/*']},
       cmdclass={'install':MakeInstall},
-      install_requires=['numpy', 'scipy', 'mpi4py', 'petsc4py==3.12.0', 'slepc4py==3.12.0'],
+      install_requires=['numpy', 'scipy', 'mpi4py', 'petsc4py', 'slepc4py'],
+      extras_require={"experimental": ['torch',]},
       zip_safe=False)

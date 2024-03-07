@@ -165,6 +165,9 @@ from petsc4py import PETSc
 from mpi4py import MPI
 from future.utils import with_metaclass
 
+
+import time
+
 __author__ = "Andrew Michaels"
 __license__ = "BSD-3"
 __version__ = "2019.5.6"
@@ -591,7 +594,10 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
         if(NOT_PARALLEL):
             info_message('Calculating gradient...')
 
+        start = time.time()
         grad_f = self.calc_gradient(self.sim, params)
+        end = time.time()
+        self._grad_f_time = end-start
         grad_p = self.calc_grad_p(self.sim, params)
 
         if(NOT_PARALLEL):
