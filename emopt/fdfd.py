@@ -65,6 +65,7 @@ import petsc4py
 import sys
 from future.utils import with_metaclass
 petsc4py.init(sys.argv)
+from petsc4py import PETSc
 
 from .misc import info_message, warning_message, error_message, RANK, \
 NOT_PARALLEL, run_on_master, MathDummy, DomainCoordinates, COMM
@@ -77,9 +78,10 @@ from .grid import row_wise_A_update
 import numpy as np
 from math import pi
 from abc import ABCMeta, abstractmethod
-from petsc4py import PETSc
 import array
 from mpi4py import MPI
+
+import gc
 
 __author__ = "Andrew Michaels"
 __license__ = "BSD-3"
@@ -1442,13 +1444,19 @@ class FDFD_TE(FDFD):
         complex
             The product y^T * (A1-A0) * x
         """
-        x = self.x
-        y = self.x_adj
         Adiag1 = self._Adiag1
         self.get_A_diag(Adiag1)
 
-        product = y * (Adiag1-Adiag0) * x
-        return np.sum(product[...])
+        product = np.sum((self.x_adj * (Adiag1-Adiag0) * self.x)[...])
+
+        Adiag1.destroy()
+        Adiag1 = None
+        del Adiag1
+
+        PETSc.garbage_cleanup()
+        gc.collect()
+
+        return product
 
 class FDFD_TM(FDFD_TE):
     """Simulate Maxwell's equations in 2D with TM-polarized fields.
@@ -3861,10 +3869,16 @@ class FDFD_3D(FDFD):
         complex
             The product y^T * (A1-A0) * x
         """
-        x = self.x
-        y = self.x_adj
         Adiag1 = self._Adiag1
         self.get_A_diag(Adiag1)
 
-        product = np.conj(y) * (Adiag1-Adiag0) * x
-        return np.sum(product[...])
+        product = np.sum((np.conj(self.x_adj) * (Adiag1-Adiag0) * self.x)[...])
+
+        Adiag1.destroy()
+        Adiag1 = None
+        del Adiag1
+
+        gc.collect()
+        PETSc.garbage_cleanup()
+
+        return product
