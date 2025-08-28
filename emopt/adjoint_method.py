@@ -164,6 +164,7 @@ from abc import ABCMeta, abstractmethod
 from petsc4py import PETSc
 from mpi4py import MPI
 from future.utils import with_metaclass
+import gc
 
 
 import time
@@ -531,7 +532,6 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
             else:
                 self.sim.update(ub)
 
-
         COMM.Barrier()
         for i in range(lenp):
             # send the partially computed gradient to the master node to finish
@@ -542,6 +542,16 @@ class AdjointMethod(with_metaclass(ABCMeta, object)):
             # finish calculating the gradient
             if(NOT_PARALLEL):
                 gradient[i] = np.sum(grad_full)
+
+        try:
+            Ai.destroy()
+            Ai = None
+        except:
+            pass
+        del Ai, product, grad_part, grad_parts, grad_full
+
+        gc.collect()
+        PETSc.garbage_cleanup()
 
         if(NOT_PARALLEL):
             return gradient
@@ -1103,6 +1113,20 @@ class AdjointMethodFM2D(AdjointMethod):
                     self.sim.update(box)
             else:
                 self.sim.update(ub)
+
+        try:
+            Ai.destroy()
+            Af.destroy()
+            dAdp.destroy()
+            dAdp_full.destroy()
+            Ai, Af, dAdp, dAdp_full = None, None, None, None
+        except:
+            pass
+
+        del Ai, Af, product, grad_part, grad_full
+
+        gc.collect()
+        PETSc.garbage_cleanup()
 
         if(NOT_PARALLEL):
             return gradient
